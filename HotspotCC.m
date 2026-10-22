@@ -128,70 +128,127 @@ static id NativeHotspotController(void) {
     return controller;
 }
 
-static BOOL SetHotspotState(BOOL enabled) {
-    HDiag(@"requested hotspot=%d previous=%d", enabled, GetHotspotState());
-    if (GetHotspotState() == enabled) {
-        HDiag(@"already at requested state");
-        return YES;
-    }
 
+// Based on Flipswitch Switches/Hotspot.x: MISManager's explicit service
+// state interface controls 1022 (off) / 1023 (on). A cached
+// CCUIConnectivityHotspotViewController's "discoverable" flag is *not*
+// equivalent to the actual service state, as confirmed on this iPhone.
+static id FlipswitchMISManager(void) {
+    static id manager = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *prefHandle = dlopen("/System/Library/PreferenceBundles/WirelessModemSettings.bundle/WirelessModemSettings",
+                                 RTLD_LAZY | RTLD_GLOBAL);
+        void *frameworkHandle = dlopen("/System/Library/PrivateFrameworks/MobileInternetSharing.framework/MobileInternetSharing",
+                                      RTLD_LAZY | RTLD_GLOBAL);
+        Class cls = NSClassFromString(@"MISManager");
+        manager = HGet((id)cls, @"sharedManager");
+        HDiag(@"MISManager probes preference=%d framework=%d class=%@ manager=%@",
+              prefHandle != NULL, frameworkHandle != NULL, cls, manager);
+    });
+    return manager;
+}
+static BOOL SetViaMIS(BOOL enabled) {
+    id manager = FlipswitchMISManager();
+    SEL set = NSSelectorFromString(@"setState:");
+    if (![manager respondsToSelector:set]) {
+        HDiag(@"MISManager setState: unavailable");
+        return NO;
+    }
+    int state = enabled ? 1023 : 1022;
+    @try {
+        SEL get = NSSelectorFromString(@"getState:andReason:");
+        if ([manager respondsToSelector:get]) {
+            int current = 0;
+            int reason = 0;
+            ((void (*)(id, SEL, int *, int *))objc_msgSend)(manager, get, &current, &reason);
+            HDiag(@"MISManager previous service state=%d reason=%d", current, reason);
+        }
+        ((void (*)(id, SEL, int))objc_msgSend)(manager, set, state);
+        HDiag(@"MISManager explicitly requested state=%d", state);
+        return YES;
+    } @catch (NSException *e) {
+        HDiag(@"MISManager exception: %@", e);
+        return NO;
+    }
+}
+static BOOL SetViaNativeGlobal(BOOL enabled) {
+    id native = NativeHotspotController();
+    SEL setter = NSSelectorFromString(@"_setGlobalServiceState:");
+    if (![native respondsToSelector:setter]) {
+        HDiag(@"native _setGlobalServiceState: unavailable");
+        return NO;
+    }
+    @try {
+        int state = enabled ? 1023 : 1022;
+        ((void (*)(id, SEL, int))objc_msgSend)(native, setter, state);
+        HDiag(@"native explicitly requested global service state=%d", state);
+        return YES;
+    } @catch (NSException *e) {
+        HDiag(@"native global setter exception: %@", e);
+        return NO;
+    }
+}
+static BOOL SetViaNativeToggleIfSafe(BOOL enabled) {
     id native = NativeHotspotController();
     SEL toggle = NSSelectorFromString(@"_toggleState");
-    if (native && [native respondsToSelector:toggle]) {
-        @try {
-            BOOL discoverable = NO;
-            BOOL readable = HGetBool(native, @"isDiscoverable", &discoverable);
-            HDiag(@"native current discoverable=%d readable=%d", discoverable, readable);
-            if (!readable || discoverable != enabled) {
-                BOOL accepted = ((BOOL (*)(id, SEL))objc_msgSend)(native, toggle);
-                HDiag(@"native _toggleState returned %d", accepted);
-                if (accepted) return YES;
-            } else {
-                HDiag(@"native discoverability already matches requested state");
-                return YES;
-            }
-        } @catch (NSException *e) {
-            HDiag(@"native toggle exception: %@", e);
-        }
+    BOOL discoverable = NO;
+    BOOL valid = HGetBool(native, @"isDiscoverable", &discoverable);
+    if (![native respondsToSelector:toggle] || !valid || discoverable == enabled) {
+        HDiag(@"skipping native toggle: selector=%d discoverability readable=%d value=%d requested=%d",
+              [native respondsToSelector:toggle], valid, discoverable, enabled);
+        return NO;
     }
-
-    // Flipswitch's secondary route: MISManager controls the global sharing
-    // service with the same state codes confirmed on this iPhone.
-    dlopen("/System/Library/PrivateFrameworks/MobileInternetSharing.framework/MobileInternetSharing", RTLD_LAZY);
-    Class misClass = NSClassFromString(@"MISManager");
-    id manager = HGet((id)misClass, @"sharedManager");
-    SEL setState = NSSelectorFromString(@"setState:");
-    if (manager && [manager respondsToSelector:setState]) {
-        @try {
-            ((void (*)(id, SEL, int))objc_msgSend)(manager, setState, enabled ? 1023 : 1022);
-            HDiag(@"MISManager setState:%d invoked", enabled ? 1023 : 1022);
-            return YES;
-        } @catch (NSException *e) {
-            HDiag(@"MISManager exception: %@", e);
-        }
+    @try {
+        BOOL accepted = ((BOOL (*)(id, SEL))objc_msgSend)(native, toggle);
+        HDiag(@"native _toggleState returned=%d; this is NOT proof service state changed", accepted);
+        return accepted;
+    } @catch (NSException *e) {
+        HDiag(@"native _toggleState exception: %@", e);
+        return NO;
     }
-    HDiag(@"MISManager unavailable class=%@ manager=%@", misClass, manager);
-
-    // Diagnostic fallback only. Calls to this CoreTelephony selector can be
-    // ignored when the caller lacks telephony permissions.
-    id ct = TelephonyClient();
-    SEL sel = NSSelectorFromString(@"setTetheringActive:completion:");
-    if ([ct respondsToSelector:sel]) {
-        @try {
-            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(ct, sel, enabled,
-                ^(id error) {
-                    HDiag(@"CoreTelephony completion: %@", error ?: @"no error");
-                });
-            HDiag(@"CoreTelephony async request submitted");
-            return YES;
-        } @catch (NSException *e) {
-            HDiag(@"CoreTelephony exception: %@", e);
-        }
-    }
-    HDiag(@"all hotspot setters unavailable; CoreTelephony client=%@", ct);
-    return NO;
 }
-@interface HotspotCCToggle : CCUIToggleModule
+static BOOL SetViaCoreTelephony(BOOL enabled) {
+    id client = TelephonyClient();
+    SEL withCompletion = NSSelectorFromString(@"setTetheringActive:completion:");
+    if (![client respondsToSelector:withCompletion]) {
+        HDiag(@"CoreTelephony async setter unavailable");
+        return NO;
+    }
+    @try {
+        ((void (*)(id, SEL, BOOL, id))objc_msgSend)(client, withCompletion, enabled, ^(id result) {
+            HDiag(@"CoreTelephony completion result=%@", result ?: @"nil");
+        });
+        HDiag(@"CoreTelephony requested enabled=%d", enabled);
+        return YES;
+    } @catch (NSException *e) {
+        HDiag(@"CoreTelephony setter exception: %@", e);
+        return NO;
+    }
+}
+// Primary pathway uses an explicit 1022/1023 service state, not the
+// controller's possibly stale discoverability. The verification phase
+// can independently try the native global setter if MIS did not work.
+static NSInteger SetHotspotState(BOOL enabled) {
+    BOOL actual = NO;
+    BOOL known = ReadTetheringStore(&actual);
+    HDiag(@"requested hotspot=%d actualStateKnown=%d actual=%d", enabled, known, actual);
+    if (known && actual == enabled) {
+        HDiag(@"service state already matches requested state");
+        return 0;
+    }
+    if (SetViaMIS(enabled)) return 1;
+    if (SetViaNativeGlobal(enabled)) return 2;
+    if (SetViaCoreTelephony(enabled)) return 3;
+    // Last resort: only toggle when the controller's own state is
+    // *opposite* the desired state. Never toggle it blindly.
+    if (SetViaNativeToggleIfSafe(enabled)) return 4;
+    HDiag(@"no usable hotspot setter");
+    return -1;
+}
+@interface HotspotCCToggle : CCUIToggleModule {
+    NSUInteger _toggleGeneration;
+}
 - (void)refreshHotspot;
 @end
 @implementation HotspotCCToggle
@@ -203,12 +260,48 @@ static BOOL SetHotspotState(BOOL enabled) {
 - (UIColor *)selectedColor { return [UIColor systemGreenColor]; }
 - (BOOL)isSelected { return GetHotspotState(); }
 - (void)setSelected:(BOOL)selected {
-    HDiag(@"CC button setSelected:%d", selected);
-    if (SetHotspotState(selected)) {
-        [self performSelector:@selector(refreshHotspot) withObject:nil afterDelay:0.5];
-        [self performSelector:@selector(refreshHotspot) withObject:nil afterDelay:1.5];
-    }
+    NSUInteger generation = ++_toggleGeneration;
+    HDiag(@"CC button setSelected:%d request #%lu", selected, (unsigned long)generation);
+    NSInteger path = SetHotspotState(selected);
     [self refreshState];
+    // Service state, not discoverability, determines whether the command
+    // worked. Don't race a later button press with a stale retry.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.25 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (generation != self->_toggleGeneration) return;
+        BOOL actual = NO;
+        BOOL known = ReadTetheringStore(&actual);
+        HDiag(@"verify #1 path=%ld target=%d known=%d actual=%d",
+              (long)path, selected, known, actual);
+        if (known && actual == selected) {
+            [self refreshState];
+            return;
+        }
+        if (path == 1) {
+            // Flipswitch MISManager did not take effect, try Apple's
+            // explicit global service setter, not _toggleState.
+            if (!SetViaNativeGlobal(selected)) SetViaCoreTelephony(selected);
+        } else if (path == 2) {
+            SetViaCoreTelephony(selected);
+        } else if (path == 3) {
+            // A telephony request was submitted; do not send a competing
+            // toggle unless its outcome is actually known.
+            HDiag(@"CoreTelephony still pending / service state mismatch");
+        } else if (path == -1) {
+            HDiag(@"No available service setter; check device build and entitlements");
+        }
+        [self refreshState];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (generation != self->_toggleGeneration) return;
+            BOOL finalState = NO;
+            BOOL finalKnown = ReadTetheringStore(&finalState);
+            HDiag(@"verify #2 target=%d known=%d actual=%d success=%d",
+                  selected, finalKnown, finalState,
+                  finalKnown && finalState == selected);
+            [self refreshState];
+        });
+    });
 }
 - (void)refreshHotspot {
     HDiag(@"refresh after toggle actual state=%d", GetHotspotState());
