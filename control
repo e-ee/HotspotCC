@@ -1,9 +1,10 @@
 Package: com.chatgpt.hotspotcc
 Name: Personal Hotspot (CCSupport)
-Version: 0.5.0-1
+Version: 0.6.0-1
 Architecture: iphoneos-arm64
 Maintainer: HotspotCC
 Section: Control Center (Modules)
 Priority: optional
 Depends: com.opa334.ccsupport, firmware (>= 15.0)
-Description: Personal Hotspot toggle for Dopamine iOS 15, Theos rootless build.
+Icon: https://raw.githubusercontent.com/e-ee/HotspotCC/main/Resources/Icon@2x.png
+Description: Personal Hotspot toggle for Dopamine on iOS 15, with CCSupport provider and visible icons.

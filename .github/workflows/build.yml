@@ -7,18 +7,33 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Theos
+      - name: Setup Theos and patched iOS SDKs
         uses: Randomblock1/theos-action@v1
-      - name: Build and verify arm64e
+      - name: Generate icon resources
+        run: python3 scripts/build_icons.py
+      - name: Compile, inspect linkage, and package
         shell: bash
         run: |
           set -euo pipefail
-          make package FINALPACKAGE=1
-          ls -lah packages/*.deb
+          make clean package FINALPACKAGE=1
           BINARY="$(find .theos/obj -type f -name HotspotCCProvider | head -1)"
           test -n "$BINARY"
           lipo -info "$BINARY"
           lipo -archs "$BINARY" | grep -qw arm64e
+          otool -L "$BINARY" | tee /tmp/hotspotcc-links.txt
+          grep -Fq '/System/Library/PrivateFrameworks/ControlCenterUIKit.framework/ControlCenterUIKit' /tmp/hotspotcc-links.txt
+          DEB="$(find packages -name '*.deb' | head -1)"
+          test -n "$DEB"
+          mkdir -p /tmp/hotspotcc-package
+          dpkg-deb -x "$DEB" /tmp/hotspotcc-package
+          BUNDLE="/tmp/hotspotcc-package/var/jb/Library/ControlCenter/CCSupport_Providers/HotspotCCProvider.bundle"
+          test -s "$BUNDLE/HotspotCCProvider"
+          test -s "$BUNDLE/Info.plist"
+          plutil -lint "$BUNDLE/Info.plist"
+          for name in Icon@2x.png Icon@3x.png HotspotGlyph@2x.png HotspotGlyph@3x.png; do
+            test -s "$BUNDLE/$name" || { echo "Missing icon: $name" >&2; exit 1; }
+          done
+          dpkg-deb -c "$DEB"
       - uses: actions/upload-artifact@v4
         with:
           name: HotspotCC-Dopamine-Theos-arm64e
