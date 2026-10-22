@@ -10,7 +10,7 @@ HotspotCCProvider_BUNDLE_EXTENSION = bundle
 HotspotCCProvider_FILES = HotspotCC.m
 HotspotCCProvider_CFLAGS = -fobjc-arc
 HotspotCCProvider_FRAMEWORKS = Foundation UIKit CoreTelephony SystemConfiguration
-HotspotCCProvider_PRIVATE_FRAMEWORKS = ControlCenterUIKit
+HotspotCCProvider_LDFLAGS = -Wl,-undefined,dynamic_lookup
 HotspotCCProvider_INSTALL_PATH = /Library/ControlCenter/CCSupport_Providers
 
 include $(THEOS_MAKE_PATH)/bundle.mk
