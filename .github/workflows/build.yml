@@ -24,16 +24,7 @@ jobs:
           grep -Fq '/System/Library/PrivateFrameworks/ControlCenterUIKit.framework/ControlCenterUIKit' /tmp/hotspotcc-links.txt
           DEB="$(find packages -name '*.deb' | head -1)"
           test -n "$DEB"
-          mkdir -p /tmp/hotspotcc-package
-          dpkg-deb -x "$DEB" /tmp/hotspotcc-package
-          BUNDLE="/tmp/hotspotcc-package/var/jb/Library/ControlCenter/CCSupport_Providers/HotspotCCProvider.bundle"
-          test -s "$BUNDLE/HotspotCCProvider"
-          test -s "$BUNDLE/Info.plist"
-          plutil -lint "$BUNDLE/Info.plist"
-          for name in Icon@2x.png Icon@3x.png HotspotGlyph@2x.png HotspotGlyph@3x.png; do
-            test -s "$BUNDLE/$name" || { echo "Missing icon: $name" >&2; exit 1; }
-          done
-          dpkg-deb -c "$DEB"
+          python3 scripts/check_deb.py "$DEB"
       - uses: actions/upload-artifact@v4
         with:
           name: HotspotCC-Dopamine-Theos-arm64e
