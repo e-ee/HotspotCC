@@ -1,0 +1,26 @@
+name: Build HotspotCC with Theos
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Theos
+        uses: Randomblock1/theos-action@v1
+      - name: Build and verify arm64e
+        shell: bash
+        run: |
+          set -euo pipefail
+          make package FINALPACKAGE=1
+          ls -lah packages/*.deb
+          BINARY="$(find .theos/obj -type f -name HotspotCCProvider | head -1)"
+          test -n "$BINARY"
+          lipo -info "$BINARY"
+          lipo -archs "$BINARY" | grep -qw arm64e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HotspotCC-Dopamine-Theos-arm64e
+          path: packages/*.deb
+          if-no-files-found: error
