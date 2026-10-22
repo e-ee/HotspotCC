@@ -1,10 +1,9 @@
 Package: com.chatgpt.hotspotcc
 Name: Personal Hotspot (CCSupport)
-Version: 0.9.0-1
+Version: 0.9.3-1
 Architecture: iphoneos-arm64
 Maintainer: HotspotCC
 Section: Control Center (Modules)
 Priority: optional
 Depends: com.opa334.ccsupport, firmware (>= 15.0)
-Icon: https://raw.githubusercontent.com/e-ee/HotspotCC/main/Resources/Icon@2x.png
-Description: Hotspot service plus Wi-Fi discovery, Bluetooth and wired connectivity readiness for iOS 15.
+Description: Native iOS Personal Hotspot glyph at 150 percent size; retains working v0.9 tethering.

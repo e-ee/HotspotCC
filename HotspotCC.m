@@ -319,10 +319,12 @@ static NSInteger SetHotspotState(BOOL enabled) {
 - (void)refreshHotspot;
 @end
 @implementation HotspotCCToggle
+// Use Apple's native Personal Hotspot SF Symbol. No custom bitmap assets.
 - (UIImage *)iconGlyph {
-    UIImage *img = [UIImage imageNamed:@"HotspotGlyph" inBundle:[NSBundle bundleForClass:[self class]] compatibleWithTraitCollection:nil];
-    return [img ?: [UIImage systemImageNamed:@"personalhotspot"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    return [[UIImage systemImageNamed:@"personalhotspot"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
+// CCUIToggleModule defaults to 1.0. Make the identical glyph 50% larger.
+- (double)glyphScale { return 1.5; }
 - (UIImage *)selectedIconGlyph { return [self iconGlyph]; }
 - (UIColor *)selectedColor { return [UIColor systemGreenColor]; }
 - (BOOL)isSelected { return GetHotspotState(); }
@@ -392,7 +394,6 @@ static NSInteger SetHotspotState(BOOL enabled) {
 }
 - (NSString *)displayNameForModuleIdentifier:(NSString *)identifier { return @"Personal Hotspot"; }
 - (UIImage *)settingsIconForModuleIdentifier:(NSString *)identifier {
-    UIImage *img = [UIImage imageNamed:@"Icon" inBundle:[NSBundle bundleForClass:[self class]] compatibleWithTraitCollection:nil];
-    return img ?: [UIImage systemImageNamed:@"personalhotspot"];
+    return [UIImage systemImageNamed:@"personalhotspot"];
 }
 @end
