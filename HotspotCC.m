@@ -5,6 +5,8 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
+#import <fcntl.h>
+#import <unistd.h>
 
 static NSString *const kModuleIdentifier = @"com.chatgpt.hotspotcc.toggle";
 static NSString *const kStoreKey = @"com.apple.MobileInternetSharing";
@@ -82,22 +84,111 @@ static BOOL GetHotspotState(void) {
     }
     return NO;
 }
-static BOOL SetHotspotState(BOOL enabled) {
-    id controller = SpringBoardTetheringController();
-    for (NSString *name in @[@"setPersonalHotspotEnabled:", @"setTetheringEnabled:"]) {
-        SEL sel = NSSelectorFromString(name);
-        if ([controller respondsToSelector:sel]) {
-            ((void (*)(id, SEL, BOOL))objc_msgSend)(controller, sel, enabled);
-            return YES;
-        }
+// Keep a diagnostic record in the mobile user's cache so a failed private-API
+// call can be distinguished from Control Center not dispatching setSelected:.
+static void HDiag(NSString *format, ...) {
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    NSLog(@"[HotspotCC] %@", message);
+    NSString *line = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], message];
+    NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
+    int fd = open("/var/mobile/Library/Caches/HotspotCC.log", O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fd >= 0) {
+        (void)write(fd, data.bytes, data.length);
+        close(fd);
     }
-    id ct = TelephonyClient();
-    SEL sel = NSSelectorFromString(@"setTetheringActive:");
-    if ([ct respondsToSelector:sel]) {
-        ((id (*)(id, SEL, BOOL))objc_msgSend)(ct, sel, enabled);
+}
+
+// Apple's *actual* Control Center hotspot controller. This technique is also
+// used by Flipswitch Switches/Hotspot.x; unlike the previous guessed
+// SBTetheringController selectors, this calls the original CC implementation.
+static id NativeHotspotController(void) {
+    static id controller = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSString *path = @"/System/Library/ControlCenter/Bundles/ConnectivityModule.bundle/ConnectivityModule";
+        void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        Class cls = NSClassFromString(@"CCUIConnectivityHotspotViewController");
+        HDiag(@"connectivity loaded=%d class=%@", handle != NULL, cls);
+        if (!cls) return;
+        @try {
+            controller = [[cls alloc] init];
+            if ([controller respondsToSelector:@selector(startObservingStateChanges)]) {
+                ((void (*)(id, SEL))objc_msgSend)(controller, @selector(startObservingStateChanges));
+            }
+            HDiag(@"native controller=%@ toggle=%d", controller,
+                  [controller respondsToSelector:NSSelectorFromString(@"_toggleState")]);
+        } @catch (NSException *e) {
+            HDiag(@"native controller init exception: %@", e);
+            controller = nil;
+        }
+    });
+    return controller;
+}
+
+static BOOL SetHotspotState(BOOL enabled) {
+    HDiag(@"requested hotspot=%d previous=%d", enabled, GetHotspotState());
+    if (GetHotspotState() == enabled) {
+        HDiag(@"already at requested state");
         return YES;
     }
-    NSLog(@"[HotspotCC] No working private setter found");
+
+    id native = NativeHotspotController();
+    SEL toggle = NSSelectorFromString(@"_toggleState");
+    if (native && [native respondsToSelector:toggle]) {
+        @try {
+            BOOL discoverable = NO;
+            BOOL readable = HGetBool(native, @"isDiscoverable", &discoverable);
+            HDiag(@"native current discoverable=%d readable=%d", discoverable, readable);
+            if (!readable || discoverable != enabled) {
+                BOOL accepted = ((BOOL (*)(id, SEL))objc_msgSend)(native, toggle);
+                HDiag(@"native _toggleState returned %d", accepted);
+                if (accepted) return YES;
+            } else {
+                HDiag(@"native discoverability already matches requested state");
+                return YES;
+            }
+        } @catch (NSException *e) {
+            HDiag(@"native toggle exception: %@", e);
+        }
+    }
+
+    // Flipswitch's secondary route: MISManager controls the global sharing
+    // service with the same state codes confirmed on this iPhone.
+    dlopen("/System/Library/PrivateFrameworks/MobileInternetSharing.framework/MobileInternetSharing", RTLD_LAZY);
+    Class misClass = NSClassFromString(@"MISManager");
+    id manager = HGet((id)misClass, @"sharedManager");
+    SEL setState = NSSelectorFromString(@"setState:");
+    if (manager && [manager respondsToSelector:setState]) {
+        @try {
+            ((void (*)(id, SEL, int))objc_msgSend)(manager, setState, enabled ? 1023 : 1022);
+            HDiag(@"MISManager setState:%d invoked", enabled ? 1023 : 1022);
+            return YES;
+        } @catch (NSException *e) {
+            HDiag(@"MISManager exception: %@", e);
+        }
+    }
+    HDiag(@"MISManager unavailable class=%@ manager=%@", misClass, manager);
+
+    // Diagnostic fallback only. Calls to this CoreTelephony selector can be
+    // ignored when the caller lacks telephony permissions.
+    id ct = TelephonyClient();
+    SEL sel = NSSelectorFromString(@"setTetheringActive:completion:");
+    if ([ct respondsToSelector:sel]) {
+        @try {
+            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(ct, sel, enabled,
+                ^(id error) {
+                    HDiag(@"CoreTelephony completion: %@", error ?: @"no error");
+                });
+            HDiag(@"CoreTelephony async request submitted");
+            return YES;
+        } @catch (NSException *e) {
+            HDiag(@"CoreTelephony exception: %@", e);
+        }
+    }
+    HDiag(@"all hotspot setters unavailable; CoreTelephony client=%@", ct);
     return NO;
 }
 @interface HotspotCCToggle : CCUIToggleModule
@@ -112,13 +203,17 @@ static BOOL SetHotspotState(BOOL enabled) {
 - (UIColor *)selectedColor { return [UIColor systemGreenColor]; }
 - (BOOL)isSelected { return GetHotspotState(); }
 - (void)setSelected:(BOOL)selected {
+    HDiag(@"CC button setSelected:%d", selected);
     if (SetHotspotState(selected)) {
         [self performSelector:@selector(refreshHotspot) withObject:nil afterDelay:0.5];
         [self performSelector:@selector(refreshHotspot) withObject:nil afterDelay:1.5];
     }
     [self refreshState];
 }
-- (void)refreshHotspot { [self refreshState]; }
+- (void)refreshHotspot {
+    HDiag(@"refresh after toggle actual state=%d", GetHotspotState());
+    [self refreshState];
+}
 @end
 @interface HotspotCCProvider : NSObject {
     NSMutableDictionary *_instances;
