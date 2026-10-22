@@ -229,6 +229,73 @@ static BOOL SetViaCoreTelephony(BOOL enabled) {
 // Primary pathway uses an explicit 1022/1023 service state, not the
 // controller's possibly stale discoverability. The verification phase
 // can independently try the native global setter if MIS did not work.
+
+// iOS treats hotspot service state and Wi-Fi discovery as independent.
+// The private WiFiKit monitor is also used by Apple's connectivity tile.
+static id DiscoveryMonitor(void) {
+    static id monitor;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        monitor = HGet(NativeHotspotController(), @"phStateMonitor");
+        if (!monitor) {
+            dlopen("/System/Library/PrivateFrameworks/WiFiKit.framework/WiFiKit", RTLD_LAZY | RTLD_GLOBAL);
+            Class cls = NSClassFromString(@"WFPersonalHotspotStateMonitor");
+            if (cls) {
+                @try { monitor = [[cls alloc] init]; }
+                @catch (NSException *e) { HDiag(@"discovery monitor exception=%@", e); }
+            }
+        }
+        HDiag(@"WiFiKit monitor=%@", monitor);
+    });
+    return monitor;
+}
+static void SetDiscovery(BOOL enabled) {
+    id m = DiscoveryMonitor();
+    SEL sel = NSSelectorFromString(@"setMISDiscoveryState:immediateDisable:");
+    if (![m respondsToSelector:sel]) {
+        HDiag(@"WiFiKit discovery setter unavailable");
+        return;
+    }
+    @try {
+        ((void (*)(id, SEL, BOOL, BOOL))objc_msgSend)(m, sel, enabled, !enabled);
+        HDiag(@"WiFiKit requested discoverable=%d immediateDisable=%d", enabled, !enabled);
+        SEL get = NSSelectorFromString(@"asyncMISDiscoveryState:");
+        if ([m respondsToSelector:get]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(m, get, ^(BOOL current) {
+                HDiag(@"WiFiKit reported discoverable=%d", current);
+            });
+        }
+    } @catch (NSException *e) { HDiag(@"WiFiKit discovery exception=%@", e); }
+}
+// Prepare wireless transports as Settings does. Never power them off when
+// sharing is disabled. USB and physical Ethernet depend on attached hardware.
+static void PrepareWirelessTransports(void) {
+    id wifi = HGet((id)NSClassFromString(@"SBWiFiManager"), @"sharedInstance");
+    BOOL enabled = NO;
+    BOOL readable = HGetBool(wifi, @"wiFiEnabled", &enabled);
+    HDiag(@"Wi-Fi manager=%@ readable=%d enabled=%d", wifi, readable, enabled);
+    SEL turnWifiOn = NSSelectorFromString(@"setWiFiEnabled:");
+    if (wifi && [wifi respondsToSelector:turnWifiOn] && (!readable || !enabled)) {
+        @try {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(wifi, turnWifiOn, YES);
+            HDiag(@"Wi-Fi power enabled");
+        } @catch (NSException *e) { HDiag(@"Wi-Fi power exception=%@", e); }
+    }
+    dlopen("/System/Library/PrivateFrameworks/BluetoothManager.framework/BluetoothManager",
+           RTLD_LAZY | RTLD_GLOBAL);
+    id bt = HGet((id)NSClassFromString(@"BluetoothManager"), @"sharedInstance");
+    enabled = NO;
+    readable = HGetBool(bt, @"powered", &enabled);
+    HDiag(@"Bluetooth manager=%@ readable=%d enabled=%d", bt, readable, enabled);
+    SEL turnBluetoothOn = NSSelectorFromString(@"setPowered:");
+    if (bt && [bt respondsToSelector:turnBluetoothOn] && (!readable || !enabled)) {
+        @try {
+            ((BOOL (*)(id, SEL, BOOL))objc_msgSend)(bt, turnBluetoothOn, YES);
+            HDiag(@"Bluetooth power enabled");
+        } @catch (NSException *e) { HDiag(@"Bluetooth power exception=%@", e); }
+    }
+}
+
 static NSInteger SetHotspotState(BOOL enabled) {
     BOOL actual = NO;
     BOOL known = ReadTetheringStore(&actual);
@@ -262,43 +329,37 @@ static NSInteger SetHotspotState(BOOL enabled) {
 - (void)setSelected:(BOOL)selected {
     NSUInteger generation = ++_toggleGeneration;
     HDiag(@"CC button setSelected:%d request #%lu", selected, (unsigned long)generation);
+    if (selected) PrepareWirelessTransports();
+    else SetDiscovery(NO);
+
     NSInteger path = SetHotspotState(selected);
     [self refreshState];
-    // Service state, not discoverability, determines whether the command
-    // worked. Don't race a later button press with a stale retry.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.25 * NSEC_PER_SEC)),
+    // Set discovery after service activation to avoid the "Not Discoverable"
+    // state observed when only MISManager setState:1023 is called.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.65 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (generation != self->_toggleGeneration) return;
+        SetDiscovery(selected);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         if (generation != self->_toggleGeneration) return;
         BOOL actual = NO;
         BOOL known = ReadTetheringStore(&actual);
-        HDiag(@"verify #1 path=%ld target=%d known=%d actual=%d",
-              (long)path, selected, known, actual);
-        if (known && actual == selected) {
-            [self refreshState];
-            return;
-        }
+        HDiag(@"verify #1 path=%ld target=%d known=%d actual=%d", (long)path, selected, known, actual);
+        if (known && actual == selected) { [self refreshState]; return; }
         if (path == 1) {
-            // Flipswitch MISManager did not take effect, try Apple's
-            // explicit global service setter, not _toggleState.
             if (!SetViaNativeGlobal(selected)) SetViaCoreTelephony(selected);
-        } else if (path == 2) {
-            SetViaCoreTelephony(selected);
-        } else if (path == 3) {
-            // A telephony request was submitted; do not send a competing
-            // toggle unless its outcome is actually known.
-            HDiag(@"CoreTelephony still pending / service state mismatch");
-        } else if (path == -1) {
-            HDiag(@"No available service setter; check device build and entitlements");
-        }
+        } else if (path == 2) SetViaCoreTelephony(selected);
+        else if (path == -1) HDiag(@"No usable hotspot service setter");
         [self refreshState];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (generation != self->_toggleGeneration) return;
-            BOOL finalState = NO;
-            BOOL finalKnown = ReadTetheringStore(&finalState);
+            BOOL state = NO;
+            BOOL valid = ReadTetheringStore(&state);
             HDiag(@"verify #2 target=%d known=%d actual=%d success=%d",
-                  selected, finalKnown, finalState,
-                  finalKnown && finalState == selected);
+                  selected, valid, state, valid && state == selected);
             [self refreshState];
         });
     });
