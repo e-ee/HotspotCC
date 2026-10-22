@@ -323,8 +323,8 @@ static NSInteger SetHotspotState(BOOL enabled) {
 - (UIImage *)iconGlyph {
     return [[UIImage systemImageNamed:@"personalhotspot"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
-// CCUIToggleModule defaults to 1.0. Make the identical glyph 50% larger.
-- (double)glyphScale { return 1.5; }
+// CCUIToggleModule defaults to 1.0. Make the original glyph twice the size it was in v0.9.3 (1.5 -> 3.0).
+- (double)glyphScale { return 3.0; }
 - (UIImage *)selectedIconGlyph { return [self iconGlyph]; }
 - (UIColor *)selectedColor { return [UIColor systemGreenColor]; }
 - (BOOL)isSelected { return GetHotspotState(); }
