@@ -25,24 +25,19 @@ static id LSURLs(id fm,SEL s,NSSearchPathDirectory d,NSSearchPathDomainMask m){
  NSArray *urls=((id(*)(id,SEL,NSSearchPathDirectory,NSSearchPathDomainMask))LSRealURLs)(fm,s,d,m);NSMutableArray *a=[NSMutableArray new];
  for(NSURL *u in urls)[a addObject:u.isFileURL?[NSURL fileURLWithPath:LSMapPath(u.path) isDirectory:YES]:u];return a;
 }
+static NSDictionary *LSReadPreferences(void){return [LSOriginalDefaults persistentDomainForName:@"com.ledvance.smart.lightshow.mesh"];}
 static NSString *LSBootstrap(void){
- LSOwnRoot=NSHomeDirectory();NSFileManager *fm=NSFileManager.defaultManager;
- NSString *parent=@"/var/mobile/Containers/Data/Application";
- for(NSString *uuid in [fm contentsOfDirectoryAtPath:parent error:nil]){
-  NSString *p=[parent stringByAppendingPathComponent:uuid];
-  NSDictionary *meta=[NSDictionary dictionaryWithContentsOfFile:[p stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"]];
-  if([meta[@"MCMMetadataIdentifier"] isEqual:@"com.ledvance.smart"]){LSOriginalRoot=p;break;}
+ LSOwnRoot=NSHomeDirectory();LSOriginalRoot=LSOwnRoot;
+ NSDictionary *seed=[NSDictionary dictionaryWithContentsOfURL:[NSBundle.mainBundle URLForResource:@"LightShowSeed" withExtension:@"plist"]];
+ LSOriginalDefaults=[[NSUserDefaults alloc]initWithSuiteName:@"com.ledvance.smart.lightshow.mesh"];
+ NSDictionary *existing=LSReadPreferences();
+ if(![existing[@"mesh.json"] isKindOfClass:NSData.class]){
+  if(![seed[@"mesh.json"] isKindOfClass:NSData.class])return @"The private saved-light configuration is missing from this build.";
+  for(NSString *key in seed)[LSOriginalDefaults setObject:seed[key] forKey:key];
+  [LSOriginalDefaults synchronize];
  }
- if(!LSOriginalRoot)return @"Original SYLVANIA data is not accessible. Pairing has not been changed.";
- // Reuse the existing state, including mesh sequence numbers. Do not clone it.
- struct rebinding bindings[]={{"NSHomeDirectory",LSHome,(void **)&LSRealHome},{"NSSearchPathForDirectoriesInDomains",LSSearch,(void **)&LSRealSearch}};
- rebind_symbols_image((void *)_dyld_get_image_header(0),_dyld_get_image_vmaddr_slide(0),bindings,2);
- Method urls=class_getInstanceMethod(NSFileManager.class,@selector(URLsForDirectory:inDomains:));LSRealURLs=method_setImplementation(urls,(IMP)LSURLs);
- LSSavedPreferences=[NSDictionary dictionaryWithContentsOfFile:[LSOriginalRoot stringByAppendingPathComponent:@"Library/Preferences/com.ledvance.smart.plist"]];
- if(![LSSavedPreferences[@"mesh.json"] isKindOfClass:NSData.class])return @"The original app has no readable saved mesh configuration.";
- LSOriginalDefaults=[[NSUserDefaults alloc]initWithSuiteName:@"com.ledvance.smart"];
- [LSOriginalDefaults registerDefaults:LSSavedPreferences];
- if(LSOriginalDefaults){Method m=class_getClassMethod(NSUserDefaults.class,@selector(standardUserDefaults));method_setImplementation(m,(IMP)LSDefaults);}
+ LSSavedPreferences=LSReadPreferences();
+ Method defaults=class_getClassMethod(NSUserDefaults.class,@selector(standardUserDefaults));method_setImplementation(defaults,(IMP)LSDefaults);
  return nil;
 }
 static NSString *LSBootstrapError;
@@ -252,8 +247,8 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
 - (BOOL)prepareSavedMesh {
  if(self.meshPrepared)return YES;
  if(LSBootstrapError){self.status.text=LSBootstrapError;return NO;}
- // Read the live original preferences again, never embed or clone the uploaded snapshot.
- NSDictionary *prefs=[NSDictionary dictionaryWithContentsOfFile:[LSOriginalRoot stringByAppendingPathComponent:@"Library/Preferences/com.ledvance.smart.plist"]];
+ // Use the independent local controller state, persisting its own sequence counter.
+ NSDictionary *prefs=LSReadPreferences();
  NSData *data=prefs[@"mesh.json"];
  if(![data isKindOfClass:NSData.class]){self.status.text=@"The original saved mesh could not be read.";return NO;}
  NSDictionary *mesh=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
@@ -303,15 +298,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
   if([rgb respondsToSelector:@selector(count)] && [rgb count])self.hasRGB=YES;
   if([white respondsToSelector:@selector(count)] && [white count])self.hasWhite=YES;
  }
- Class native=NSClassFromString(@"MeshNativeHelper");
- SEL connected=NSSelectorFromString(@"meshClientIsConnectedToNetwork");
- self.native=[native respondsToSelector:connected]&&((unsigned char(*)(id,SEL))objc_msgSend)(native,connected);
- if(self.native){
-  id groups=nil;SEL g=NSSelectorFromString(@"meshClientGetAllGroups:");
-  if([native respondsToSelector:g])groups=((id(*)(id,SEL,id))objc_msgSend)(native,g,nil);
-  if([groups isKindOfClass:NSArray.class])for(id x in groups)remember(x);
-  @synchronized(nativeTargets){self.targets=nativeTargets.array.copy;}
- }else self.targets=@[];
+ self.native=NO;self.targets=@[];
 }
 - (void)toggle {
  if(self.running){self.userPaused=YES;[self stop];return;}
@@ -328,7 +315,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  if(self.mode.selectedSegmentIndex==0){
   self.running=YES;self.sceneStarted=NSProcessInfo.processInfo.systemUptime;self.sceneHue=self.artworkHue;self.oldIdle=UIApplication.sharedApplication.idleTimerDisabled;UIApplication.sharedApplication.idleTimerDisabled=YES;
   [self.start setTitle:@"Pause light show" forState:UIControlStateNormal];
-  self.timer=[NSTimer scheduledTimerWithTimeInterval:0.16 target:self selector:@selector(tick) userInfo:nil repeats:YES];return;
+  self.timer=[NSTimer timerWithTimeInterval:0.05 target:self selector:@selector(tick) userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];return;
  }
 }
 - (void)tick {
@@ -354,13 +341,16 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
   int result=((int(*)(id,SEL,id,int,int,int,unsigned char,int,short))objc_msgSend)(NSClassFromString(@"MeshNativeHelper"),s,t,light,hu,sat,0,0,0);
   self.status.text=[NSString stringWithFormat:@"%lu saved lights · room flow",(unsigned long)self.savedBulbCount]; (void)result;
  }else{
+  id peripheral=send0(bearer,@"getCurrentPeripheral");
+  if([peripheral respondsToSelector:NSSelectorFromString(@"canSendWriteWithoutResponse")] && !((BOOL(*)(id,SEL))objc_msgSend)(peripheral,NSSelectorFromString(@"canSendWriteWithoutResponse")))return;
   // Observe the SDK queue rather than building an unbounded backlog.
   id mesh=send0(NSClassFromString(@"SigMeshLib"),@"share");id commands=send0(mesh,@"commands");
   if([commands respondsToSelector:@selector(count)] && [commands count]){self.status.text=@"Music reactive · waiting for Bluetooth";return;}
-  NSDictionary *zone=[self nextSpatialZone];uint16_t destination=[zone[@"address"] unsignedIntValue];int role=[zone[@"role"] intValue];
+  NSDictionary *zone=[self nextSpatialZone];BOOL fullRoom=(self.spatialTick%4)!=0;uint16_t destination=fullRoom?0xffff:[zone[@"address"] unsignedIntValue];int role=fullRoom?4:[zone[@"role"] intValue];
   float phase=[zone[@"phase"] floatValue],travel=0.5+0.5*sinf(t*0.65-phase*2*M_PI);
   float brightness;
-  if(role==0){brightness=0.14+0.12*breath+0.06*pulse;sat=44000;}
+  if(role==4){brightness=0.20+0.45*wave+0.15*pulse;sat=57000;}
+  else if(role==0){brightness=0.14+0.12*breath+0.06*pulse;sat=44000;}
   else if(role==1){brightness=0.10+0.10*breath;sat=36000;}
   else if(role==2){brightness=0.25+0.42*travel+0.08*pulse;hue=fmodf(hue+0.07*wave,1);sat=58000;}
   else {brightness=0.09+0.20*travel+0.04*pulse;hue=fmodf(hue+0.06*phase,1);sat=52000;}
@@ -386,14 +376,20 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  if(was)self.status.text=@"Stopped. Lights keep their last colour.";
 }
 @end
+static UIWindow *LSHostWindow;
+static BOOL LSLaunch(id delegate,SEL selector,UIApplication *application,NSDictionary *options){
+ LSHostWindow=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];UIViewController *vc=[UIViewController new];vc.view.backgroundColor=[UIColor colorWithRed:0.035 green:0.043 blue:0.065 alpha:1];LSHostWindow.rootViewController=vc;
+ if([delegate respondsToSelector:@selector(setWindow:)])((void(*)(id,SEL,id))objc_msgSend)(delegate,@selector(setWindow:),LSHostWindow);
+ [LSHostWindow makeKeyAndVisible];
+ controller=[LSPanel new];[controller install];return YES;
+}
+static void LSLifecycle(id d,SEL s,id application){}
 __attribute__((constructor)) static void loadLightShow(void){
  @autoreleasepool{
- LSBootstrapError=LSBootstrap();
- nativeTargets=[NSMutableOrderedSet new];
- Class c=NSClassFromString(@"MeshNativeHelper");
- swizzle(c,@"meshClientHslSet:lightness:hue:saturation:reliable:transitionTime:delay:",(IMP)watchHSL,&origHSL);
- swizzle(c,@"meshClientOnOffSet:onoff:reliable:transitionTime:delay:",(IMP)watchOnOff,&origOnOff);
- swizzle(c,@"meshClientLightnessSet:lightness:reliable:transition_time:delay:",(IMP)watchLightness,&origLightness);
- dispatch_after(dispatch_time(DISPATCH_TIME_NOW,3*NSEC_PER_SEC),dispatch_get_main_queue(),^{controller=[LSPanel new];[controller install];});
+ LSBootstrapError=LSBootstrap();nativeTargets=[NSMutableOrderedSet new];
+ Class delegate=NSClassFromString(@"_TtC13SmartHome_Prd11AppDelegate");
+ SEL launch=@selector(application:didFinishLaunchingWithOptions:);Method m=class_getInstanceMethod(delegate,launch);
+ if(m)method_setImplementation(m,(IMP)LSLaunch);
+ for(NSString *name in @[@"applicationDidBecomeActive:",@"applicationWillResignActive:",@"applicationDidEnterBackground:",@"applicationWillEnterForeground:",@"applicationWillTerminate:"]){Method lifecycle=class_getInstanceMethod(delegate,NSSelectorFromString(name));if(lifecycle)method_setImplementation(lifecycle,(IMP)LSLifecycle);}
  }
 }
