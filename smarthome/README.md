@@ -1,27 +1,27 @@
-# Light Show v0.4: Room Flow
+# Light Show v0.5: Private Paired Build
 
-TrollStore IPA for the supplied SYLVANIA Smart Home 3.0.2 host, iOS 15. No microphone, no pairing/reset commands, separate install identity `com.ledvance.smart.lightshow`.
+Private TrollStore IPA for the supplied SYLVANIA 3.0.2 host on iOS 15. The user reported that v0.4 could not access the original app's data container; the stock account tutorial also flashed before the delayed overlay. This version removes both dependencies.
 
-## Existing lights
+## Existing network, independent controller
 
-Read the original on-device preferences file and `mesh.json`, restore the existing controller UUID through the stock Telink SDK, select app-key index 0, initialize SigMeshLib and explicitly start SigBearer's mesh connection. The uploaded data verified 14 bulbs in 5 groups. Network keys and user state are not embedded in source or published to GitHub. Original data is shared in place; close the original app before running this app so controller sequence state has only one writer.
+The local packaging step embeds a private seed derived from the user's supplied mesh export. The seed is never committed or uploaded to GitHub. It retains the existing network/app keys, 14 bulbs and 5 groups, but adds a distinct controller UUID at unicast address 7F00, outside the original provisioner's 0001–0100 allocation. Its own sequence counter persists in a separate preferences suite. Remote device keys are replaced with placeholders; configuration/provisioning operations are not implemented. No reset or re-pairing is performed.
 
-## Spatial effects
+This personalized build assigns one additional controller identity for the user's current phone. Do not run copies of this same seeded controller on multiple phones concurrently; allocate a distinct controller/address for each. Original SYLVANIA remains separately installed and its data is neither read nor modified. Close the original app while testing to release its Bluetooth connection.
 
-Living Room's four fill bulbs are updated individually. Saved names containing TV and Corner are provisional spatial hints for a dimmer TV anchor and a wider corner wash. The photographs establish broad wall/ceiling washes and TV focus; they do not prove which physical fixture each saved node controls. No definitive TV-white or behind-TV mapping is claimed. The other 8 bulbs remain in their saved support groups. The Kitchen and single-bulb new group share an effect phase, without changing saved membership.
+The native module loads its own persisted mesh seed through SigDataSource, selects app-key 0, initializes SigMeshLib and explicitly starts SigBearer. It uses standard Bluetooth permissions. The original cross-container/private-storage entitlements are removed. The installer container stays `com.ledvance.smart.lightshow`.
 
-Use a bounded 8-slot schedule at 0.16 seconds per slot: fill, corner, fill, support, TV, corner, fill, fill. Avoid overlapping Living Room group broadcasts that would overwrite the TV/corner settings. Shared palette, slow offset waves, gradual artwork-hue changes, conservative TV brightness, no random black/white strobing. Decorative on-screen waves represent the generated light scene, not an audio spectrum.
+## Clean startup
 
-## Now Playing
+Remove stock main and launch storyboards. Replace the stock app delegate's launch/lifecycle path with the Light Show interface and lighting engine. The empty-account tutorial and APP NEWS fetch/presentation path no longer run. Actual Bluetooth/system permissions are retained.
 
-MediaRemote supplies title, artwork, play/pause state and playback position across sources where available. Album artwork drives colour; clock-driven curves animate the room. If the player publishes BPM metadata it can influence the pulse. Without BPM, use slow continuous movement; there is no invented 120 BPM default. This is playback-driven ambient lighting, not waveform analysis, measured beat sync, or movie screen-colour matching. There is no microphone fallback or permission.
+## Responsive effects
 
-## Interface
+20 Hz latest-frame scheduler, conditional on the SDK queue and CoreBluetooth write-without-response readiness. Frames are generated at send time; obsolete frames are not accumulated. Whole-room broadcast updates take priority; spatial accents are secondary. This is a configured update cadence, not measured physical bulb latency.
 
-Full-screen dark native interface, real artwork, current title, saved group names, connection status, one Start/Pause button. Palette and brightness are optional. Starts automatically when Now Playing is active and the mesh is connected. Keep the app foregrounded while your player supplies playback in the background. Broad cross-app background execution is not implemented.
+Now Playing supplies track information, artwork and play/pause state. Generated lighting effects follow playback; they do not measure soundtrack beats or movie screen colours. Microphone capture is absent. Experimental ReplayKit work is not shipped in this build. Keep Light Show foregrounded while the player supplies background playback.
 
 ## Validation
 
-Native ARM64 module compiled on GitHub macOS with the iOS SDK. Local checks verify all 14 saved bulbs are covered, TV/corner endpoints are excluded from fill updates, no user network keys appear in source, identifiers differ from the original app, microphone permission/capture symbols are absent, and executable signature page hashes match. No physical-device installation, original-state access, or Bluetooth tests are available. Compilation and package checks do not guarantee runtime success. Earlier v0.2 did not connect; v0.3+ adds the explicit saved-mesh initialization and connection steps.
+GitHub macOS compiled the ARM64 module. Local checks verify: a separate local controller/address and sequence domain; all existing bulbs/groups retained; readable bundled seed; no uploaded keys in public source; separate install identity; no stock storyboard or microphone permission; and valid executable signature page hashes. Physical-device installation and Bluetooth behavior remain untested in this environment. Prior container-access failure is addressed architecturally, but runtime success is not yet established.
 
-Original host binaries stay private. fishhook dependency license is included. HotspotCC main is unaffected.
+Host binaries and private mesh seed remain outside GitHub. fishhook license is retained for earlier source history. Main HotspotCC is unaffected.
