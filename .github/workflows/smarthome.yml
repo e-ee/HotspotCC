@@ -4,12 +4,26 @@ on:
     branches: [smarthome-visualizer]
     paths: ['smarthome/**', '.github/workflows/smarthome.yml']
   workflow_dispatch:
+concurrency:
+  group: smarthome-visualizer
+  cancel-in-progress: true
 permissions:
   contents: read
+  actions: write
 jobs:
   build:
     runs-on: macos-14
     steps:
+      - name: Cancel obsolete branch builds
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {owner: context.repo.owner, repo: context.repo.repo, branch: 'smarthome-visualizer', per_page: 100});
+            for (const r of runs) {
+              if (r.id !== context.runId && ['queued', 'in_progress', 'waiting'].includes(r.status)) {
+                try { await github.rest.actions.cancelWorkflowRun({owner: context.repo.owner, repo: context.repo.repo, run_id: r.id}); } catch(e) { core.info(String(e.status)); }
+              }
+            }
       - uses: actions/checkout@v4
       - name: Compile ARM64 visualizer
         run: |
