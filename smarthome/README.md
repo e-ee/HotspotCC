@@ -1,25 +1,27 @@
-# Light Show v0.2
+# Light Show v0.4: Room Flow
 
-Experimental playback-only lighting module for the supplied SYLVANIA Smart Home 3.0.2 build. No microphone code or permission is included.
+TrollStore IPA for the supplied SYLVANIA Smart Home 3.0.2 host, iOS 15. No microphone, no pairing/reset commands, separate install identity `com.ledvance.smart.lightshow`.
 
-The separate app identifier `com.ledvance.smart.lightshow` avoids replacing the original `com.ledvance.smart` installation. The IPA is intended for TrollStore on iOS 15; ordinary signing does not grant the required private entitlements. Older iOS versions are not established because the supplied host requires iOS 15.
+## Existing lights
 
-## Playback behavior
+Read the original on-device preferences file and `mesh.json`, restore the existing controller UUID through the stock Telink SDK, select app-key index 0, initialize SigMeshLib and explicitly start SigBearer's mesh connection. The uploaded data verified 14 bulbs in 5 groups. Network keys and user state are not embedded in source or published to GitHub. Original data is shared in place; close the original app before running this app so controller sequence state has only one writer.
 
-MediaRemote supplies system Now Playing metadata and play/pause state. Album artwork determines colour. Playback position drives a pulse. BPM metadata is used when available; otherwise the animation uses an explicitly unmeasured 120 BPM pulse. This is not audio waveform capture, frequency analysis, or verified beat synchronization. App-to-app audio capture is not implemented.
+## Spatial effects
 
-The foreground app automatically attempts to start when playback is active and saved lights are available. The compact control expands for pause and palette options. Keep it foregrounded while another player supplies music.
+Living Room's four fill bulbs are updated individually. Saved names containing TV and Corner are provisional spatial hints for a dimmer TV anchor and a wider corner wash. The photographs establish broad wall/ceiling washes and TV focus; they do not prove which physical fixture each saved node controls. No definitive TV-white or behind-TV mapping is claimed. The other 8 bulbs remain in their saved support groups. The Kitchen and single-bulb new group share an effect phase, without changing saved membership.
 
-## Existing bulbs
+Use a bounded 8-slot schedule at 0.16 seconds per slot: fill, corner, fill, support, TV, corner, fill, fill. Avoid overlapping Living Room group broadcasts that would overwrite the TV/corner settings. Shared palette, slow offset waves, gradual artwork-hue changes, conservative TV brightness, no random black/white strobing. Decorative on-screen waves represent the generated light scene, not an audio spectrum.
 
-The module uses TrollStore entitlements to locate only the original SYLVANIA data container by its metadata identifier. It redirects the host executable's Foundation home/search paths, NSFileManager directory URLs, and standard defaults to that existing configuration. It does not copy the controller identity or reset/provision bulbs. Its own installer container identity remains distinct, to avoid tying uninstall to the original app's container.
+## Now Playing
 
-Close the original app before launching Light Show. Both apps must not independently write mesh state or sequence numbers concurrently. Shared original state can be updated by the stock mesh SDK while controlling lights. This is not a read-only bridge. No pairing credentials are uploaded or published here.
+MediaRemote supplies title, artwork, play/pause state and playback position across sources where available. Album artwork drives colour; clock-driven curves animate the room. If the player publishes BPM metadata it can influence the pulse. Without BPM, use slow continuous movement; there is no invented 120 BPM default. This is playback-driven ambient lighting, not waveform analysis, measured beat sync, or movie screen-colour matching. There is no microphone fallback or permission.
 
-The Telink path uses broadcast lighting commands within the current mesh/app-key binding. WICED attempts to enumerate groups and can also observe host UI targets. Not all bulb/backend combinations are verified. If the saved network cannot be loaded, the module waits rather than requesting re-pairing.
+## Interface
 
-## Validation and limitations
+Full-screen dark native interface, real artwork, current title, saved group names, connection status, one Start/Pause button. Palette and brightness are optional. Starts automatically when Now Playing is active and the mesh is connected. Keep the app foregrounded while your player supplies playback in the background. Broad cross-app background execution is not implemented.
 
-GitHub macOS builds compile the native ARM64 module. Local packaging checks cover identifiers, absent microphone permission, library embedding, and executable code-signature page hashes. No physical-device installation, original-state routing, or Bluetooth tests are available in this environment. Successful package validation is not a guarantee of runtime success.
+## Validation
 
-Source dependencies: fishhook from facebook/fishhook, with its license in this directory. The supplied host app is never uploaded to this repository. The main HotspotCC branch is unaffected.
+Native ARM64 module compiled on GitHub macOS with the iOS SDK. Local checks verify all 14 saved bulbs are covered, TV/corner endpoints are excluded from fill updates, no user network keys appear in source, identifiers differ from the original app, microphone permission/capture symbols are absent, and executable signature page hashes match. No physical-device installation, original-state access, or Bluetooth tests are available. Compilation and package checks do not guarantee runtime success. Earlier v0.2 did not connect; v0.3+ adds the explicit saved-mesh initialization and connection steps.
+
+Original host binaries stay private. fishhook dependency license is included. HotspotCC main is unaffected.
