@@ -1,0 +1,23 @@
+name: SmartHome Visualizer
+on:
+  push:
+    branches: [smarthome-visualizer]
+    paths: ['smarthome/**', '.github/workflows/smarthome.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile ARM64 visualizer
+        run: |
+          mkdir -p build
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=12.0 -fobjc-arc -fblocks -dynamiclib smarthome/LightShow.m -o build/LightShow.dylib -install_name '@executable_path/Frameworks/LightShow.dylib' -framework UIKit -framework AVFoundation -framework Accelerate -framework Foundation -Wno-deprecated-declarations
+          codesign --force --sign - build/LightShow.dylib
+          file build/LightShow.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LightShow-arm64
+          path: build/LightShow.dylib
