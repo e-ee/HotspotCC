@@ -150,7 +150,10 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  [UIView animateWithDuration:0.25 animations:^{self.window.frame=f;}];[button setTitle:self.expanded?@"−":@"+" forState:UIControlStateNormal];
 }
 - (id)mediaValue:(NSDictionary *)d suffix:(NSString *)suffix {
- for(id k in d)if([[k description]hasSuffix:suffix])return d[k];return nil;
+ id value=d[[@"kMRMediaRemoteNowPlayingInfo" stringByAppendingString:suffix]];
+ if(value)return value;
+ value=d[suffix];if(value)return value;
+ for(id k in d)if([[k description]hasSuffix:[@"Info" stringByAppendingString:suffix]])return d[k];return nil;
 }
 - (void)refreshMedia {
  static void *handle;static void (*getInfo)(dispatch_queue_t,void(^)(CFDictionaryRef));static void (*getPlaying)(dispatch_queue_t,void(^)(BOOL));
