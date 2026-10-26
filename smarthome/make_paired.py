@@ -18,6 +18,7 @@ d['UIUserInterfaceStyle']='Dark'
 d['UIStatusBarStyle']='UIStatusBarStyleLightContent'
 d['UIViewControllerBasedStatusBarAppearance']=False
 shutil.copy2(root/'LightShowSeed.plist',app/'LightShowSeed.plist')
+(app/'LightShowSeed.plist').chmod(0o644)
 info.write_bytes(plistlib.dumps(d,fmt=plistlib.FMT_BINARY))
 shutil.copy2(root/'compiled/LightShow.dylib',app/'Frameworks/LightShow.dylib')
 exe=app/d['CFBundleExecutable']
