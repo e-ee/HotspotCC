@@ -217,8 +217,8 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  if(self.running)return;
  if(LSBootstrapError){self.status.text=LSBootstrapError;return;}
  [self discover];
- if(self.native && !self.targets.count){self.status.text=@"Select All Lights in the app and change colour once, then Start.";return;}
- if(!self.native && !self.hasRGB && !self.hasWhite){self.status.text=@"No configured lights found. Connect or pair them in the app first.";return;}
+ if(self.native && !self.targets.count){self.status.text=@"Loading your existing light groups.";return;}
+ if(!self.native && !self.hasRGB && !self.hasWhite){self.status.text=@"Waiting for your existing light network to load.";return;}
  if(self.mode.selectedSegmentIndex==0){
   self.running=YES;self.oldIdle=UIApplication.sharedApplication.idleTimerDisabled;UIApplication.sharedApplication.idleTimerDisabled=YES;
   [self.start setTitle:@"Pause light show" forState:UIControlStateNormal];
