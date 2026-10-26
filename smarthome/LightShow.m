@@ -10,6 +10,7 @@
 #import "fishhook.h"
 static NSString *LSOriginalRoot, *LSOwnRoot;
 static NSUserDefaults *LSOriginalDefaults;
+static NSDictionary *LSSavedPreferences;
 static NSString *(*LSRealHome)(void);
 static NSArray *(*LSRealSearch)(NSSearchPathDirectory,NSSearchPathDomainMask,BOOL);
 static NSString *LSMapPath(NSString *p){
@@ -37,7 +38,10 @@ static NSString *LSBootstrap(void){
  struct rebinding bindings[]={{"NSHomeDirectory",LSHome,(void **)&LSRealHome},{"NSSearchPathForDirectoriesInDomains",LSSearch,(void **)&LSRealSearch}};
  rebind_symbols_image((void *)_dyld_get_image_header(0),_dyld_get_image_vmaddr_slide(0),bindings,2);
  Method urls=class_getInstanceMethod(NSFileManager.class,@selector(URLsForDirectory:inDomains:));LSRealURLs=method_setImplementation(urls,(IMP)LSURLs);
+ LSSavedPreferences=[NSDictionary dictionaryWithContentsOfFile:[LSOriginalRoot stringByAppendingPathComponent:@"Library/Preferences/com.ledvance.smart.plist"]];
+ if(![LSSavedPreferences[@"mesh.json"] isKindOfClass:NSData.class])return @"The original app has no readable saved mesh configuration.";
  LSOriginalDefaults=[[NSUserDefaults alloc]initWithSuiteName:@"com.ledvance.smart"];
+ [LSOriginalDefaults registerDefaults:LSSavedPreferences];
  if(LSOriginalDefaults){Method m=class_getClassMethod(NSUserDefaults.class,@selector(standardUserDefaults));method_setImplementation(m,(IMP)LSDefaults);}
  return nil;
 }
@@ -82,6 +86,11 @@ static void swizzle(Class c,NSString *s,IMP replacement,IMP *original){ Method m
 @property(nonatomic,strong) NSDictionary *mediaInfo;
 @property(nonatomic) BOOL playing;
 @property(nonatomic) BOOL userPaused;
+@property(nonatomic) BOOL meshPrepared;
+@property(nonatomic) BOOL meshConnecting;
+@property(nonatomic) BOOL meshConnected;
+@property(nonatomic) NSUInteger savedBulbCount;
+@property(nonatomic) NSTimeInterval lastConnectAttempt;
 @property(nonatomic) BOOL expanded;
 @property(nonatomic) float artworkHue;
 @property(nonatomic) NSTimeInterval mediaReceived;
@@ -143,6 +152,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  [self.window setHidden:NO];
  [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(stop) name:UIApplicationWillResignActiveNotification object:nil];
 
+ [self connectSavedMesh];
  [self refreshMedia];self.mediaTimer=[NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(refreshMedia) userInfo:nil repeats:YES];
 }
 - (void)fold:(UIButton *)button {
@@ -156,6 +166,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  for(id k in d)if([[k description]hasSuffix:[@"Info" stringByAppendingString:suffix]])return d[k];return nil;
 }
 - (void)refreshMedia {
+ [self connectSavedMesh];
  static void *handle;static void (*getInfo)(dispatch_queue_t,void(^)(CFDictionaryRef));static void (*getPlaying)(dispatch_queue_t,void(^)(BOOL));
  static dispatch_once_t once;dispatch_once(&once,^{
   handle=dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote",RTLD_NOW);
@@ -193,6 +204,46 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  });
 }
 
+- (BOOL)prepareSavedMesh {
+ if(self.meshPrepared)return YES;
+ if(LSBootstrapError){self.status.text=LSBootstrapError;return NO;}
+ // Read the live original preferences again, never embed or clone the uploaded snapshot.
+ NSDictionary *prefs=[NSDictionary dictionaryWithContentsOfFile:[LSOriginalRoot stringByAppendingPathComponent:@"Library/Preferences/com.ledvance.smart.plist"]];
+ NSData *data=prefs[@"mesh.json"];
+ if(![data isKindOfClass:NSData.class]){self.status.text=@"The original saved mesh could not be read.";return NO;}
+ NSDictionary *mesh=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+ if(![mesh isKindOfClass:NSDictionary.class] || ![mesh[@"nodes"] isKindOfClass:NSArray.class] || ![mesh[@"netKeys"] count]){self.status.text=@"The original mesh configuration is incomplete.";return NO;}
+ NSString *uuid=prefs[@"currenProvisionerUUID_key"];
+ if(![uuid isKindOfClass:NSString.class] || !uuid.length){self.status.text=@"The saved controller identity is unavailable.";return NO;}
+ [LSOriginalDefaults registerDefaults:prefs];
+ id ds=send0(NSClassFromString(@"SigDataSource"),@"share");
+ SEL set=NSSelectorFromString(@"setDictionaryToDataSource:");
+ if(![ds respondsToSelector:set]){self.status.text=@"The lighting backend could not initialize.";return NO;}
+ @try {
+  ((void(*)(id,SEL,id))objc_msgSend)(ds,set,mesh);
+  ((void(*)(id,SEL,id))objc_msgSend)(ds,NSSelectorFromString(@"saveCurrentProvisionerUUID:"),uuid);
+  // Every lighting model in the supplied configuration is bound to app-key index 0.
+  for(id key in send0(ds,@"appKeys"))if([[key valueForKey:@"index"] unsignedIntegerValue]==0){((void(*)(id,SEL,id))objc_msgSend)(ds,NSSelectorFromString(@"setCurAppkeyModel:"),key);break;}
+  NSArray *nodes=send0(ds,@"curNodes");NSUInteger count=0;
+  for(id n in nodes)if([send0(n,@"HSLAddresses") count] || [send0(n,@"lightnessAddresses") count])count++;
+  self.savedBulbCount=count;self.meshPrepared=count>0;
+  self.status.text=[NSString stringWithFormat:@"%lu saved lights · connecting",(unsigned long)count];
+ }@catch(NSException *e){self.status.text=@"The saved light network could not be loaded.";return NO;}
+ return self.meshPrepared;
+}
+- (void)connectSavedMesh {
+ if(![self prepareSavedMesh])return;
+ id bearer=send0(NSClassFromString(@"SigBearer"),@"share");
+ if([bearer respondsToSelector:NSSelectorFromString(@"isOpen")])self.meshConnected=((BOOL(*)(id,SEL))objc_msgSend)(bearer,NSSelectorFromString(@"isOpen"));
+ if(self.meshConnected || self.meshConnecting)return;
+ if(NSProcessInfo.processInfo.systemUptime-self.lastConnectAttempt<8)return;
+ self.meshConnecting=YES;self.lastConnectAttempt=NSProcessInfo.processInfo.systemUptime;
+ SEL start=NSSelectorFromString(@"startMeshConnectWithComplete:");
+ if(![bearer respondsToSelector:start]){self.meshConnecting=NO;return;}
+ __weak LSPanel *weak=self;
+ void (^completion)(BOOL)=^(BOOL ok){dispatch_async(dispatch_get_main_queue(),^{LSPanel *me=weak;if(!me)return;me.meshConnecting=NO;me.meshConnected=ok;me.status.text=ok?[NSString stringWithFormat:@"%lu lights connected · ready",(unsigned long)me.savedBulbCount]:@"Looking for your saved lights over Bluetooth";});};
+ ((void(*)(id,SEL,id))objc_msgSend)(bearer,start,completion);
+}
 - (void)discover {
  self.hasRGB=NO;self.hasWhite=NO;
  id ds=send0(NSClassFromString(@"SigDataSource"),@"share");
@@ -218,7 +269,9 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
 }
 - (void)begin {
  if(self.running)return;
- if(LSBootstrapError){self.status.text=LSBootstrapError;return;}
+ if(![self prepareSavedMesh])return;
+ [self connectSavedMesh];
+ if(!self.meshConnected)return;
  [self discover];
  if(self.native && !self.targets.count){self.status.text=@"Loading your existing light groups.";return;}
  if(!self.native && !self.hasRGB && !self.hasWhite){self.status.text=@"Waiting for your existing light network to load.";return;}
@@ -230,6 +283,8 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
 }
 - (void)tick {
  if(!self.running)return;
+ id bearer=send0(NSClassFromString(@"SigBearer"),@"share");
+ if([bearer respondsToSelector:NSSelectorFromString(@"isOpen")] && !((BOOL(*)(id,SEL))objc_msgSend)(bearer,NSSelectorFromString(@"isOpen"))){self.meshConnected=NO;self.status.text=@"Reconnecting to your saved lights";[self connectSavedMesh];return;}
  if(self.mode.selectedSegmentIndex==0 && !self.playing){self.status.text=@"Music paused · waiting";return;}
  float b=getFloat(&_bassBits)*self.gain.value,m=getFloat(&_midBits)*self.gain.value,h=getFloat(&_highBits)*self.gain.value;
  if(self.mode.selectedSegmentIndex==0){
