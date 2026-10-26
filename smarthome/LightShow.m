@@ -94,6 +94,7 @@ static void swizzle(Class c,NSString *s,IMP replacement,IMP *original){ Method m
 @property(nonatomic) BOOL meshConnected;
 @property(nonatomic) NSUInteger savedBulbCount;
 @property(nonatomic,strong) UIButton *helperButton;
+@property(nonatomic,strong) id backgroundAssertion;
 @property(nonatomic,strong) NSTimer *audioTimer;
 @property(nonatomic) int audioSocket;
 @property(nonatomic) uint64_t audioSession,audioServer,audioRequest,audioSequence,audioEpoch;
@@ -226,6 +227,15 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  else if(now-self.audioLastFrame>1.5){if(self.meshConnected)self.status.text=@"Waiting for playback audio";}
 }
 - (void)openAudioHelper {NSURL *url=[NSURL URLWithString:@"sileo://package/com.ryannair05.audiosnapshotserver2"];[UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];}
+- (void)acquireAudioAssertion {
+ if(self.backgroundAssertion)return;
+ dlopen("/System/Library/PrivateFrameworks/AssertionServices.framework/AssertionServices",RTLD_NOW);
+ Class cls=NSClassFromString(@"BKSProcessAssertion");SEL sel=NSSelectorFromString(@"initWithPID:flags:reason:name:withHandler:");
+ if([cls instancesRespondToSelector:sel]){
+  id instance=((id(*)(id,SEL))objc_msgSend)(cls,@selector(alloc));
+  self.backgroundAssertion=((id(*)(id,SEL,int,unsigned int,unsigned int,id,id))objc_msgSend)(instance,sel,getpid(),3,7,@"Light Show live beat processing",nil);
+ }
+}
 - (void)resumeLightShow {if(!self.userPaused){[self refreshMedia];if(self.helperSeen)[self begin];}}
 
 - (void)refreshMedia {
@@ -366,7 +376,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  if(self.native && !self.targets.count){self.status.text=@"Loading your existing light groups.";return;}
  if(!self.native && !self.hasRGB && !self.hasWhite){self.status.text=@"Waiting for your existing light network to load.";return;}
  if(self.mode.selectedSegmentIndex==0){
-  self.running=YES;self.sceneStarted=NSProcessInfo.processInfo.systemUptime;self.sceneHue=self.artworkHue;self.oldIdle=UIApplication.sharedApplication.idleTimerDisabled;UIApplication.sharedApplication.idleTimerDisabled=YES;
+  self.running=YES;[self acquireAudioAssertion];self.sceneStarted=NSProcessInfo.processInfo.systemUptime;self.sceneHue=self.artworkHue;self.oldIdle=UIApplication.sharedApplication.idleTimerDisabled;UIApplication.sharedApplication.idleTimerDisabled=YES;
   [self.start setTitle:@"Pause light show" forState:UIControlStateNormal];
   self.timer=[NSTimer timerWithTimeInterval:0.05 target:self selector:@selector(tick) userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];return;
  }
@@ -410,6 +420,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  self.window.rootViewController.view.layer.borderColor=[UIColor colorWithHue:hue saturation:0.7 brightness:0.5+0.3*wave alpha:1].CGColor;self.window.rootViewController.view.layer.borderWidth=2;
 }
 - (void)stop {
+ if(self.backgroundAssertion){send0(self.backgroundAssertion,@"invalidate");self.backgroundAssertion=nil;}
  if(self.audioSocket>=0&&self.audioServer&&self.userPaused){uint8_t packet[32];MSHFEncodeHeader(packet,MSHFMessageTypeUnsubscribe,0,self.audioSession,self.audioServer,++_audioRequest);struct sockaddr_in server={0};server.sin_len=sizeof(server);server.sin_family=AF_INET;server.sin_port=htons(MSHF_PROTOCOL_PORT);server.sin_addr.s_addr=htonl(INADDR_LOOPBACK);sendto(self.audioSocket,packet,sizeof(packet),0,(struct sockaddr *)&server,sizeof(server));}
  BOOL was=self.running;self.running=NO;[self.timer invalidate];self.timer=nil;
  
