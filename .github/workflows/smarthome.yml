@@ -2,7 +2,7 @@ name: SmartHome Visualizer
 on:
   push:
     branches: [smarthome-visualizer]
-    paths: ['smarthome/**', '.github/workflows/smarthome.yml']
+    paths: ['smarthome/*.m', 'smarthome/*.c', 'smarthome/*.h', '.github/workflows/smarthome.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-visualizer
