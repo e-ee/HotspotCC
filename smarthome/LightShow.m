@@ -122,7 +122,7 @@ static void setFloat(atomic_uint *dst,float v){unsigned n;memcpy(&n,&v,4);atomic
 static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memory_order_relaxed);float v;memcpy(&v,&n,4);return v;}
 @implementation LSPanel
 - (UILabel *)label:(NSString *)text frame:(CGRect)f size:(CGFloat)size weight:(UIFontWeight)weight color:(UIColor *)c {
- UILabel *l=[[UILabel alloc]initWithFrame:f];l.text=text;l.font=[UIFont systemFontOfSize:size weight:weight];l.textColor=c;[self.window.rootViewController.view addSubview:l];return l;
+ UILabel *l=[[UILabel alloc]initWithFrame:f];l.text=text;l.font=[UIFont systemFontOfSize:size weight:weight];l.textColor=c;[self.panel addSubview:l];return l;
 }
 - (void)install {
  if(self.window)return;
@@ -136,19 +136,20 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  width=host.bounds.size.width; height=host.bounds.size.height;
  self.window.windowLevel=UIWindowLevelAlert+1;
  UIViewController *vc=[UIViewController new];self.window.rootViewController=vc;vc.view.backgroundColor=[UIColor colorWithRed:0.035 green:0.043 blue:0.065 alpha:0.98];vc.view.layer.cornerRadius=28;vc.view.clipsToBounds=YES;
+ UIScrollView *content=[[UIScrollView alloc]initWithFrame:CGRectMake(0,host.safeAreaInsets.top+10,width,height-host.safeAreaInsets.top-host.safeAreaInsets.bottom-10)];content.contentSize=CGSizeMake(width,720);content.showsVerticalScrollIndicator=NO;self.panel=content;[vc.view addSubview:content];
  self.window.layer.shadowColor=UIColor.blackColor.CGColor;self.window.layer.shadowRadius=24;self.window.layer.shadowOpacity=0.4;self.window.layer.shadowOffset=CGSizeMake(0,8);
  CAGradientLayer *gl=[CAGradientLayer layer];gl.frame=CGRectMake(0,0,width,height);gl.colors=@[(id)[UIColor colorWithRed:0.17 green:0.12 blue:0.30 alpha:1].CGColor,(id)[UIColor colorWithRed:0.035 green:0.043 blue:0.065 alpha:1].CGColor];gl.startPoint=CGPointZero;gl.endPoint=CGPointMake(0.9,0.8);[vc.view.layer insertSublayer:gl atIndex:0];
  [self label:@"LIGHT SHOW" frame:CGRectMake(22,16,width-85,26) size:17 weight:UIFontWeightBold color:UIColor.whiteColor];
- UIButton *fold=[UIButton buttonWithType:UIButtonTypeSystem];fold.frame=CGRectMake(width-58,10,42,38);fold.hidden=YES;[fold setTitle:@"−" forState:UIControlStateNormal];fold.tintColor=UIColor.whiteColor;fold.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightLight];[fold addTarget:self action:@selector(fold:) forControlEvents:UIControlEventTouchUpInside];[vc.view addSubview:fold];
+ UIButton *fold=[UIButton buttonWithType:UIButtonTypeSystem];fold.frame=CGRectMake(width-58,10,42,38);fold.hidden=YES;[fold setTitle:@"−" forState:UIControlStateNormal];fold.tintColor=UIColor.whiteColor;fold.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightLight];[fold addTarget:self action:@selector(fold:) forControlEvents:UIControlEventTouchUpInside];[self.panel addSubview:fold];
  [self label:@"YOUR MUSIC, IN COLOUR" frame:CGRectMake(22,58,width-44,18) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.65 alpha:1]];
  self.track=[self label:@"Waiting for your music" frame:CGRectMake(22,83,width-44,28) size:23 weight:UIFontWeightSemibold color:UIColor.whiteColor];self.track.adjustsFontSizeToFitWidth=YES;self.track.minimumScaleFactor=0.6;
  self.status=[self label:LSBootstrapError?:@"Uses the bulbs already connected in SYLVANIA." frame:CGRectMake(22,114,width-44,36) size:12 weight:UIFontWeightRegular color:[UIColor colorWithWhite:0.65 alpha:1]];self.status.numberOfLines=2;
- self.spectrum=[[LSSpectrum alloc]initWithFrame:CGRectMake(22,158,width-44,70)];self.spectrum.backgroundColor=UIColor.clearColor;self.spectrum.bass=0.25;self.spectrum.mid=0.35;self.spectrum.high=0.2;[vc.view addSubview:self.spectrum];
+ self.spectrum=[[LSSpectrum alloc]initWithFrame:CGRectMake(22,158,width-44,70)];self.spectrum.backgroundColor=UIColor.clearColor;self.spectrum.bass=0.25;self.spectrum.mid=0.35;self.spectrum.high=0.2;[self.panel addSubview:self.spectrum];
  [self label:@"NOW PLAYING · AUTOMATIC" frame:CGRectMake(22,246,width-44,22) size:12 weight:UIFontWeightSemibold color:[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1]];
- self.palette=[[UISegmentedControl alloc]initWithItems:@[@"Artwork",@"Aurora",@"Ember"]];self.palette.frame=CGRectMake(22,285,width-44,28);self.palette.selectedSegmentIndex=0;[vc.view addSubview:self.palette];
+ self.palette=[[UISegmentedControl alloc]initWithItems:@[@"Artwork",@"Aurora",@"Ember"]];self.palette.frame=CGRectMake(22,285,width-44,28);self.palette.selectedSegmentIndex=0;[self.panel addSubview:self.palette];
  [self label:@"INTENSITY" frame:CGRectMake(22,323,100,16) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.6 alpha:1]];
- self.gain=[[UISlider alloc]initWithFrame:CGRectMake(126,317,width-148,26)];self.gain.minimumValue=0.5;self.gain.maximumValue=8;self.gain.value=2.5;self.gain.tintColor=[UIColor colorWithRed:0.64 green:0.52 blue:1 alpha:1];[vc.view addSubview:self.gain];
- self.start=[UIButton buttonWithType:UIButtonTypeSystem];self.start.frame=CGRectMake(22,359,width-44,46);self.start.backgroundColor=[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1];self.start.layer.cornerRadius=15;[self.start setTitleColor:[UIColor colorWithWhite:0.08 alpha:1] forState:UIControlStateNormal];[self.start setTitle:@"Start light show" forState:UIControlStateNormal];self.start.titleLabel.font=[UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];[self.start addTarget:self action:@selector(toggle) forControlEvents:UIControlEventTouchUpInside];[vc.view addSubview:self.start];
+ self.gain=[[UISlider alloc]initWithFrame:CGRectMake(126,317,width-148,26)];self.gain.minimumValue=0.5;self.gain.maximumValue=8;self.gain.value=2.5;self.gain.tintColor=[UIColor colorWithRed:0.64 green:0.52 blue:1 alpha:1];[self.panel addSubview:self.gain];
+ self.start=[UIButton buttonWithType:UIButtonTypeSystem];self.start.frame=CGRectMake(22,359,width-44,46);self.start.backgroundColor=[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1];self.start.layer.cornerRadius=15;[self.start setTitleColor:[UIColor colorWithWhite:0.08 alpha:1] forState:UIControlStateNormal];[self.start setTitle:@"Start light show" forState:UIControlStateNormal];self.start.titleLabel.font=[UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];[self.start addTarget:self action:@selector(toggle) forControlEvents:UIControlEventTouchUpInside];[self.panel addSubview:self.start];
  self.savedGroups=[self label:@"Loading your saved groups…" frame:CGRectMake(22,440,width-44,240) size:17 weight:UIFontWeightMedium color:[UIColor colorWithWhite:0.75 alpha:1]];self.savedGroups.numberOfLines=0;
  self.expanded=YES;self.artworkHue=0.7;self.tempo=120;
  [self.window setHidden:NO];
