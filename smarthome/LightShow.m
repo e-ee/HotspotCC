@@ -5,6 +5,12 @@
 #import <stdatomic.h>
 #import <math.h>
 #import <dlfcn.h>
+#import <arpa/inet.h>
+#import <sys/socket.h>
+#import <fcntl.h>
+#import <unistd.h>
+#import "MSHFProtocol.h"
+#import "BeatCore.h"
 
 #import <mach-o/dyld.h>
 #import "fishhook.h"
@@ -72,6 +78,7 @@ static void swizzle(Class c,NSString *s,IMP replacement,IMP *original){ Method m
 
 @interface LSPanel : NSObject {
 @public atomic_uint _bassBits, _midBits, _highBits;
+ LSBeatState _beatState;
 }
 @property(nonatomic,strong) UIWindow *window;
 @property(nonatomic,strong) LSSpectrum *spectrum;
@@ -86,7 +93,12 @@ static void swizzle(Class c,NSString *s,IMP replacement,IMP *original){ Method m
 @property(nonatomic) BOOL meshConnecting;
 @property(nonatomic) BOOL meshConnected;
 @property(nonatomic) NSUInteger savedBulbCount;
-@property(nonatomic,strong) UILabel *savedGroups;
+@property(nonatomic,strong) UIButton *helperButton;
+@property(nonatomic,strong) NSTimer *audioTimer;
+@property(nonatomic) int audioSocket;
+@property(nonatomic) uint64_t audioSession,audioServer,audioRequest,audioSequence,audioEpoch;
+@property(nonatomic) double audioLastFrame,lastAudioSubscribe;
+@property(nonatomic) BOOL helperSeen;
 @property(nonatomic,strong) UIImageView *artwork;
 @property(nonatomic,strong) NSArray *livingZones;
 @property(nonatomic,strong) NSArray *supportZones;
@@ -145,24 +157,25 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  UIScrollView *content=[[UIScrollView alloc]initWithFrame:CGRectMake(0,host.safeAreaInsets.top+10,width,height-host.safeAreaInsets.top-host.safeAreaInsets.bottom-10)];content.contentSize=CGSizeMake(width,720);content.showsVerticalScrollIndicator=NO;self.panel=content;[vc.view addSubview:content];
  self.window.layer.shadowColor=UIColor.blackColor.CGColor;self.window.layer.shadowRadius=24;self.window.layer.shadowOpacity=0.4;self.window.layer.shadowOffset=CGSizeMake(0,8);
  CAGradientLayer *gl=[CAGradientLayer layer];gl.frame=CGRectMake(0,0,width,height);gl.colors=@[(id)[UIColor colorWithRed:0.17 green:0.12 blue:0.30 alpha:1].CGColor,(id)[UIColor colorWithRed:0.035 green:0.043 blue:0.065 alpha:1].CGColor];gl.startPoint=CGPointZero;gl.endPoint=CGPointMake(0.9,0.8);[vc.view.layer insertSublayer:gl atIndex:0];
- [self label:@"LIGHT SHOW" frame:CGRectMake(22,16,width-85,26) size:17 weight:UIFontWeightBold color:UIColor.whiteColor];
+ [self label:@"BEAT ROOM" frame:CGRectMake(22,16,width-85,26) size:17 weight:UIFontWeightBold color:UIColor.whiteColor];
  UIButton *fold=[UIButton buttonWithType:UIButtonTypeSystem];fold.frame=CGRectMake(width-58,10,42,38);fold.hidden=YES;[fold setTitle:@"−" forState:UIControlStateNormal];fold.tintColor=UIColor.whiteColor;fold.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightLight];[fold addTarget:self action:@selector(fold:) forControlEvents:UIControlEventTouchUpInside];[self.panel addSubview:fold];
- [self label:@"YOUR MUSIC, IN COLOUR" frame:CGRectMake(22,58,width-44,18) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.65 alpha:1]];
+ [self label:@"ALL LIGHTS · REAL AUDIO" frame:CGRectMake(22,58,width-44,18) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.65 alpha:1]];
  self.artwork=[[UIImageView alloc]initWithFrame:CGRectMake(22,83,76,76)];self.artwork.contentMode=UIViewContentModeScaleAspectFill;self.artwork.layer.cornerRadius=16;self.artwork.clipsToBounds=YES;self.artwork.backgroundColor=[UIColor colorWithWhite:0.13 alpha:1];[self.panel addSubview:self.artwork];
  self.track=[self label:@"Waiting for your music" frame:CGRectMake(114,83,width-136,28) size:23 weight:UIFontWeightSemibold color:UIColor.whiteColor];self.track.adjustsFontSizeToFitWidth=YES;self.track.minimumScaleFactor=0.6;
  self.status=[self label:LSBootstrapError?:@"Uses the bulbs already connected in SYLVANIA." frame:CGRectMake(114,118,width-136,42) size:12 weight:UIFontWeightRegular color:[UIColor colorWithWhite:0.65 alpha:1]];self.status.numberOfLines=2;
  self.spectrum=[[LSSpectrum alloc]initWithFrame:CGRectMake(22,178,width-44,50)];self.spectrum.backgroundColor=UIColor.clearColor;self.spectrum.bass=0.25;self.spectrum.mid=0.35;self.spectrum.high=0.2;[self.panel addSubview:self.spectrum];
- [self label:@"ROOM FLOW · NOW PLAYING" frame:CGRectMake(22,246,width-44,22) size:12 weight:UIFontWeightSemibold color:[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1]];
- self.palette=[[UISegmentedControl alloc]initWithItems:@[@"Artwork",@"Aurora",@"Ember"]];self.palette.frame=CGRectMake(22,285,width-44,28);self.palette.selectedSegmentIndex=0;[self.panel addSubview:self.palette];
+ [self label:@"BEAT SYNC · SYSTEM AUDIO" frame:CGRectMake(22,246,width-44,22) size:12 weight:UIFontWeightSemibold color:[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1]];
+ self.palette=[[UISegmentedControl alloc]initWithItems:@[@"Pulse",@"Spectrum",@"Prism"]];self.palette.frame=CGRectMake(22,285,width-44,28);self.palette.selectedSegmentIndex=2;[self.panel addSubview:self.palette];
  [self label:@"BRIGHTNESS" frame:CGRectMake(22,323,100,16) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.6 alpha:1]];
  self.gain=[[UISlider alloc]initWithFrame:CGRectMake(126,317,width-148,26)];self.gain.minimumValue=0.5;self.gain.maximumValue=8;self.gain.value=2.5;self.gain.tintColor=[UIColor colorWithRed:0.64 green:0.52 blue:1 alpha:1];[self.panel addSubview:self.gain];
  self.start=[UIButton buttonWithType:UIButtonTypeSystem];self.start.frame=CGRectMake(22,359,width-44,46);self.start.backgroundColor=[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1];self.start.layer.cornerRadius=15;[self.start setTitleColor:[UIColor colorWithWhite:0.08 alpha:1] forState:UIControlStateNormal];[self.start setTitle:@"Start light show" forState:UIControlStateNormal];self.start.titleLabel.font=[UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];[self.start addTarget:self action:@selector(toggle) forControlEvents:UIControlEventTouchUpInside];[self.panel addSubview:self.start];
- self.savedGroups=[self label:@"Loading your saved groups…" frame:CGRectMake(22,440,width-44,240) size:17 weight:UIFontWeightMedium color:[UIColor colorWithWhite:0.75 alpha:1]];self.savedGroups.numberOfLines=0;
+ self.helperButton=[UIButton buttonWithType:UIButtonTypeSystem];self.helperButton.frame=CGRectMake(22,430,width-44,48);[self.helperButton setTitle:@"Install audio helper" forState:UIControlStateNormal];self.helperButton.tintColor=[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1];[self.helperButton addTarget:self action:@selector(openAudioHelper) forControlEvents:UIControlEventTouchUpInside];[self.panel addSubview:self.helperButton];
  self.expanded=YES;self.artworkHue=0.7;self.tempo=0;
  [self.window setHidden:NO];
- [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(stop) name:UIApplicationWillResignActiveNotification object:nil];
+ [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(resumeLightShow) name:UIApplicationDidBecomeActiveNotification object:nil];
 
  [self connectSavedMesh];
+ [self setupAudioClient];
  [self refreshMedia];self.mediaTimer=[NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(refreshMedia) userInfo:nil repeats:YES];
 }
 - (void)fold:(UIButton *)button {
@@ -175,6 +188,46 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  value=d[suffix];if(value)return value;
  for(id k in d)if([[k description]hasSuffix:[@"Info" stringByAppendingString:suffix]])return d[k];return nil;
 }
+- (void)setupAudioClient {
+ self.audioSocket=socket(AF_INET,SOCK_DGRAM,0);if(self.audioSocket<0)return;
+ fcntl(self.audioSocket,F_SETFL,O_NONBLOCK);struct sockaddr_in local={0};local.sin_len=sizeof(local);local.sin_family=AF_INET;local.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+ if(bind(self.audioSocket,(struct sockaddr *)&local,sizeof(local))<0){close(self.audioSocket);self.audioSocket=-1;return;}
+ arc4random_buf(&_audioSession,sizeof(_audioSession));if(!self.audioSession)self.audioSession=1;
+ LSBeatInit(&_beatState);
+ self.audioTimer=[NSTimer timerWithTimeInterval:0.025 target:self selector:@selector(pollAudio) userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.audioTimer forMode:NSRunLoopCommonModes];
+}
+- (void)pollAudio {
+ if(self.audioSocket<0||self.userPaused)return;double now=NSProcessInfo.processInfo.systemUptime;
+ if(now-self.lastAudioSubscribe>4){
+  if(now-self.audioLastFrame>2)self.audioServer=0;
+  uint8_t packet[MSHF_PROTOCOL_HEADER_SIZE+MSHF_PROTOCOL_SUBSCRIBE_PAYLOAD_SIZE]={0};
+  MSHFEncodeHeader(packet,MSHFMessageTypeSubscribe,8,self.audioSession,self.audioServer,++_audioRequest);
+  MSHFWriteU32(packet+32,MSHFFeatureMaskSpectrum);MSHFWriteU16(packet+36,40);MSHFWriteU16(packet+38,0);
+  struct sockaddr_in server={0};server.sin_len=sizeof(server);server.sin_family=AF_INET;server.sin_port=htons(MSHF_PROTOCOL_PORT);server.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+  sendto(self.audioSocket,packet,sizeof(packet),0,(struct sockaddr *)&server,sizeof(server));self.lastAudioSubscribe=now;
+ }
+ for(int packetCount=0;packetCount<16;packetCount++){
+  uint8_t packet[MSHF_PROTOCOL_MAX_PACKET_SIZE];struct sockaddr_in from={0};socklen_t size=sizeof(from);ssize_t n=recvfrom(self.audioSocket,packet,sizeof(packet),0,(struct sockaddr *)&from,&size);if(n<=0)break;
+  if(from.sin_family!=AF_INET||from.sin_addr.s_addr!=htonl(INADDR_LOOPBACK)||from.sin_port!=htons(MSHF_PROTOCOL_PORT))continue;
+  MSHFPacketHeader h;if(!MSHFDecodeHeader(packet,n,&h)||h.type!=MSHFMessageTypeFeature||h.clientSessionID!=self.audioSession||!h.serverInstanceID||!h.sequence||h.payloadLength<28)continue;
+  if(h.serverInstanceID!=self.audioServer){self.audioServer=h.serverInstanceID;self.audioSequence=0;LSBeatInit(&_beatState);}
+  if(h.sequence<=self.audioSequence)continue;const uint8_t *p=packet+32;uint32_t mask=MSHFReadU32(p+8),status=MSHFReadU32(p+12);
+  if(!(mask&MSHFFeatureMaskSpectrum)||h.payloadLength!=MSHFFeaturePayloadLength(mask)||!MSHFReadU64(p))continue;
+  float sampleRate=MSHFReadF32(p+16),rms=MSHFReadF32(p+20);if(!isfinite(sampleRate)||sampleRate<=0||!isfinite(rms))continue;
+  const uint8_t *bins=p+28+((mask&MSHFFeatureMaskWaveform)?64*4:0);float spectrum[64];BOOL valid=YES;
+  for(int i=0;i<64;i++){spectrum[i]=MSHFReadF32(bins+i*4);if(!isfinite(spectrum[i])||spectrum[i]<-0.001||spectrum[i]>1.001)valid=NO;}
+  if(!valid)continue;
+  uint64_t epoch=MSHFReadU64(p);if(epoch!=self.audioEpoch){self.audioEpoch=epoch;LSBeatInit(&_beatState);}
+  LSBeatUpdate(&_beatState,spectrum,rms,now,(status&MSHFFeatureStatusSilence)!=0);self.audioSequence=h.sequence;self.audioLastFrame=now;self.helperSeen=YES;
+  self.helperButton.hidden=YES;
+  if(!self.running&&!self.userPaused&&self.meshConnected)[self begin];
+ }
+ if(!self.helperSeen){self.helperButton.hidden=NO;if(self.meshConnected)self.status.text=@"Lights connected · install the audio helper once";}
+ else if(now-self.audioLastFrame>1.5){if(self.meshConnected)self.status.text=@"Waiting for playback audio";}
+}
+- (void)openAudioHelper {NSURL *url=[NSURL URLWithString:@"sileo://package/com.ryannair05.audiosnapshotserver2"];[UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];}
+- (void)resumeLightShow {if(!self.userPaused){[self refreshMedia];if(self.helperSeen)[self begin];}}
+
 - (void)refreshMedia {
  [self connectSavedMesh];
  static void *handle;static void (*getInfo)(dispatch_queue_t,void(^)(CFDictionaryRef));static void (*getPlaying)(dispatch_queue_t,void(^)(BOOL));
@@ -209,7 +262,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
    }
   }
   self.mediaInfo=d.copy;
-  if(!self.running && !self.userPaused && self.mode.selectedSegmentIndex==0 && self.playing)[self begin];
+  if(!self.running && !self.userPaused && self.helperSeen && NSProcessInfo.processInfo.systemUptime-self.audioLastFrame<1)[self begin];
   if(!self.running && !self.userPaused && !LSBootstrapError && self.meshConnected)self.status.text=[artist isKindOfClass:NSString.class]?artist:@"Ready · starts when music plays";
  });
 }
@@ -270,7 +323,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
   [self buildSpatialZones:mesh dataSource:ds];
   NSMutableArray *names=[NSMutableArray new];
   for(NSDictionary *group in mesh[@"groups"])if([group[@"name"] isKindOfClass:NSString.class])[names addObject:group[@"name"]];
-  self.savedGroups.text=[NSString stringWithFormat:@"YOUR SAVED GROUPS\n\n%@",[names componentsJoinedByString:@"\n\n"]];
+
   self.status.text=[NSString stringWithFormat:@"%lu saved lights · connecting",(unsigned long)count];
  }@catch(NSException *e){self.status.text=@"The saved light network could not be loaded.";return NO;}
  return self.meshPrepared;
@@ -302,7 +355,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
 }
 - (void)toggle {
  if(self.running){self.userPaused=YES;[self stop];return;}
- self.userPaused=NO;[self begin];
+ self.userPaused=NO;self.lastAudioSubscribe=0;[self begin];
 }
 - (void)begin {
  if(self.running)return;
@@ -322,51 +375,42 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  if(!self.running)return;
  id bearer=send0(NSClassFromString(@"SigBearer"),@"share");
  if([bearer respondsToSelector:NSSelectorFromString(@"isOpen")] && !((BOOL(*)(id,SEL))objc_msgSend)(bearer,NSSelectorFromString(@"isOpen"))){self.meshConnected=NO;self.status.text=@"Reconnecting to your saved lights";[self connectSavedMesh];return;}
- if(self.mode.selectedSegmentIndex==0 && !self.playing){self.status.text=@"Music paused · waiting";return;}
- double t=NSProcessInfo.processInfo.systemUptime-self.sceneStarted;
- double playback=self.elapsed+(NSProcessInfo.processInfo.systemUptime-self.mediaReceived)*MAX(0,self.rate);
- float pulse=self.tempo>0?powf(0.5+0.5*cos(2*M_PI*playback*self.tempo/60),3):0;
- float wave=0.5+0.5*sinf(t*2.8+0.65*sinf(t*0.21)),breath=0.5+0.5*sinf(t*0.27);
- float delta=self.artworkHue-self.sceneHue;if(delta>0.5)delta-=1;if(delta< -0.5)delta+=1;self.sceneHue=fmodf(self.sceneHue+delta*0.04+1,1);
- float hue=self.sceneHue;
- if(self.palette.selectedSegmentIndex==1)hue=fmodf(0.56+0.15*sinf(t*0.06)+1,1);
- if(self.palette.selectedSegmentIndex==2)hue=0.025+0.035*wave;
+
+ double now=NSProcessInfo.processInfo.systemUptime;
+ if(!self.helperSeen||now-self.audioLastFrame>1.5){self.status.text=self.helperSeen?@"Waiting for playback audio":@"Install the audio helper for beat detection";return;}
+ float energy=_beatState.level,pulse=_beatState.beat,wave=energy;
+ float hue=_beatState.hue;
+ if(self.palette.selectedSegmentIndex==0)hue=fmodf(self.artworkHue+_beatState.beats*0.045f,1);
+ if(self.palette.selectedSegmentIndex==1){float total=_beatState.bass+_beatState.mid+_beatState.high+0.001;hue=fmodf(0.52+0.34*(_beatState.mid+2*_beatState.high)/(2*total),1);}
  float strength=fminf(1.3,fmaxf(0.2,self.gain.value/2.5));
- uint16_t light=(uint16_t)((0.18+0.13*wave+0.07*pulse)*strength*65535),hu=(uint16_t)(hue*65535),sat=47000;
- self.spectrum.bass=0.25+0.55*wave;self.spectrum.mid=0.2+0.45*breath;self.spectrum.high=0.2+0.5*(1-wave);self.spectrum.phase=t*0.45;[self.spectrum setNeedsDisplay];
+ uint16_t light=(uint16_t)(fminf(0.95,fmaxf(0.025,energy*strength))*65535),hu=(uint16_t)(hue*65535),sat=(uint16_t)((0.7+0.25*pulse)*65535);
+ self.spectrum.bass=_beatState.bass;self.spectrum.mid=_beatState.mid;self.spectrum.high=_beatState.high;self.spectrum.phase=now*0.7;[self.spectrum setNeedsDisplay];
  @try {
  if(self.native){
   NSString *t=self.targets[self.cursor++%self.targets.count];
   SEL s=NSSelectorFromString(@"meshClientHslSet:lightness:hue:saturation:reliable:transitionTime:delay:");
   int result=((int(*)(id,SEL,id,int,int,int,unsigned char,int,short))objc_msgSend)(NSClassFromString(@"MeshNativeHelper"),s,t,light,hu,sat,0,0,0);
-  self.status.text=[NSString stringWithFormat:@"%lu saved lights · room flow",(unsigned long)self.savedBulbCount]; (void)result;
+  self.status.text=[NSString stringWithFormat:@"%lu lights · live beat sync",(unsigned long)self.savedBulbCount]; (void)result;
  }else{
   id peripheral=send0(bearer,@"getCurrentPeripheral");
   if([peripheral respondsToSelector:NSSelectorFromString(@"canSendWriteWithoutResponse")] && !((BOOL(*)(id,SEL))objc_msgSend)(peripheral,NSSelectorFromString(@"canSendWriteWithoutResponse")))return;
   // Observe the SDK queue rather than building an unbounded backlog.
   id mesh=send0(NSClassFromString(@"SigMeshLib"),@"share");id commands=send0(mesh,@"commands");
   if([commands respondsToSelector:@selector(count)] && [commands count]){self.status.text=@"Music reactive · waiting for Bluetooth";return;}
-  NSDictionary *zone=[self nextSpatialZone];BOOL fullRoom=(self.spatialTick%4)!=0;uint16_t destination=fullRoom?0xffff:[zone[@"address"] unsignedIntValue];int role=fullRoom?4:[zone[@"role"] intValue];
-  float phase=[zone[@"phase"] floatValue],travel=0.5+0.5*sinf(t*0.65-phase*2*M_PI);
-  float brightness;
-  if(role==4){brightness=0.20+0.45*wave+0.15*pulse;sat=57000;}
-  else if(role==0){brightness=0.14+0.12*breath+0.06*pulse;sat=44000;}
-  else if(role==1){brightness=0.10+0.10*breath;sat=36000;}
-  else if(role==2){brightness=0.25+0.42*travel+0.08*pulse;hue=fmodf(hue+0.07*wave,1);sat=58000;}
-  else {brightness=0.09+0.20*travel+0.04*pulse;hue=fmodf(hue+0.06*phase,1);sat=52000;}
-  light=(uint16_t)(fminf(0.8,brightness*strength)*65535);hu=(uint16_t)(hue*65535);
+  uint16_t destination=0xffff;
   Class sdk=NSClassFromString(@"SDKLibCommand");
   if(self.hasRGB){SEL s=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:retryCount:responseMaxCount:ack:successCallback:resultCallback:");
    ((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,s,destination,light,hu,sat,0,0,NO,nil,nil);
   }else{SEL s=NSSelectorFromString(@"lightLightnessSetWithDestination:lightness:retryCount:responseMaxCount:ack:successCallback:resultCallback:");
    if([sdk respondsToSelector:s])((id(*)(id,SEL,uint16_t,uint16_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,s,destination,light,0,0,NO,nil,nil);
   }
-  self.status.text=[NSString stringWithFormat:@"%lu saved lights · room flow",(unsigned long)self.savedBulbCount];
+  self.status.text=[NSString stringWithFormat:@"%lu lights · live beat sync",(unsigned long)self.savedBulbCount];
  }
  }@catch(NSException *e){[self stop];self.status.text=[@"Light command failed: " stringByAppendingString:e.reason?:@"unknown error"];}
  self.window.rootViewController.view.layer.borderColor=[UIColor colorWithHue:hue saturation:0.7 brightness:0.5+0.3*wave alpha:1].CGColor;self.window.rootViewController.view.layer.borderWidth=2;
 }
 - (void)stop {
+ if(self.audioSocket>=0&&self.audioServer&&self.userPaused){uint8_t packet[32];MSHFEncodeHeader(packet,MSHFMessageTypeUnsubscribe,0,self.audioSession,self.audioServer,++_audioRequest);struct sockaddr_in server={0};server.sin_len=sizeof(server);server.sin_family=AF_INET;server.sin_port=htons(MSHF_PROTOCOL_PORT);server.sin_addr.s_addr=htonl(INADDR_LOOPBACK);sendto(self.audioSocket,packet,sizeof(packet),0,(struct sockaddr *)&server,sizeof(server));}
  BOOL was=self.running;self.running=NO;[self.timer invalidate];self.timer=nil;
  
  
