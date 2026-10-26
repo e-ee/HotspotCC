@@ -210,7 +210,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
   }
   self.mediaInfo=d.copy;
   if(!self.running && !self.userPaused && self.mode.selectedSegmentIndex==0 && self.playing)[self begin];
-  if(!self.running && !self.userPaused && !LSBootstrapError)self.status.text=[artist isKindOfClass:NSString.class]?artist:@"Ready · starts when music plays";
+  if(!self.running && !self.userPaused && !LSBootstrapError && self.meshConnected)self.status.text=[artist isKindOfClass:NSString.class]?artist:@"Ready · starts when music plays";
  });
 }
 
@@ -326,7 +326,7 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  double t=NSProcessInfo.processInfo.systemUptime-self.sceneStarted;
  double playback=self.elapsed+(NSProcessInfo.processInfo.systemUptime-self.mediaReceived)*MAX(0,self.rate);
  float pulse=self.tempo>0?powf(0.5+0.5*cos(2*M_PI*playback*self.tempo/60),3):0;
- float wave=0.5+0.5*sinf(t*0.55),breath=0.5+0.5*sinf(t*0.27);
+ float wave=0.5+0.5*sinf(t*2.8+0.65*sinf(t*0.21)),breath=0.5+0.5*sinf(t*0.27);
  float delta=self.artworkHue-self.sceneHue;if(delta>0.5)delta-=1;if(delta< -0.5)delta+=1;self.sceneHue=fmodf(self.sceneHue+delta*0.04+1,1);
  float hue=self.sceneHue;
  if(self.palette.selectedSegmentIndex==1)hue=fmodf(0.56+0.15*sinf(t*0.06)+1,1);
