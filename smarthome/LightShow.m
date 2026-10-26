@@ -90,6 +90,7 @@ static void swizzle(Class c,NSString *s,IMP replacement,IMP *original){ Method m
 @property(nonatomic) BOOL meshConnecting;
 @property(nonatomic) BOOL meshConnected;
 @property(nonatomic) NSUInteger savedBulbCount;
+@property(nonatomic,strong) UILabel *savedGroups;
 @property(nonatomic) NSTimeInterval lastConnectAttempt;
 @property(nonatomic) BOOL expanded;
 @property(nonatomic) float artworkHue;
@@ -131,13 +132,14 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  CGFloat width=MIN(host.bounds.size.width-24,410),height=MIN(424,host.bounds.size.height-100);
  if(@available(iOS 13.0,*)){if(host.windowScene)self.window=[[UIWindow alloc]initWithWindowScene:host.windowScene];}
  if(!self.window)self.window=[[UIWindow alloc]initWithFrame:CGRectZero];
- self.window.frame=CGRectMake((host.bounds.size.width-width)/2,host.bounds.size.height-height-host.safeAreaInsets.bottom-12,width,height);
+ self.window.frame=host.bounds;
+ width=host.bounds.size.width; height=host.bounds.size.height;
  self.window.windowLevel=UIWindowLevelAlert+1;
  UIViewController *vc=[UIViewController new];self.window.rootViewController=vc;vc.view.backgroundColor=[UIColor colorWithRed:0.035 green:0.043 blue:0.065 alpha:0.98];vc.view.layer.cornerRadius=28;vc.view.clipsToBounds=YES;
  self.window.layer.shadowColor=UIColor.blackColor.CGColor;self.window.layer.shadowRadius=24;self.window.layer.shadowOpacity=0.4;self.window.layer.shadowOffset=CGSizeMake(0,8);
  CAGradientLayer *gl=[CAGradientLayer layer];gl.frame=CGRectMake(0,0,width,height);gl.colors=@[(id)[UIColor colorWithRed:0.17 green:0.12 blue:0.30 alpha:1].CGColor,(id)[UIColor colorWithRed:0.035 green:0.043 blue:0.065 alpha:1].CGColor];gl.startPoint=CGPointZero;gl.endPoint=CGPointMake(0.9,0.8);[vc.view.layer insertSublayer:gl atIndex:0];
  [self label:@"LIGHT SHOW" frame:CGRectMake(22,16,width-85,26) size:17 weight:UIFontWeightBold color:UIColor.whiteColor];
- UIButton *fold=[UIButton buttonWithType:UIButtonTypeSystem];fold.frame=CGRectMake(width-58,10,42,38);[fold setTitle:@"−" forState:UIControlStateNormal];fold.tintColor=UIColor.whiteColor;fold.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightLight];[fold addTarget:self action:@selector(fold:) forControlEvents:UIControlEventTouchUpInside];[vc.view addSubview:fold];
+ UIButton *fold=[UIButton buttonWithType:UIButtonTypeSystem];fold.frame=CGRectMake(width-58,10,42,38);fold.hidden=YES;[fold setTitle:@"−" forState:UIControlStateNormal];fold.tintColor=UIColor.whiteColor;fold.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightLight];[fold addTarget:self action:@selector(fold:) forControlEvents:UIControlEventTouchUpInside];[vc.view addSubview:fold];
  [self label:@"YOUR MUSIC, IN COLOUR" frame:CGRectMake(22,58,width-44,18) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.65 alpha:1]];
  self.track=[self label:@"Waiting for your music" frame:CGRectMake(22,83,width-44,28) size:23 weight:UIFontWeightSemibold color:UIColor.whiteColor];self.track.adjustsFontSizeToFitWidth=YES;self.track.minimumScaleFactor=0.6;
  self.status=[self label:LSBootstrapError?:@"Uses the bulbs already connected in SYLVANIA." frame:CGRectMake(22,114,width-44,36) size:12 weight:UIFontWeightRegular color:[UIColor colorWithWhite:0.65 alpha:1]];self.status.numberOfLines=2;
@@ -147,8 +149,8 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
  [self label:@"INTENSITY" frame:CGRectMake(22,323,100,16) size:10 weight:UIFontWeightSemibold color:[UIColor colorWithWhite:0.6 alpha:1]];
  self.gain=[[UISlider alloc]initWithFrame:CGRectMake(126,317,width-148,26)];self.gain.minimumValue=0.5;self.gain.maximumValue=8;self.gain.value=2.5;self.gain.tintColor=[UIColor colorWithRed:0.64 green:0.52 blue:1 alpha:1];[vc.view addSubview:self.gain];
  self.start=[UIButton buttonWithType:UIButtonTypeSystem];self.start.frame=CGRectMake(22,359,width-44,46);self.start.backgroundColor=[UIColor colorWithRed:0.76 green:0.68 blue:1 alpha:1];self.start.layer.cornerRadius=15;[self.start setTitleColor:[UIColor colorWithWhite:0.08 alpha:1] forState:UIControlStateNormal];[self.start setTitle:@"Start light show" forState:UIControlStateNormal];self.start.titleLabel.font=[UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];[self.start addTarget:self action:@selector(toggle) forControlEvents:UIControlEventTouchUpInside];[vc.view addSubview:self.start];
+ self.savedGroups=[self label:@"Loading your saved groups…" frame:CGRectMake(22,440,width-44,240) size:17 weight:UIFontWeightMedium color:[UIColor colorWithWhite:0.75 alpha:1]];self.savedGroups.numberOfLines=0;
  self.expanded=YES;self.artworkHue=0.7;self.tempo=120;
- dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),^{[self fold:fold];});
  [self.window setHidden:NO];
  [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(stop) name:UIApplicationWillResignActiveNotification object:nil];
 
@@ -227,12 +229,16 @@ static float getFloat(atomic_uint *src){unsigned n=atomic_load_explicit(src,memo
   NSArray *nodes=send0(ds,@"curNodes");NSUInteger count=0;
   for(id n in nodes)if([send0(n,@"HSLAddresses") count] || [send0(n,@"lightnessAddresses") count])count++;
   self.savedBulbCount=count;self.meshPrepared=count>0;
+  NSMutableArray *names=[NSMutableArray new];
+  for(NSDictionary *group in mesh[@"groups"])if([group[@"name"] isKindOfClass:NSString.class])[names addObject:group[@"name"]];
+  self.savedGroups.text=[NSString stringWithFormat:@"YOUR SAVED GROUPS\n\n%@",[names componentsJoinedByString:@"\n\n"]];
   self.status.text=[NSString stringWithFormat:@"%lu saved lights · connecting",(unsigned long)count];
  }@catch(NSException *e){self.status.text=@"The saved light network could not be loaded.";return NO;}
  return self.meshPrepared;
 }
 - (void)connectSavedMesh {
  if(![self prepareSavedMesh])return;
+ send0(NSClassFromString(@"SigMeshLib"),@"share");
  id bearer=send0(NSClassFromString(@"SigBearer"),@"share");
  if([bearer respondsToSelector:NSSelectorFromString(@"isOpen")])self.meshConnected=((BOOL(*)(id,SEL))objc_msgSend)(bearer,NSSelectorFromString(@"isOpen"));
  if(self.meshConnected || self.meshConnecting)return;
