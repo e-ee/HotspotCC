@@ -14,7 +14,7 @@ jobs:
       - name: Compile ARM64 visualizer
         run: |
           mkdir -p build
-          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=12.0 -fobjc-arc -fblocks -dynamiclib smarthome/LightShow.m -o build/LightShow.dylib -install_name '@executable_path/Frameworks/LightShow.dylib' -framework UIKit -framework AVFoundation -framework Accelerate -framework Foundation -framework CoreGraphics -framework QuartzCore -Wno-deprecated-declarations
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=12.0 -fobjc-arc -fblocks -dynamiclib smarthome/LightShow.m smarthome/fishhook.c -o build/LightShow.dylib -install_name '@executable_path/Frameworks/LightShow.dylib' -framework UIKit -framework AVFoundation -framework Accelerate -framework Foundation -framework CoreGraphics -framework QuartzCore -Wno-deprecated-declarations
           codesign --force --sign - build/LightShow.dylib
           file build/LightShow.dylib
       - uses: actions/upload-artifact@v4
