@@ -87,6 +87,12 @@ static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callba
 static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);}
 static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualStop();return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
 static id HPManualBrightness(id self,SEL selector,id target,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,id))HPManualBrightnessOriginal)(self,selector,target,l,callback);}
+static id HPDefaultFadeHSL(id cls,SEL selector,uint16_t target,uint16_t light,uint16_t hue,uint16_t saturation,NSInteger retries,NSInteger responses,BOOL ack,id success,id result){
+    // The vendor's convenience method hard-codes a zero-duration transition.
+    // Omitting its optional transition lets the bulb use its configured default.
+    SEL full=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:transitionTime:delay:retryCount:responseMaxCount:ack:successCallback:resultCallback:");
+    return ((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(cls,full,target,light,hue,saturation,nil,0,retries,responses,ack,success,result);
+}
 static void HPHook(Class cls,NSString *name,IMP replacement,IMP *original){
     Method method=class_getInstanceMethod(cls,NSSelectorFromString(name));if(method){IMP old=method_setImplementation(method,replacement);if(original)*original=old;}
 }
@@ -104,6 +110,8 @@ static void HPInstallEnhancements(void){
     HPHook(api,@"setCTL:lightness:temp:onCompletion:",(IMP)HPManualCTL,&HPManualCTLOriginal);
     HPHook(api,@"setOnOff:state:onCompletion:",(IMP)HPManualOnOff,&HPManualOnOffOriginal);
     HPHook(api,@"setBrightness:level:onCompletion:",(IMP)HPManualBrightness,&HPManualBrightnessOriginal);
+    Method hsl=class_getClassMethod(NSClassFromString(@"SDKLibCommand"),NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:retryCount:responseMaxCount:ack:successCallback:resultCallback:"));
+    if(hsl)method_setImplementation(hsl,(IMP)HPDefaultFadeHSL);
     [NSNotificationCenter.defaultCenter addObserverForName:@"HP.OrderChanged" object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         UICollectionView *collection=HPGet(HPHomeController,@"collectionView");
         if(!collection)return;
