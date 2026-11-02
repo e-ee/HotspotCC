@@ -342,18 +342,15 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     }
 }
 @end
-@interface HPModeCard : UIButton
-@property(nonatomic,strong) CAGradientLayer *palette;
+@interface HPModeCard : UIControl
+@property(nonatomic,readonly) CAGradientLayer *palette;
 @property(nonatomic,strong) UILabel *caption;
 @property(nonatomic,strong) NSString *recipeID;
 @end
 @implementation HPModeCard
-- (void)layoutSubviews{[super layoutSubviews];self.palette.frame=self.bounds;self.caption.frame=CGRectInset(self.bounds,9,8);[self setNeedsDisplay];}
-- (void)drawRect:(CGRect)rect{
-    [super drawRect:rect];CGContextRef context=UIGraphicsGetCurrentContext();CGColorSpaceRef space=CGColorSpaceCreateDeviceRGB();CGGradientRef gradient=CGGradientCreateWithColors(space,(__bridge CFArrayRef)self.palette.colors,NULL);
-    if(gradient)CGContextDrawLinearGradient(context,gradient,CGPointZero,CGPointMake(self.bounds.size.width,self.bounds.size.height),0);if(gradient)CGGradientRelease(gradient);CGColorSpaceRelease(space);
-    NSMutableAttributedString *text=[self.caption.attributedText mutableCopy];if(!text.length)return;NSMutableParagraphStyle *paragraph=[NSMutableParagraphStyle new];paragraph.alignment=NSTextAlignmentCenter;paragraph.lineBreakMode=NSLineBreakByWordWrapping;[text addAttribute:NSParagraphStyleAttributeName value:paragraph range:NSMakeRange(0,text.length)];CGRect area=CGRectInset(self.bounds,9,8);CGRect measured=[text boundingRectWithSize:area.size options:NSStringDrawingUsesLineFragmentOrigin|NSStringDrawingUsesFontLeading context:nil];CGFloat height=MIN(area.size.height,ceil(measured.size.height));area.origin.y+=(area.size.height-height)*.5;area.size.height=height;[text drawWithRect:area options:NSStringDrawingUsesLineFragmentOrigin|NSStringDrawingUsesFontLeading context:nil];
-}
++ (Class)layerClass{return CAGradientLayer.class;}
+- (CAGradientLayer *)palette{return (CAGradientLayer *)self.layer;}
+- (void)layoutSubviews{[super layoutSubviews];self.caption.frame=CGRectInset(self.bounds,9,8);}
 @end
 
 @interface HPStudioScrollView:UIScrollView @end
@@ -414,8 +411,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (HPModeCard *)card:(NSString *)name detail:(NSString *)detail mode:(int)mode journey:(int)journey{
     HPModeCard *button=[[HPModeCard alloc]initWithFrame:CGRectZero];NSMutableArray *colors=[NSMutableArray new];
     for(int n=0;n<3;n++){HPColor sample=HPStudioTarget(mode,journey,0,45,n*.5,.35,.8,1,0);[colors addObject:(id)[UIColor colorWithHue:sample.hue saturation:sample.saturation brightness:.22+.05*n alpha:1].CGColor];}
-    button.palette=[CAGradientLayer layer];button.palette.colors=colors;button.palette.startPoint=CGPointMake(0,0);button.palette.endPoint=CGPointMake(1,1);button.layer.cornerRadius=17;button.layer.masksToBounds=YES;button.layer.borderWidth=.5;button.layer.borderColor=[UIColor colorWithWhite:1 alpha:.13].CGColor;[button.heightAnchor constraintEqualToConstant:96].active=YES;
-    NSMutableAttributedString *title=[[NSMutableAttributedString alloc]initWithString:[NSString stringWithFormat:@"%@\n%@",name,detail]attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,NSFontAttributeName:[UIFont systemFontOfSize:12]}];[title addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]range:NSMakeRange(0,name.length)];button.caption=[UILabel new];button.caption.attributedText=title;button.caption.numberOfLines=3;button.caption.textAlignment=NSTextAlignmentCenter;button.caption.userInteractionEnabled=NO;button.opaque=NO;button.accessibilityLabel=[NSString stringWithFormat:@"%@, %@",name,detail];return button;
+    button.palette.colors=colors;button.palette.startPoint=CGPointMake(0,0);button.palette.endPoint=CGPointMake(1,1);button.layer.cornerRadius=17;button.layer.masksToBounds=YES;button.layer.borderWidth=.5;button.layer.borderColor=[UIColor colorWithWhite:1 alpha:.13].CGColor;[button.heightAnchor constraintEqualToConstant:96].active=YES;
+    NSMutableAttributedString *title=[[NSMutableAttributedString alloc]initWithString:[NSString stringWithFormat:@"%@\n%@",name,detail]attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,NSFontAttributeName:[UIFont systemFontOfSize:12]}];[title addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]range:NSMakeRange(0,name.length)];button.caption=[UILabel new];button.caption.attributedText=title;button.caption.numberOfLines=3;button.caption.textAlignment=NSTextAlignmentCenter;button.caption.userInteractionEnabled=NO;button.caption.isAccessibilityElement=NO;[button addSubview:button.caption];button.opaque=NO;button.isAccessibilityElement=YES;button.accessibilityTraits=UIAccessibilityTraitButton;button.accessibilityLabel=[NSString stringWithFormat:@"%@, %@",name,detail];return button;
 }
 - (void)buildGallery{
     for(UIView *view in [self.gallery.arrangedSubviews copy]){[self.gallery removeArrangedSubview:view];[view removeFromSuperview];}
@@ -442,8 +439,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     for(UIView *row in self.gallery.arrangedSubviews){NSArray *cards=[row isKindOfClass:UIStackView.class]?[(UIStackView *)row arrangedSubviews]:@[row];for(UIView *view in cards)if([view isKindOfClass:HPModeCard.class]){HPModeCard *card=(id)view;BOOL selected=self.category.selectedSegmentIndex==0?engine.journey<0&&card.tag==engine.lastMode:self.category.selectedSegmentIndex==1&&card.tag==engine.journey;card.layer.borderWidth=selected?2:.5;card.layer.borderColor=[UIColor colorWithWhite:1 alpha:selected?.68:.13].CGColor;card.accessibilityTraits=UIAccessibilityTraitButton|(selected?UIAccessibilityTraitSelected:0);}}
     [self.preview setNeedsDisplay];
 }
-- (void)selectTheme:(UIButton *)button{if(self.captureReader)return;[HPLightEngine.shared start:button.tag];[self refresh];}
-- (void)selectJourney:(UIButton *)button{if(self.captureReader)return;[HPLightEngine.shared startJourney:button.tag];[self refresh];}
+- (void)selectTheme:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared start:button.tag];[self refresh];}
+- (void)selectJourney:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared startJourney:button.tag];[self refresh];}
 - (void)brightness:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeBrightness:slider.value];[self refresh];}
 - (void)speed:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeMotion:slider.value];[self refresh];}
 - (void)depth:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeDepth:slider.value];[self refresh];}
