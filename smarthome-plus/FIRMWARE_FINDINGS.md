@@ -32,13 +32,13 @@ Read timeouts explicitly cancel their own message handle. Cache values use raw
 The vendor's degree/percentage field units were verified in the supplied native
 executable; upstream normalized mesh examples are not this app's contract.
 
-Version 3.5.1 distinguishes deliberate control changes from ambient evolution.
+Version 3.6 distinguishes deliberate control changes from ambient evolution.
 A selected mode or brightness/depth value is sent on each bulb's next scheduled
 visit, using the same explicit four-second native fade. Subsequent automatic
 motion retains the slow adjacent-target limiter. The earlier limiter could take
 nearly four minutes to move from Aurora to Embers; its delay was inappropriate
 for deliberate controls. This does not change the radio pacing or vendor units.
-The motion slider changes phase rate from 0.2x to 3.0x; colour depth can now reach
+The motion slider changes phase rate from 0.2x to 10.0x; colour depth can now reach
 100% saturation instead of multiplying an already muted palette.
 
 ## Manufacturer downloads
@@ -66,10 +66,10 @@ advertised commands and preserve pairing.
 
 ## What this enables now
 
-- 24 calm moods, including Aurora and eight new natural palette fields.
+- 32 moods, including the original Aurora palette and eight additional spatial fields.
 - An apartment grid with saved 2D lamp positions and tap-to-identify colour markers, explicit Identify/Next controls and HSL restoration.
 - Room selection, brightness, gentle motion and colour-depth controls.
-- Three slow palette journeys and saved animated mood recipes.
+- Six slow palette journeys, colour shuffling/mirroring and saved animated mood recipes.
 - Capture a paused look as a native scene using actual bulb readback.
 - Normal scene/light controls pause the local effect generator.
 - Ordinary fade timing and power-restore behaviour, through native bulb models.
