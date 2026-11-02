@@ -93,9 +93,10 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     // One queued command at a time. Each lamp performs the interpolation locally.
     NSUInteger index=(NSUInteger)self.cursor++%self.lights.count;NSDictionary *light=self.lights[index];
     HPColor color=HPPattern((int)self.mode,self.phase,index/(double)self.lights.count,self.brightness,1);
-    uint16_t brightness=HPWord(color.lightness),hue=HPWord(color.hue),saturation=HPWord(color.saturation);
+    HPWireColor wire=HPVendorColor(color);
+    uint16_t brightness=wire.lightness,hue=wire.hue,saturation=wire.saturation;
     NSArray *previous=self.sent[light[@"id"]];
-    if(previous&&abs([previous[0] intValue]-brightness)<120&&abs([previous[1] intValue]-hue)<120&&abs([previous[2] intValue]-saturation)<120)return;
+    if(previous&&[previous[0]unsignedShortValue]==brightness&&[previous[1]unsignedShortValue]==hue&&[previous[2]unsignedShortValue]==saturation)return;
     Class transitionClass=NSClassFromString(@"SigTransitionTime");id transition=((id(*)(id,SEL))objc_msgSend)(transitionClass,@selector(alloc));
     // Hundred-millisecond steps. Cover most of a full update round with a smooth fade.
     uint8_t steps=(uint8_t)fmin(20,fmax(2,ceil(self.lights.count*.08*8)));
