@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdint.h>
 #define HP_MODE_COUNT 24
+#define HP_JOURNEY_COUNT 3
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
@@ -74,6 +75,32 @@ static inline HPColor HPPattern2D(int mode,double seconds,double x,double y,doub
     return HPPattern(mode,seconds,position,brightness,speed);
 }
 static inline HPWireColor HPVendorColor(HPColor color){return (HPWireColor){(uint16_t)lround(HPClamp(color.hue,0,1)*360),(uint16_t)lround(HPClamp(color.saturation,0,1)*100),(uint16_t)lround(HPClamp(color.lightness,0,1)*100)};}
+// Each chapter lasts six active minutes: four to settle, two to dissolve.
+// Related palettes interpolate without crossing the hue seam. The next chapter
+// uses the same field phase, so every boundary (including the loop) is continuous.
+static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,double phase,double x,double y,double brightness,double depth,uint32_t variation){
+    phase=isfinite(phase)?phase:0;
+    x=isfinite(x)?HPClamp(x,0,1):.5;y=isfinite(y)?HPClamp(y,0,1):.5;
+    if(variation){
+        double originalX=x;
+        switch(variation%4){case 1:x=1-y;y=originalX;break;case 2:x=1-x;y=1-y;break;case 3:x=y;y=1-originalX;break;default:break;}
+        if(variation&4)x=1-x;
+        phase+=(variation%997)*.73;
+    }
+    HPColor result;
+    if(journey>=0&&journey<HP_JOURNEY_COUNT){
+        static const int chapters[HP_JOURNEY_COUNT][6]={{0,23,18,19,20,0},{21,17,2,11,9,23},{14,8,3,6,10,14}};
+        static const int counts[HP_JOURNEY_COUNT]={5,6,5};
+        double time=isfinite(journeySeconds)?fmax(0,journeySeconds):0;
+        time=fmod(time,counts[journey]*360.);
+        int chapter=(int)(time/360.);double mix=HPClamp((fmod(time,360.)-240.)/120.,0,1);mix=mix*mix*(3-2*mix);
+        HPColor a=HPPattern2D(chapters[journey][chapter],phase,x,y,brightness,1);
+        HPColor b=HPPattern2D(chapters[journey][(chapter+1)%counts[journey]],phase,x,y,brightness,1);
+        result=(HPColor){a.hue+(b.hue-a.hue)*mix,a.saturation+(b.saturation-a.saturation)*mix,a.lightness+(b.lightness-a.lightness)*mix};
+    }else result=HPPattern2D(mode,phase,x,y,brightness,1);
+    result.saturation*=isfinite(depth)?HPClamp(depth,.25,1):1;
+    return result;
+}
 // Older firmware may report normalized status. Command units stay degrees/percent.
 static inline HPColor HPStatusColor(uint16_t hue,uint16_t sat,uint16_t light){
     if(hue>360||sat>100||light>100)return (HPColor){hue/65535.f,sat/65535.f,light/65535.f};
