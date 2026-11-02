@@ -41,7 +41,7 @@ static id HPHomeCell(id self,SEL selector,UICollectionView *collection,NSIndexPa
     [cell contentView].backgroundColor=color;return cell;
 }
 static void HPHomeTap(id self,SEL selector,UICollectionView *collection,NSIndexPath *path){
-    [HPLightEngine.shared stop];HPShortcutMap *map=objc_getAssociatedObject(collection,&HPShortcutMapKey);
+    [HPLightEngine.shared stop];[HPCommandColours removeAllObjects];HPShortcutMap *map=objc_getAssociatedObject(collection,&HPShortcutMapKey);
     if(map&&path.item>=0&&(NSUInteger)path.item<map.indexes.count)path=[NSIndexPath indexPathForItem:[map.indexes[path.item]integerValue] inSection:path.section];
     ((void(*)(id,SEL,id,id))HPTapOriginal)(self,selector,collection,path);
 }
@@ -101,7 +101,7 @@ static id HPMenuHeader(id self,SEL selector,id table,NSInteger section){if(HPHid
 static CGFloat HPMenuHeaderHeight(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return .01;return ((CGFloat(*)(id,SEL,id,NSInteger))HPMenuHeaderHeightOriginal)(self,selector,table,section);}
 static void HPNoExperience(id self,SEL selector,id sender){(void)self;(void)selector;(void)sender;}
 static IMP HPManualHSLOriginal,HPManualCTLOriginal,HPManualOnOffOriginal,HPManualBrightnessOriginal;
-static void HPManualStop(void){if(NSThread.isMainThread)[HPLightEngine.shared stop];else dispatch_async(dispatch_get_main_queue(),^{[HPLightEngine.shared stop];});}
+static void HPManualStop(void){dispatch_block_t stop=^{[HPLightEngine.shared stop];[HPCommandColours removeAllObjects];};if(NSThread.isMainThread)stop();else dispatch_async(dispatch_get_main_queue(),stop);}
 static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,int,int,id))HPManualHSLOriginal)(self,selector,target,h,s,l,callback);}
 static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);}
 static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualStop();return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
