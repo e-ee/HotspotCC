@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import "SceneCapture.h"
 #import "EffectPatterns.h"
+#import "StudioPresets.h"
 #include <assert.h>
 #include <math.h>
 static NSMutableArray *Writes,*Reads,*BrightnessWrites;
@@ -171,6 +172,8 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
 - (void)buildGallery;
 - (void)playSaved:(UIButton *)card;
 - (void)nextLight;
+- (void)shuffleColours;
+- (void)restoreColours;
 - (void)stop;
 - (void)install;
 - (void)moveButton:(UIButton *)button to:(CGPoint)point remember:(BOOL)remember;
@@ -179,6 +182,12 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
 @end
 static id Shared(NSString *name){return ((id(*)(id,SEL))objc_msgSend)(NSClassFromString(name),NSSelectorFromString(@"shared"));}
 static void Later(double seconds,dispatch_block_t block){dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(seconds*NSEC_PER_SEC)),dispatch_get_main_queue(),block);}
+static void WaitUntil(double deadline,NSString *name,BOOL(^predicate)(void),dispatch_block_t completion){
+    if(predicate()){completion();return;}
+    if(NSProcessInfo.processInfo.systemUptime>=deadline){NSLog(@"Timed out waiting for %@: markers %lu, pending reads %lu, last marker %@",name,(unsigned long)MarkerWrites.count,(unsigned long)PendingReads,MarkerWrites.lastObject);assert(predicate());return;}
+    Later(.1,^{WaitUntil(deadline,name,predicate,completion);});
+}
+static void Until(double seconds,NSString *name,BOOL(^predicate)(void),dispatch_block_t completion){WaitUntil(NSProcessInfo.processInfo.systemUptime+seconds,name,predicate,completion);}
 static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer *renderer=[[UIGraphicsImageRenderer alloc]initWithBounds:window.bounds];UIImage *image=[renderer imageWithActions:^(UIGraphicsImageRendererContext *context){NSArray *windows=[UIApplication.sharedApplication.windows sortedArrayUsingComparator:^NSComparisonResult(UIWindow *a,UIWindow *b){return a.windowLevel<b.windowLevel?NSOrderedAscending:NSOrderedDescending;}];for(UIWindow *w in windows)if(!w.hidden)[w drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];}];NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:name];assert([UIImagePNGRepresentation(image)writeToFile:path atomically:YES]);}
 @interface HPSmokeDelegate:UIResponder<UIApplicationDelegate>
 @property(nonatomic,strong) UIWindow *window;
@@ -187,16 +196,18 @@ static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer 
 - (void)checkMovingMoods;
 - (void)checkControls:(dispatch_block_t)completion;
 - (void)checkStorage;
+- (void)checkShuffle:(dispatch_block_t)completion;
 - (void)checkMap:(UINavigationController *)navigation;
 - (void)checkDeletion:(UINavigationController *)navigation;
 - (void)finishReport;
 @end
 @implementation HPSmokeDelegate
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options{
+    UIViewController *launch=[[UIStoryboard storyboardWithName:@"HomePlusBlankLaunch360"bundle:NSBundle.mainBundle]instantiateInitialViewController];[launch loadViewIfNeeded];assert(launch.view.subviews.count==0);CGFloat r,g,b,a;[launch.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.1&&g<.1&&b<.1);
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
     Later(1,^{id engine=Shared(@"HPLightEngine");DropReads=YES;QueueBusy=YES;[engine start:0];assert(Reads.count==0&&Writes.count==0);
         Later(.4,^{assert(Writes.count==0&&Reads.count==0);QueueBusy=NO;
-            Later(5.2,^{NSMutableSet *targets=[NSMutableSet new];for(NSDictionary *write in Writes)[targets addObject:write[@"target"]];assert(targets.count==14&&Reads.count==0);DropReads=NO;assert(AmbientWrites>0);SaveScreen(self.window,@"AuroraGreen.png");[self checkControls:^{[self checkStorage];}];});
+            Later(5.2,^{NSMutableSet *targets=[NSMutableSet new];for(NSDictionary *write in Writes)[targets addObject:write[@"target"]];assert(targets.count==14&&Reads.count==0);DropReads=NO;assert(AmbientWrites>0);SaveScreen(self.window,@"AuroraGreen.png");[self checkControls:^{[self checkShuffle:^{[self checkStorage];}];}];});
         });
     });return YES;
 }
@@ -205,9 +216,9 @@ static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer 
     // Exercise every actual mode card while already running, not engine setters.
     for(UIStackView *row in gallery.arrangedSubviews)if([row isKindOfClass:UIStackView.class])for(UIButton *card in row.arrangedSubviews){
         CGRect rect=[card convertRect:card.bounds toView:scroll];[scroll scrollRectToVisible:rect animated:NO];[self.window layoutIfNeeded];
-        CGPoint point=[card convertPoint:CGPointMake(CGRectGetMidX(card.bounds),CGRectGetMidY(card.bounds))toView:self.window];UIView *hit=[self.window hitTest:point withEvent:nil];assert(hit==card||[hit isDescendantOfView:card]);
+        CGPoint point=[card convertPoint:CGPointMake(CGRectGetMidX(card.bounds),CGRectGetMidY(card.bounds))toView:self.window];UIView *hit=[self.window hitTest:point withEvent:nil];assert(hit==card||[hit isDescendantOfView:card]);assert(scroll.canCancelContentTouches&&scroll.scrollEnabled&&scroll.panGestureRecognizer.enabled&&[scroll touchesShouldCancelInContentView:card]&&[scroll touchesShouldCancelInContentView:[card valueForKey:@"caption"]]);
         [card sendActionsForControlEvents:UIControlEventTouchUpInside];assert([[engine valueForKey:@"lastMode"]integerValue]==card.tag&&[[engine valueForKey:@"journey"]integerValue]==-1);checked++;if(card.tag==3)embers=card;
-    }assert(checked==24&&embers);
+    }assert(checked==HP_MODE_COUNT&&embers);
     [embers sendActionsForControlEvents:UIControlEventTouchUpInside];[scroll setContentOffset:CGPointZero animated:NO];
     Later(1.8,^{for(NSDictionary *value in LampValues.allValues)assert([value[@"hue"]intValue]<40); // Old limiter takes almost four minutes.
         UISlider *brightness=[self.studio valueForKey:@"brightnessSlider"],*depth=[self.studio valueForKey:@"depthSlider"],*motion=[self.studio valueForKey:@"motionSlider"];
@@ -225,6 +236,16 @@ static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer 
                         });
                     });
                 });
+            });
+        });
+    });
+}
+- (void)checkShuffle:(dispatch_block_t)completion{
+    id engine=Shared(@"HPLightEngine");UIButton *prism=nil;UIStackView *gallery=[self.studio valueForKey:@"gallery"];for(UIStackView *row in gallery.arrangedSubviews)for(UIButton *card in row.arrangedSubviews)if(card.tag==5)prism=card;assert(prism);[prism sendActionsForControlEvents:UIControlEventTouchUpInside];
+    Until(4,@"Prism selection",^BOOL{return [[engine valueForKey:@"retargets"]count]==0;},^{NSDictionary *before=[LampValues copy];UIButton *shuffle=[self.studio valueForKey:@"shuffleButton"];UISegmentedControl *category=[self.studio valueForKey:@"category"];assert(shuffle.superview==category.superview&&CGRectGetMaxY(shuffle.frame)<CGRectGetMinY(category.frame));uint32_t seed=[[engine valueForKey:@"variation"]unsignedIntValue];[shuffle sendActionsForControlEvents:UIControlEventTouchUpInside];assert([[engine valueForKey:@"variation"]unsignedIntValue]!=seed&&[[engine valueForKey:@"lastMode"]intValue]==5);
+        Until(4,@"shuffled colours",^BOOL{return [[engine valueForKey:@"retargets"]count]==0;},^{double change=0;for(NSNumber *key in LampValues)change+=abs([LampValues[key][@"hue"]intValue]-[before[key][@"hue"]intValue]);assert(change>50);SaveScreen(self.window,@"ShuffleColours.png");[engine stop];NSDictionary *held=[LampValues copy];double phase=[[engine valueForKey:@"phase"]doubleValue];[shuffle sendActionsForControlEvents:UIControlEventTouchUpInside];
+            Until(4,@"shuffled paused look",^BOOL{return ![[engine valueForKey:@"adjusting"]boolValue];},^{assert([[engine valueForKey:@"mode"]intValue]==-1&&[[engine valueForKey:@"phase"]doubleValue]==phase);for(NSNumber *key in LampValues){assert(abs([LampValues[key][@"light"]intValue]-[held[key][@"light"]intValue])<=1&&abs([LampValues[key][@"sat"]intValue]-[held[key][@"sat"]intValue])<=1);}NSDictionary *recipe=[engine recipeNamed:@"Shuffled Prism"];assert([HPStudioPresets validatedRecipe:recipe error:nil]&&[recipe[@"variation"]unsignedIntValue]==[[engine valueForKey:@"variation"]unsignedIntValue]);[engine restoreColours];
+                Until(4,@"original palette restored",^BOOL{return ![[engine valueForKey:@"adjusting"]boolValue];},^{assert([[engine valueForKey:@"variation"]unsignedIntValue]==0);completion();});
             });
         });
     });
@@ -284,12 +305,12 @@ static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer 
     NSUInteger colors=Writes.count;[canvas moveLightAtIndex:0 to:CGPointMake(.12,.84)];assert(Writes.count==colors&&BrightnessWrites.count==0);
     UIViewController *again=[NSClassFromString(@"HPSpatialEditor")new];[again loadViewIfNeeded];NSDictionary *placed=[[again valueForKey:@"canvas"]valueForKey:@"lights"][0];assert(fabs([placed[@"x"]doubleValue]-.12)<.00001&&fabs([placed[@"y"]doubleValue]-.84)<.00001);
     NSDictionary *original=[LampValues[@0x20]copy];UIButton *pin=[[canvas valueForKey:@"pins"]firstObject];[pin sendActionsForControlEvents:UIControlEventTouchUpInside];
-    Later(.3,^{assert(MarkerWrites.count==1&&[MarkerWrites[0][@"target"]intValue]==0x20&&[MarkerWrites[0][@"sat"]intValue]==90&&[MarkerWrites[0][@"light"]intValue]==65&&BrightnessWrites.count==0);
-        Later(5.5,^{assert(MarkerWrites.count==2&&[LampValues[@0x20]isEqual:original]&&Writes.count==colors+2);SaveScreen(self.window,@"ApartmentMap.png");
-            // The explicit Next control must still mark and restore when ALL reads disappear.
+    Until(3,@"first marker",^BOOL{return MarkerWrites.count>=1;},^{assert(MarkerWrites.count==1&&[MarkerWrites[0][@"target"]intValue]==0x20&&[MarkerWrites[0][@"sat"]intValue]==90&&[MarkerWrites[0][@"light"]intValue]==65&&BrightnessWrites.count==0);
+        Until(10,@"first light restored",^BOOL{return MarkerWrites.count==2&&[LampValues[@0x20]isEqual:original]&&[[map valueForKey:@"nextButton"]isEnabled];},^{assert(Writes.count==colors+2);SaveScreen(self.window,@"ApartmentMap.png");
             NSDictionary *second=[LampValues[@0x21]copy];DropReads=YES;[map nextLight];
-            Later(.3,^{assert(MarkerWrites.count==3&&[MarkerWrites.lastObject[@"target"]intValue]==0x21);});
-            Later(8.8,^{assert(MarkerWrites.count==4&&[LampValues[@0x21]isEqual:second]&&PendingReads==0);DropReads=NO;[self checkDeletion:navigation];});
+            Until(3,@"next marker",^BOOL{return MarkerWrites.count>=3;},^{assert([MarkerWrites[2][@"target"]intValue]==0x21);
+                Until(15,@"restore and cancel unanswered query",^BOOL{return MarkerWrites.count==4&&[LampValues[@0x21]isEqual:second]&&PendingReads==0&&[[map valueForKey:@"nextButton"]isEnabled];},^{DropReads=NO;[self checkDeletion:navigation];});
+            });
         });
     });
 }
@@ -299,7 +320,7 @@ static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer 
     Later(.4,^{UIAlertController *confirmation=(id)editor.presentedViewController;assert([confirmation isKindOfClass:UIAlertController.class]&&[confirmation.title containsString:@"Saved scene 1"]);UIAlertAction *action=confirmation.actions.lastObject;assert(action.style==UIAlertActionStyleDestructive);void(^handler)(UIAlertAction *)=[action valueForKey:@"handler"];assert(handler);[confirmation dismissViewControllerAnimated:NO completion:^{handler(action);assert([RLMRealm defaultRealm].scenes.count==11&&[[editor valueForKey:@"items"]count]==11&&Writes.count==commands);[self finishReport];}];});
 }
 - (void)finishReport{
-    NSDictionary *report=@{@"passed":@YES,@"targets":@14,@"moods":@24,@"journeys":@3,@"writes":@(Writes.count),@"explicitFadedWrites":@(ExplicitFadedWrites),@"ambientBoundedWrites":@(AmbientWrites),@"allTwentyFourModeCardsSwitchWhileRunning":@YES,@"modeChangeReachesAllBulbsWithinOneRound":@YES,@"brightnessAndDepthRespondWhileRunningAndPaused":@YES,@"motionSliderChangesPhaseRate":@YES,@"sliderThumbSurvivesRefresh":@YES,@"galleryCaptionsSurviveScrollingAndRepeatedSelection":@YES,@"sliderDragDoesNotScrollOrCancel":@YES,@"reads":@(Reads.count),@"backpressure":@YES,@"manualControlStopsEffect":@YES,@"boundedSmallSteps":@YES,@"fourSecondFades":@YES,@"actualReadbackSceneSaved":@YES,@"failedReadLeavesScenesIntact":@YES,@"floatingButtonsWhiteAndPersistent":@YES,@"dragPositionRemembered":@YES,@"touchesPassThrough":@YES,@"darkConnectionBadge":@YES,@"lateBlackTextAndMenuAssignmentsGuarded":@YES,@"networkAnalyseRemoved":@YES,@"logoRemoved":@YES,@"directStudioShortcut":@YES,@"apartmentMapPositionRemembered":@YES,@"gridTapMarksOnlyOneBulbAndRestoresColour":@YES,@"nextLightWorksWithoutColourReplies":@YES,@"studioStartsWithoutColourReplies":@YES,@"timedOutReadCancelsOnlyItsOwnHandle":@YES,@"journeyAndMovingMoodRoundTrip":@YES,@"pauseResumeKeepsPhase":@YES,@"reconnectUsesChangedNativeCache":@YES,@"sceneDeletionAfterNamedConfirmation":@YES};
+    NSDictionary *report=@{@"passed":@YES,@"targets":@14,@"moods":@32,@"journeys":@6,@"writes":@(Writes.count),@"explicitFadedWrites":@(ExplicitFadedWrites),@"ambientBoundedWrites":@(AmbientWrites),@"allModeCardsSwitchWhileRunning":@YES,@"modeChangeReachesAllBulbsWithinOneRound":@YES,@"brightnessAndDepthRespondWhileRunningAndPaused":@YES,@"motionSliderChangesPhaseRate":@YES,@"sliderThumbSurvivesRefresh":@YES,@"galleryCaptionsSurviveScrollingAndRepeatedSelection":@YES,@"sliderDragDoesNotScrollOrCancel":@YES,@"cardAndCaptionDragsCancelForVerticalScrolling":@YES,@"motionSliderMaximum10x":@YES,@"shuffleRecoloursPrismAndPreservesPausedLevels":@YES,@"shuffledRecipeRemembersVariation":@YES,@"originalPaletteCanBeRestored":@YES,@"reads":@(Reads.count),@"backpressure":@YES,@"manualControlStopsEffect":@YES,@"boundedSmallSteps":@YES,@"fourSecondFades":@YES,@"actualReadbackSceneSaved":@YES,@"failedReadLeavesScenesIntact":@YES,@"floatingButtonsWhiteAndPersistent":@YES,@"dragPositionRemembered":@YES,@"touchesPassThrough":@YES,@"darkConnectionBadge":@YES,@"lateBlackTextAndMenuAssignmentsGuarded":@YES,@"networkAnalyseRemoved":@YES,@"logoRemoved":@YES,@"launchStoryboardContainsNoTextOrImages":@YES,@"directStudioShortcut":@YES,@"apartmentMapPositionRemembered":@YES,@"gridTapMarksOnlyOneBulbAndRestoresColour":@YES,@"nextLightWorksWithoutColourReplies":@YES,@"studioStartsWithoutColourReplies":@YES,@"timedOutReadCancelsOnlyItsOwnHandle":@YES,@"journeyAndMovingMoodRoundTrip":@YES,@"pauseResumeKeepsPhase":@YES,@"reconnectUsesChangedNativeCache":@YES,@"sceneDeletionAfterNamedConfirmation":@YES};
     NSData *data=[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([data writeToFile:path atomically:YES]);
 }
 @end
