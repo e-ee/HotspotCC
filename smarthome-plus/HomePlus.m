@@ -265,6 +265,8 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         if(![document[@"Documents"][@"default.realm"]writeToURL:realmURL options:NSDataWritingAtomic error:&error])document=nil;
         else @autoreleasepool{
             id config=[HPGet(HPRealm(),@"configuration")copy];HPSet(config,@"setFileURL:",realmURL);
+            SEL deleteOnMigration=NSSelectorFromString(@"setDeleteRealmIfMigrationNeeded:");
+            if([config respondsToSelector:deleteOnMigration])((void(*)(id,SEL,BOOL))objc_msgSend)(config,deleteOnMigration,NO);
             ((void(*)(id,SEL,BOOL))objc_msgSend)(config,NSSelectorFromString(@"setReadOnly:"),YES);
             SEL open=NSSelectorFromString(@"realmWithConfiguration:error:");
             id checked=((id(*)(id,SEL,id,NSError **))objc_msgSend)(NSClassFromString(@"RLMRealm"),open,config,&error);
