@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -72,11 +75,12 @@ jobs:
           xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios14.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
           python3 - <<'PY'
           import plistlib,pathlib
-          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'14.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
+          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'14.0','UIDeviceFamily':[1,2],'UILaunchStoryboardName':'HomePlusBlankLaunch360','LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
           pathlib.Path('build/StudioSmoke.app/Info.plist').write_bytes(plistlib.dumps(info))
           seed={'Profile':'Simulator','Summary':'14 lights / 0 groups','Documents':{},'Preferences':{'HP.Profile':'Simulator','mesh.json':b'{"groups":[],"nodes":[]}'}}
           pathlib.Path('build/StudioSmoke.app/HomePlusSeed.plist').write_bytes(plistlib.dumps(seed))
           PY
+          cp -R build/HomePlusLaunch.storyboardc build/StudioSmoke.app/HomePlusBlankLaunch360.storyboardc
           codesign --force --sign - build/StudioSmoke.app
           xcrun simctl list devices available --json > build/devices.json
           DEVICE=$(python3 - <<'PY'
@@ -91,11 +95,12 @@ jobs:
           xcrun simctl install "$DEVICE" build/StudioSmoke.app
           CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
           xcrun simctl launch --stdout="$CONTAINER/Documents/Smoke.stdout" --stderr="$CONTAINER/Documents/Smoke.stderr" "$DEVICE" local.homeplus.studiosmoke
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             if test -f "$CONTAINER/Documents/smoke-report.json"; then break; fi
             sleep 1
           done
           if ! test -f "$CONTAINER/Documents/smoke-report.json"; then
+            cp "$CONTAINER/Documents/"*.png build/ || true
             cat "$CONTAINER/Documents/Smoke.stdout" "$CONTAINER/Documents/Smoke.stderr" || true
             xcrun simctl spawn "$DEVICE" log show --last 3m --style compact --predicate 'process == "StudioSmoke"' | tail -120 || true
             exit 1
@@ -109,9 +114,11 @@ jobs:
           cp "$CONTAINER/Documents/ApartmentMap.png" build/ApartmentMap.png
           cp "$CONTAINER/Documents/AuroraGreen.png" build/AuroraGreen.png
           cp "$CONTAINER/Documents/StudioControls.png" build/StudioControls.png
+          cp "$CONTAINER/Documents/ShuffleColours.png" build/ShuffleColours.png
           cp "$CONTAINER/Documents/Journeys.png" build/Journeys.png
           cp "$CONTAINER/Documents/SavedMoods.png" build/SavedMoods.png
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Studio-UI-Smoke
           path: |
@@ -123,5 +130,6 @@ jobs:
             build/ApartmentMap.png
             build/AuroraGreen.png
             build/StudioControls.png
+            build/ShuffleColours.png
             build/Journeys.png
             build/SavedMoods.png
