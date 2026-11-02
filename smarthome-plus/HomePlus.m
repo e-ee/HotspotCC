@@ -297,6 +297,7 @@ static void HPDidAppear(id self,SEL selector,BOOL animated) {
 }
 __attribute__((constructor)) static void HPInitialize(void) {
     @autoreleasepool {
+        HPIdentifyTask=UIBackgroundTaskInvalid;
         HPBootstrap();
         HPInstallEnhancements();
         HPInstallDarkTheme();
