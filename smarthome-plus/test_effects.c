@@ -20,6 +20,11 @@ int main(void){
         HPColor repeat=HPPattern(mode,19.2,.4,.6,1),again=HPPattern(mode,19.2,.4,.6,1);
         assert(repeat.hue==again.hue&&repeat.lightness==again.lightness);
     }
-    assert(HPWord(0)==0&&HPWord(1)==65535);
+    HPWireColor blue=HPVendorColor((HPColor){240.f/360.f,.8f,.6f});
+    assert(blue.hue==240&&blue.saturation==80&&blue.lightness==60);
+    for(int mode=0;mode<8;mode++)for(int frame=0;frame<100;frame++){
+        HPWireColor w=HPVendorColor(HPPattern(mode,frame*.1,frame/100.,.6,1));
+        assert(w.hue<=360&&w.saturation<=100&&w.lightness<=60);
+    }
     puts("Eight patterns: finite bounded output, independent spatial motion, temporal variation and deterministic playback passed.");
 }
