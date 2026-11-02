@@ -67,6 +67,8 @@ static BOOL HPWritePlist(id value,NSString *path,NSError **error){NSData *data=[
     if(counter<0||counter>=0xffff00)return HPHomeFail(error,@"This controller needs a mesh sequence refresh before a Home can be imported.");
     prefs[@"currenProvisionerUUID_key"]=uuid;prefs[@"currenProvisionerSno_key"]=@(counter+256);
     prefs[@"uniqueID"]=current[@"uniqueID"]?:uuid;prefs[@"HP.Profile"]=current[@"HP.Profile"]?:@"This device";prefs[@"HP.Seeded"]=@YES;
+    // Floating controls belong to this screen/device, rather than the Home.
+    for(NSString *localKey in @[@"HP.Float.PLUS",@"HP.Float.STUDIO"]){[prefs removeObjectForKey:localKey];if(current[localKey])prefs[localKey]=current[localKey];}
     NSMutableDictionary *addresses=[prefs[@"currentMeshProvisionAddress_key"]isKindOfClass:NSDictionary.class]?[prefs[@"currentMeshProvisionAddress_key"]mutableCopy]:[NSMutableDictionary new];
     NSUInteger next=[current[@"currentMeshProvisionAddress_key"][uuid]unsignedIntegerValue];addresses[uuid]=@(MAX(MAX(next,[addresses[uuid]unsignedIntegerValue]),start+count));prefs[@"currentMeshProvisionAddress_key"]=addresses;
     for(NSString *key in @[@"kUUIDOfConnectedDevices",@"scanList_key"]){[prefs removeObjectForKey:key];if(sameHome&&current[key])prefs[key]=current[key];}
