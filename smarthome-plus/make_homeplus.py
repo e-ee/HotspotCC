@@ -146,7 +146,7 @@ def build(config_zip, module, ldid):
     documents[network_name.removeprefix('Documents/')]=json.dumps(network_mesh,separators=(',',':')).encode()
     output = ROOT/'release';output.mkdir(exist_ok=True)
     report=[]
-    for index,identity in enumerate(identities,1):
+    for index,identity in enumerate(identities[:1],1):
         # Work only in a dedicated, newly created tree. Existing releases stay available.
         staging=ROOT/('stage-'+identity['uuid'])
         if staging.exists():shutil.rmtree(staging)
@@ -165,7 +165,7 @@ def build(config_zip, module, ldid):
         shutil.copytree(launch,app/'HomePlusBlankLaunch360.storyboardc',dirs_exist_ok=True)
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
-                    CFBundleVersion='3601',CFBundleShortVersionString='3.6.1',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
+                    CFBundleVersion='3700',CFBundleShortVersionString='3.7.0',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
         for key in list(info):
             if key.startswith('UILaunch'):info.pop(key)
@@ -179,8 +179,8 @@ def build(config_zip, module, ldid):
         private_prefs.update({'mesh.json':json.dumps(mesh,separators=(',',':')).encode(),
             'currenProvisionerUUID_key':identity['uuid'],'currenProvisionerSno_key':0,
             'currentMeshProvisionAddress_key':{identity['uuid']:identity['address']+1},
-            'uniqueID':str(uuid.UUID(identity['uuid'])).upper(),'InfoAlertPresented':True,'SHOWALERT':False,'HP.Profile':identity['name']})
-        seed={'Profile':identity['name'],'Summary':'14 lights / 5 groups','Preferences':private_prefs,'Documents':documents}
+            'uniqueID':str(uuid.UUID(identity['uuid'])).upper(),'InfoAlertPresented':True,'SHOWALERT':False,'HP.Profile':identity['name'],'HP.EnrollmentAuthority':identities[0]['uuid']})
+        seed={'Universal':True,'AuthorityUUID':identities[0]['uuid'],'Profile':identity['name'],'Summary':'14 lights / 5 groups','Preferences':private_prefs,'Documents':documents}
         (app/'HomePlusSeed.plist').write_bytes(plistlib.dumps(seed,fmt=plistlib.FMT_BINARY))
         # Separate container and application identity preserve the installed original app.
         entitlements={'application-identifier':'4657EYLGTH.'+BUNDLE_ID,
@@ -195,7 +195,7 @@ def build(config_zip, module, ldid):
                 subprocess.run([str(ldid),'-S'+str(entitlement_path) if path==binary else '-S',str(path)],check=True)
         verify_signatures(binary);verify_signatures(app/'Frameworks/HomePlus.dylib')
         assert verify_ios14_deployment(app)>=18
-        destination=output/f'SYLVANIA_Plus_Device_{index}_iOS14plus.ipa'
+        destination=output/'SYLVANIA_Plus_Universal_iOS14plus.ipa'
         out=destination.with_suffix('.ipa.pending')
         with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(staging.rglob('*')):
