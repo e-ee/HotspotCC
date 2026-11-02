@@ -1,9 +1,12 @@
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
 #import "SceneTransfer.h"
 #import "HomeArchive.h"
+#import "SceneCapture.h"
+#import "SpatialLayout.h"
 #import <sqlite3.h>
 
 // All runtime calls below use selectors and ABIs inspected in the supplied 3.0.2 app.
@@ -100,15 +103,33 @@ static NSArray *HPExportRoutines(void) {
 @property(nonatomic,strong) NSString *detail;
 @end
 
+static UIWindow *HPContentWindow(void){
+    UIWindow *fallback=nil;
+    for(UIWindow *window in UIApplication.sharedApplication.windows){
+        if(window.hidden||!window.rootViewController||window.windowLevel!=UIWindowLevelNormal||[window.accessibilityIdentifier isEqual:@"HP.FloatingWindow"])continue;
+        if(window.windowScene&&window.windowScene.activationState!=UISceneActivationStateForegroundActive&&window.windowScene.activationState!=UISceneActivationStateForegroundInactive)continue;
+        if(window.isKeyWindow)return window;if(!fallback)fallback=window;
+    }
+    return fallback;
+}
 @interface HPManager : NSObject
-@property(nonatomic,strong) UIButton *button;
+@property(nonatomic,strong) UIButton *button,*studioButton;
+@property(nonatomic,strong) UIWindow *overlay;
+@property(nonatomic,strong) NSTimer *visibilityTimer;
+@property(nonatomic,weak) UIButton *draggingButton;
+@property(nonatomic) CGPoint dragStart;
+@property(nonatomic) CGRect keyboardFrame;
+@property(nonatomic) BOOL installing,keyboardVisible;
 + (instancetype)shared;
 - (void)install;
 - (void)show;
+- (void)showStudio;
+- (void)layoutButtons;
+- (void)moveButton:(UIButton *)button to:(CGPoint)point remember:(BOOL)remember;
 @end
 
 static UIViewController *HPTop(void) {
-    UIWindow *window = UIApplication.sharedApplication.keyWindow;
+    UIWindow *window = HPContentWindow();
     UIViewController *controller = window.rootViewController;
     while (controller) {
         if (controller.presentedViewController) controller = controller.presentedViewController;
@@ -124,36 +145,8 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     [controller presentViewController:alert animated:YES completion:nil];
 }
 
-@implementation HPManager
-+ (instancetype)shared { static HPManager *value; static dispatch_once_t once; dispatch_once(&once,^{value=[HPManager new];}); return value; }
-- (void)install {
-    UIWindow *window = UIApplication.sharedApplication.keyWindow;
-    if (!window) return;
-    if (!self.button) {
-        self.button = [UIButton buttonWithType:UIButtonTypeSystem];
-        [self.button setTitle:@"PLUS" forState:UIControlStateNormal];
-        self.button.titleLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold];
-        [self.button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        self.button.backgroundColor = [UIColor colorWithRed:0.12 green:0.14 blue:0.19 alpha:0.94];
-        self.button.alpha=0.28;
-        self.button.layer.cornerRadius = 20;
-        self.button.accessibilityLabel = @"SYLVANIA Plus, Light Studio and Home transfer";
-        [self.button addTarget:self action:@selector(show) forControlEvents:UIControlEventTouchUpInside];
-    }
-    if (self.button.superview != window) [window addSubview:self.button];
-    self.button.frame = CGRectMake(window.bounds.size.width-78,window.bounds.size.height-window.safeAreaInsets.bottom-104,64,40);
-    self.button.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleTopMargin;
-    UIViewController *top=HPTop();
-    self.button.hidden=[top isKindOfClass:HPPanel.class]||[top isKindOfClass:HPStudio.class]||[top isKindOfClass:HPPathEditor.class]||[top isKindOfClass:HPBulbSettings.class];
-    [window bringSubviewToFront:self.button];
-}
-- (void)show {
-    if ([HPTop() isKindOfClass:HPPanel.class]) return;
-    HPPanel *panel = [[HPPanel alloc]initWithStyle:UITableViewStyleInsetGrouped];
-    UINavigationController *navigation = [[UINavigationController alloc]initWithRootViewController:panel];
-    [HPTop() presentViewController:navigation animated:YES completion:nil];
-}
-@end
+#import <float.h>
+#import "FloatingControls.inc"
 
 @implementation HPPanel
 - (void)viewDidLoad {
@@ -181,7 +174,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     UITableViewCell *cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
     if(path.section==0){
-        cell.textLabel.text=@[@"Open Light Studio",@"Arrange scene shortcuts",@"Arrange light travel path",@"Everyday light behaviour"][path.row];cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+        cell.textLabel.text=@[@"Open Light Studio",@"Arrange scene shortcuts",@"Map light travel path",@"Everyday light behaviour"][path.row];cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         if(path.row==0){cell.textLabel.textColor=[UIColor colorWithRed:.48 green:.23 blue:.8 alpha:1];cell.textLabel.font=[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];}
     }else if(path.section==1) {
         cell.selectionStyle=UITableViewCellSelectionStyleNone;
@@ -239,6 +232,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     [tableView deselectRowAtIndexPath:path animated:YES];
     if(path.section==0){
         if(path.row==0)[self.navigationController pushViewController:[HPStudio new] animated:YES];
+        else if(path.row==2)[self.navigationController pushViewController:[HPSpatialEditor new] animated:YES];
         else if(path.row==3)[self.navigationController pushViewController:[[HPBulbSettings alloc]initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
         else{HPPathEditor *editor=[[HPPathEditor alloc]initWithStyle:UITableViewStyleInsetGrouped];editor.scenes=path.row==1;[self.navigationController pushViewController:editor animated:YES];}
         return;
