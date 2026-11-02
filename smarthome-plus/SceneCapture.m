@@ -43,8 +43,8 @@ static BOOL HPCaptureNumber(id n,NSInteger max){return [n isKindOfClass:NSNumber
         ((void(*)(id,SEL))objc_msgSend)(realm,NSSelectorFromString(@"beginWriteTransaction"));began=YES;
         id(*field)(id,NSString *)=dlsym(RTLD_DEFAULT,"RLMObjectBaseObjectForKeyedSubscript");
         for(id scene in scenes){
-            id list=field?field(scene,@"routineList"):[scene valueForKey:@"routineList"];NSMutableArray *children=[NSMutableArray new];for(id child in list)[children addObject:child];
-            for(id child in children){NSString *uuid=[child valueForKey:@"uuid"];id others=((id(*)(id,SEL,id,id))objc_msgSend)(realm,query,@"RoutinesInfo",[NSPredicate predicateWithFormat:@"uuid != %@ AND ANY routineList.uuid == %@",identifier,uuid]);if(![others count])((void(*)(id,SEL,id))objc_msgSend)(realm,NSSelectorFromString(@"deleteObject:"),child);}
+            id list=field?field(scene,@"routineList"):[scene valueForKey:@"routineList"];NSMutableDictionary *children=[NSMutableDictionary new];for(id child in list)children[[child valueForKey:@"uuid"]]=child;
+            for(NSString *uuid in children){id others=((id(*)(id,SEL,id,id))objc_msgSend)(realm,query,@"RoutinesInfo",[NSPredicate predicateWithFormat:@"uuid != %@ AND ANY routineList.uuid == %@",identifier,uuid]);if(![others count])((void(*)(id,SEL,id))objc_msgSend)(realm,NSSelectorFromString(@"deleteObject:"),children[uuid]);}
             ((void(*)(id,SEL,id))objc_msgSend)(realm,NSSelectorFromString(@"deleteObject:"),scene);
         }
         if(((BOOL(*)(id,SEL,NSError **))objc_msgSend)(realm,NSSelectorFromString(@"commitWriteTransaction:"),error))return YES;
