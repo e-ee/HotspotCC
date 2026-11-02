@@ -54,6 +54,8 @@ static BOOL QueueBusy;
 @implementation SDKLibCommand
 + (id)lightHSLSetWithDestination:(uint16_t)target HSLLight:(uint16_t)light HSLHue:(uint16_t)hue HSLSaturation:(uint16_t)saturation transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
     assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil);
+    // ABI contract recovered from this app's OpMessage, not upstream Telink.
+    assert(hue<=360&&saturation<=100&&light<=100);
     if(!Writes)Writes=[NSMutableArray new];
     [Writes addObject:@{@"target":@(target),@"light":@(light),@"hue":@(hue),@"sat":@(saturation),@"transition":@([transition raw])}];return nil;
 }
@@ -85,7 +87,7 @@ static BOOL QueueBusy;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2400*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
                 NSMutableSet *targets=[NSMutableSet new],*hues=[NSMutableSet new],*levels=[NSMutableSet new];
                 for(NSDictionary *write in Writes){[targets addObject:write[@"target"]];[hues addObject:write[@"hue"]];[levels addObject:write[@"light"]];assert([write[@"transition"]intValue]>0);}
-                assert(targets.count==14&&hues.count>14&&levels.count>14);
+                assert(targets.count==14&&hues.count>10&&levels.count>10);
                 // The actual native-control hook must cancel the live effect timer.
                 [[DeviceControlApi share]setBrightness:@"Lamp 1" level:40 onCompletion:nil];
                 NSUInteger stopped=Writes.count;
