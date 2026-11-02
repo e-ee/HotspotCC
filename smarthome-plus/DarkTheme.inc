@@ -51,7 +51,7 @@ static void HPThemeTree(UIView *view){
     if([view isKindOfClass:UITextView.class]){UITextView *field=(id)view;field.keyboardAppearance=UIKeyboardAppearanceDark;field.textColor=HPReadableText(field.textColor);}
     for(UIView *child in view.subviews)HPThemeTree(child);
 }
-static BOOL HPLegacyController(UIViewController *controller){NSString *name=NSStringFromClass(controller.class);return [name hasPrefix:@"SmartHome_Prd."]||[name hasPrefix:@"_TtC13SmartHome_Prd"]||[NSBundle bundleForClass:controller.class]==NSBundle.mainBundle;}
+static BOOL HPLegacyController(UIViewController *controller){NSString *name=NSStringFromClass(controller.class);if([name hasPrefix:@"HP"])return NO;return [name hasPrefix:@"SmartHome_Prd."]||[name hasPrefix:@"_TtC13SmartHome_Prd"]||[NSBundle bundleForClass:controller.class]==NSBundle.mainBundle;}
 static void HPThemeController(UIViewController *controller){controller.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;controller.view.window.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;HPRemoveLogo(controller);if(HPLegacyController(controller)){HPStyleNavigation(controller.navigationItem);HPThemeTree(controller.view);}}
 static IMP HPLayoutOriginal,HPViewWindowOriginal,HPBadgeLayoutOriginal,HPBackgroundOriginal,HPTextColorOriginal,HPAttributedOriginal,HPLabelLayoutOriginal,HPTintOriginal,HPBarTintOriginal,HPBarImageOriginal,HPButtonImageOriginal,HPImageOriginal,HPHiddenOriginal,HPNavLayoutOriginal;
 static void HPNightLayout(id self,SEL selector){((void(*)(id,SEL))HPLayoutOriginal)(self,selector);if(!HPTheming&&[self isViewLoaded]){HPTheming=YES;HPThemeController(self);HPTheming=NO;}}
