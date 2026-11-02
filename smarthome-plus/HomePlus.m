@@ -17,6 +17,8 @@ static id HPCall(id object, NSString *selector, id value) {
     if (![object respondsToSelector:sel]) @throw [NSException exceptionWithName:@"HPUnavailable" reason:[@"Unavailable method: " stringByAppendingString:selector] userInfo:nil];
     return ((id(*)(id,SEL,id))objc_msgSend)(object,sel,value);
 }
+static void HPVoid(id object,NSString *selector){SEL sel=NSSelectorFromString(selector);if([object respondsToSelector:sel])((void(*)(id,SEL))objc_msgSend)(object,sel);}
+static void HPSet(id object,NSString *selector,id value){SEL sel=NSSelectorFromString(selector);if([object respondsToSelector:sel])((void(*)(id,SEL,id))objc_msgSend)(object,sel,value);}
 static id HPField(id object, NSString *key) {
     // Swift List properties have no Objective-C getter. Realm's own dynamic
     // accessor returns the underlying RLMArray, rather than a Swift List box.
@@ -84,6 +86,8 @@ static NSArray *HPExportRoutines(void) {
     return scenes;
 }
 
+#import "LightStudio.inc"
+
 @interface HPPanel : UITableViewController <UIDocumentPickerDelegate>
 @property(nonatomic,strong) NSArray *scenes;
 @property(nonatomic,strong) NSString *detail;
@@ -124,6 +128,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         self.button.titleLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold];
         [self.button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
         self.button.backgroundColor = [UIColor colorWithRed:0.12 green:0.14 blue:0.19 alpha:0.94];
+        self.button.alpha=0.28;
         self.button.layer.cornerRadius = 20;
         self.button.accessibilityLabel = @"SYLVANIA Plus, scene sharing and backups";
         [self.button addTarget:self action:@selector(show) forControlEvents:UIControlEventTouchUpInside];
@@ -131,6 +136,8 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     if (self.button.superview != window) [window addSubview:self.button];
     self.button.frame = CGRectMake(window.bounds.size.width-78,window.bounds.size.height-window.safeAreaInsets.bottom-104,64,40);
     self.button.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleTopMargin;
+    UIViewController *top=HPTop();
+    self.button.hidden=[top isKindOfClass:HPPanel.class]||[top isKindOfClass:HPStudio.class]||[top isKindOfClass:HPPathEditor.class];
     [window bringSubviewToFront:self.button];
 }
 - (void)show {
@@ -153,23 +160,27 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     @catch (NSException *e) { self.scenes=@[]; self.detail=e.reason; }
     [self.tableView reloadData];
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section==0?3:(section==1?3:1); }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 4; }
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section==0?4:(section==3?1:3); }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return @[@"Your home",@"Keep your home portable",@"Direct local control"][section];
+    return @[@"Make the room come alive",@"Your home",@"Keep your home portable",@"Direct local control"][section];
 }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    if (section==0) return self.detail ?: @"The original scene editor and controls are retained. New scenes have no ten-routine cap.";
-    if (section==1) return @"Scene files contain light settings, without pairing keys. A full home backup includes private pairing data. Imports merge scenes by their identifier.";
+    if (section==0) return @"Explore moving colour, then arrange the shortcut row and the path effects take through your lights.";
+    if (section==1) return self.detail ?: @"The original scene editor and controls are retained. New scenes have no ten-routine cap.";
+    if (section==2) return @"Scene files contain light settings, without pairing keys. A full home backup includes private pairing data. Imports merge scenes by their identifier.";
     return @"Install Device 1, Device 2 and Device 3 on different devices. Each has its own mesh address and sequence counter. Bluetooth control works without another phone running. Later edits stay local until you share them.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     UITableViewCell *cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
-    if(path.section==0) {
+    if(path.section==0){
+        cell.textLabel.text=@[@"Open Light Studio",@"Arrange scene shortcuts",@"Arrange light travel path",@"Everyday light behaviour"][path.row];cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+        if(path.row==0){cell.textLabel.textColor=[UIColor colorWithRed:.48 green:.23 blue:.8 alpha:1];cell.textLabel.font=[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];}
+    }else if(path.section==1) {
         cell.selectionStyle=UITableViewCellSelectionStyleNone;
         cell.textLabel.text=@[@"Scene limit",@"Saved scenes",@"Controller"][path.row];
         cell.detailTextLabel.text=path.row==0?@"Removed":(path.row==1?[NSString stringWithFormat:@"%lu",(unsigned long)self.scenes.count]:[NSUserDefaults.standardUserDefaults stringForKey:@"HP.Profile"]?:HPSeed[@"Profile"]);
-    } else if(path.section==1) {
+    } else if(path.section==2) {
         cell.textLabel.text=@[@"Share scenes",@"Import scenes",@"Export full home backup"][path.row];
         cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
     } else {
@@ -231,7 +242,14 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     } @catch(NSException *e){HPAlert(self,@"Could not create backup",e.reason);}
 }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-    [tableView deselectRowAtIndexPath:path animated:YES];if(path.section!=1)return;
+    [tableView deselectRowAtIndexPath:path animated:YES];
+    if(path.section==0){
+        if(path.row==0)[self.navigationController pushViewController:[HPStudio new] animated:YES];
+        else if(path.row==3)[self.navigationController pushViewController:[[HPBulbSettings alloc]initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
+        else{HPPathEditor *editor=[[HPPathEditor alloc]initWithStyle:UITableViewStyleInsetGrouped];editor.scenes=path.row==1;[self.navigationController pushViewController:editor animated:YES];}
+        return;
+    }
+    if(path.section!=2)return;
     if(path.row==0)[self exportScenes];
     else if(path.row==2)[self exportBackup];
     else {
@@ -263,13 +281,13 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 - (void)importScenes:(NSArray *)scenes {
     id realm=nil;
     @try {
-        realm=HPRealm();HPGet(realm,@"beginWriteTransaction");
+        realm=HPRealm();HPVoid(realm,@"beginWriteTransaction");
         for(NSDictionary *scene in scenes) {
             SEL query=NSSelectorFromString(@"objects:withPredicate:");
             id matches=((id(*)(id,SEL,id,id))objc_msgSend)(realm,query,@"RoutinesInfo",[NSPredicate predicateWithFormat:@"uuid == %@",scene[@"uuid"]]);
             NSMutableArray *old=[NSMutableArray new];for(id object in matches)[old addObject:object];
             for(id object in old) {
-                id children=HPField(object,@"routineList");HPCall(realm,@"deleteObjects:",children);HPCall(realm,@"deleteObject:",object);
+                id children=HPField(object,@"routineList");HPSet(realm,@"deleteObjects:",children);HPSet(realm,@"deleteObject:",object);
             }
             SEL create=NSSelectorFromString(@"createObject:withValue:");
             ((id(*)(id,SEL,id,id))objc_msgSend)(realm,create,@"RoutinesInfo",scene);
@@ -280,20 +298,24 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         [self refresh];HPAlert(self,@"Scenes imported",@"Return to Scenes to use them. No lights were paired or reset.");
     } @catch(NSException *e) {
         // Roll the entire import back if any field or database operation fails.
-        if(realm && [[realm valueForKey:@"inWriteTransaction"] boolValue])HPGet(realm,@"cancelWriteTransaction");
+        if(realm && [[realm valueForKey:@"inWriteTransaction"] boolValue])HPVoid(realm,@"cancelWriteTransaction");
         HPAlert(self,@"Could not import",e.reason);
     }
 }
 @end
 
+#import "HomeEnhancements.inc"
+
 static IMP HPOriginalDidAppear;
 static void HPDidAppear(id self,SEL selector,BOOL animated) {
     ((void(*)(id,SEL,BOOL))HPOriginalDidAppear)(self,selector,animated);
     [[HPManager shared]install];
+    HPEnhanceHome(self);
 }
 __attribute__((constructor)) static void HPInitialize(void) {
     @autoreleasepool {
         HPBootstrap();
+        HPInstallEnhancements();
         Method method=class_getInstanceMethod(UIViewController.class,@selector(viewDidAppear:));
         if(method)HPOriginalDidAppear=method_setImplementation(method,(IMP)HPDidAppear);
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){[[HPManager shared]install];}];
