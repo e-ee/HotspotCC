@@ -1,68 +1,48 @@
-# SYLVANIA Plus 3.3 / After Dark
+# SYLVANIA Plus 3.4 / Slow Light
 
-An improvement to the user's own SYLVANIA Smart Home 3.0.2 installation, retaining
-the original controls, current paired bulbs and separate original app.
+An update to the user's working modified SYLVANIA Smart Home 3.0.2 app. Original controls, paired bulbs, scenes and the separate original app remain.
 
-- Remove the verified ten-scene branch without replacing the scene editor.
-- Install as `com.ledvance.smart.plus` with three distinct controller identities.
-- Export and import one complete Home with scenes, groups, pairings and ordering.
-- Keep the receiving controller's identity and advance its existing sequence
-  counter; apply Home restoration on restart before the native databases open.
-- Preserve Realm database bytes instead of rejecting legacy scene sentinels.
-- Restore an interrupted Home import using a file and preferences journal.
-- Run eight generative lighting moods, with configurable brightness, speed,
-  room scope and lamp order, using the original vendor colour units.
-- Apply a dark theme to legacy fixed colours as well as the new panels.
-- Hide the retired smart-home experience and support/legal menu sections.
-- Retain scene shortcut ordering, default fades and power-on settings.
+## Light Studio
 
-## Colour fix
+24 generative moods. Aurora remains first, followed by new calm natural palettes: Forest Mist, Lagoon, Heather, Opal, Blue Hour, Coast, Rose Dusk and Polar Mist. Soft gradient cards preview each palette. Two overlapping 2D fields keep adjacent bulbs related while colour slowly moves through the apartment.
 
-`DeviceControlApi.setHSL:color:sat:lightness:onCompletion:` calls the original
-`OpMessage.changeHSLWithAddress:saturation:brightness:address:isGet:...` method.
-At unslid address `0x1002e4070`, that method forwards the supplied floats as
-UInt16 values **without normalizing to 65,535**. The input is hue in degrees,
-saturation and brightness in percent. The generic upstream Telink example uses
-a different contract and was an incorrect reference for this vendor app.
+Every bulb's current HSL is read before animation. Mode changes preserve the current drift state. A shared exponential filter and strict rate limits (1 degree hue, 1.2 percentage points saturation and 0.8 points brightness per second) constrain changes. Elapsed time is capped after congestion/suspension. Four-second native transitions overlap the round-robin sender for fourteen bulbs. Palettes have low brightness contrast. Motion adjusts travel speed without relaxing these limits.
 
-`verify_native_color.py` executes that actual native method locally under
-Unicorn against the exact supplied executable. Blue 240/80/60 reaches the SDK as
-240/80/60, as do independent green and magenta cases. `HPVendorColor` now emits
-that contract. The native convenience HSL method is left unmodified.
+Pause, then Save as scene, reads selected bulbs after their fades settle. No partial scene is written if a bulb fails to respond. New scenes use the original Realm schema: independent entry UUIDs, device names, HSL deviceType raw value 8, hue degrees, percentage saturation/lightness and cct=-1. Native scene controls can recall them. Saving also works on an already held look without starting animation. The ten-scene cap stays removed.
+
+## Apartment map and controls
+
+Map light travel path provides one grid for all colour bulbs. Drag numbered lights into their relative apartment positions. Saved normalized coordinates drive 2D effects and travel with exported Home files. Tap a pin for one gentle physical brightness pulse and restoration of its read level. Colour/CCT is not rewritten. Studio remains paused while mapping and identifying.
+
+PLUS and STUDIO use matching translucent capsules with opaque white text. Drag each to move it. Per-device positions persist and remain inside safe screen/keyboard bounds. A non-key overlay accepts touches only on the capsules, keeping both present across original pages and modal tools.
+
+Arrange scene shortcuts supports reordering and confirmed deletion by scene name. Entries referenced by another scene survive deletion; no bulb commands are sent. Default fade and power-on settings remain.
+
+Persistent dark styling guards later black text and hamburger-image assignments, including attributed labels. The connection badge is dark with white text. The Sylvania logo and Network Analyse are hidden, together with retired smart-home experience and support/legal sections.
 
 ## Home files
 
-`HomeArchive` writes a binary `.sylhome` file, version 2, containing preferences,
-a consistent Realm snapshot, the SQLite backup and the saved Network documents.
-Document checksums detect damaged copies. The importer also accepts version 1
-`.sylbackup` files from earlier Plus releases. Per-scene JSON sharing is removed
-from the UI. `SceneTransfer` remains only for stable ordering and legacy tests.
+Export Home and Import Home exchange one complete .sylhome: consistent native Realm/SQLite snapshots, pairings, groups, scenes, ordering and apartment map. Imports preserve the receiving controller's UUID, allocation, profile and monotonic counter. Floating button positions stay local. Restoration runs on restart before native storage/mesh opens, with a journal covering interruption. Legacy .sylbackup import remains supported. Home files contain pairing keys.
 
-Import validates the native Realm copy with the running app's configuration,
-then stages a full Home. On restart, before the original app opens Realm or its
-mesh connection, the receiver keeps its controller UUID, local node, allocation,
-profile and a monotonic sequence counter. A restore journal covers interrupted
-file replacement. No other app container is read or changed.
+## Hardware and compatibility
 
-## Build and privacy
+This vendor SDK uses hue degrees and percentage saturation/lightness despite its UInt16 fields. verify_native_color.py executes the exact original ARM64 conversion and scene-enum methods under Unicorn: blue reaches the SDK as 240/80/60; native HSL scenes use type 8. Normalized mesh units caused the static-red failure fixed in 3.3.
 
-No app binaries, Realm databases, pairing keys, real controller UUIDs or private
-seeds are committed. `make_homeplus.py` reads the user's own backup locally,
-checks the exact original executable, applies the single scene-limit patch,
-injects the add-on and dark launch screen, signs for TrollStore, and validates
-archive contents and CodeDirectory hashes. Preserve `private-profiles.plist`
-across rebuilds; never share the same numbered identity between phones.
+The add-on targets iOS 14 with compiler availability checks. The supplied executable and bundled frameworks have iOS 13-or-earlier deployment targets. Packaging audits them and sets the app minimum to 14. Install with the existing TrollStore route over the same numbered Plus app, without uninstalling. Each phone needs a different numbered controller; private-profiles.plist must persist across rebuilds.
 
-Build the module and launch storyboard with `.github/workflows/homeplus.yml`.
-Tests cover Home restoration, native unit conversion, pattern motion and bounds,
-legacy ordering, fourteen simulated send targets, queue backpressure, manual
-cancellation, hidden menu sections and dark legacy text. UIKit screenshots are
-captured for visual inspection. Test doubles are not linked into the release.
+Physical bulbs and an actual iOS 14 runtime are unavailable in this build environment. Simulators do not establish radio performance or perceived smoothness. Moods are generative ambient lighting, not beat analysis or audio/video capture. No microphone or firmware flashing is involved. Keep Plus active for reliable continuous effects and run Studio on one controller at a time.
 
-The original app requires iOS 15.0. Updates install over the corresponding Plus
-number, preserving the existing container and any scenes created since the seed
-backup. The original SYLVANIA app stays installed. No firmware is flashed.
+## Design research
 
-Physical BLE behaviour, lamp interpolation and background operation require
-validation on the user's device. Studio's moods are generative, not measured
-music/audio or screen synchronization.
+These are original palette formulas. Research informed the design, not copied scene data:
+
+- [Philips Hue dynamic scenes](https://www.philips-hue.com/en-us/explore-hue/blog/things-to-do-with-hue-color-lights): coordinated natural palettes and unobtrusive movement informed the low-contrast gallery.
+- [NASA auroras](https://science.nasa.gov/sun/auroras/) and [NOAA aurora tutorial](https://www.spaceweather.gov/content/aurora-tutorial): layered colour and curtain forms inspired broad overlapping fields.
+- [Guggenheim Turrell interview](https://www.guggenheim.org/wp-content/uploads/2021/08/Aten_Reign_James_Turrell_Skyspaces_transcript.pdf): relationships between light, space and the viewer informed spatial continuity.
+- [Bluetooth Mesh Model specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/MMDL_v1.1/out/en/index-en.html): native transition semantics. The supplied vendor binary remains authoritative for numeric units.
+
+## Build and validation
+
+GitHub receives only source, synthetic tests and documentation. Binaries, real databases, pairing keys and controller profiles remain local. make_homeplus.py verifies the supplied executable, patches the scene-limit branch, injects the add-on/dark launch screen, signs private TrollStore packages and verifies deployment targets/CodeDirectories.
+
+The workflow tests Home identity/counters/restoration, 24-palette continuity and bounded steps, spatial persistence, real Realm 10.11 scene writes/deletion with shared-child preservation, and UIKit regressions with fourteen synthetic bulbs. Internal Studio/map/dark-theme screenshots support visual review. Test doubles are excluded from IPAs.
