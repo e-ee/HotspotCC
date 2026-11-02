@@ -30,3 +30,39 @@ jobs:
         with:
           name: HomePlus-arm64
           path: build/HomePlus.dylib
+      - name: Exercise UIKit and the fourteen-lamp sender
+        run: |
+          mkdir -p build/StudioSmoke.app
+          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios15.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -Wno-deprecated-declarations -Wno-incompatible-pointer-types
+          python3 - <<'PY'
+          import plistlib,pathlib
+          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'15.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True}
+          pathlib.Path('build/StudioSmoke.app/Info.plist').write_bytes(plistlib.dumps(info))
+          PY
+          codesign --force --sign - build/StudioSmoke.app
+          xcrun simctl list devices available --json > build/devices.json
+          DEVICE=$(python3 - <<'PY'
+          import json
+          devices=[d for group in json.load(open('build/devices.json'))['devices'].values() for d in group if d.get('isAvailable') and 'iPhone' in d['name']]
+          assert devices,'No iPhone simulator runtime available'
+          print(devices[0]['udid'])
+          PY
+          )
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/StudioSmoke.app
+          xcrun simctl launch "$DEVICE" local.homeplus.studiosmoke
+          CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
+          for attempt in $(seq 1 30); do
+            if test -f "$CONTAINER/Documents/smoke-report.json"; then break; fi
+            sleep 1
+          done
+          cp "$CONTAINER/Documents/smoke-report.json" build/smoke-report.json
+          cat build/smoke-report.json
+          xcrun simctl io "$DEVICE" screenshot build/LightStudio.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Studio-UI-Smoke
+          path: |
+            build/smoke-report.json
+            build/LightStudio.png
