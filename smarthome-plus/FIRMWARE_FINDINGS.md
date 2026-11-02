@@ -15,15 +15,18 @@ models, bound to application key index 0:
 The existing app already contains the extended HSL setter, including an explicit
 transition and delay. Light Studio uses it to let each bulb interpolate locally
 between colour targets. Commands are unacknowledged, paced at no more than one
-per 80 milliseconds, and held while the SDK queue or BLE write buffer is busy.
-With all 14 lamps selected, a complete update round takes roughly 1.1 seconds
+per 100 milliseconds, and held while the SDK queue or BLE write buffer is busy.
+With all 14 lamps selected, a complete update round takes roughly 1.4 seconds
 before radio delays. The effect is a moving, blended apartment atmosphere, not
 a claim of video-frame-rate output from every lamp.
 
 The original SDK's short HSL convenience method explicitly sets a zero-duration
-transition. Plus now omits that optional field for ordinary HSL changes, allowing
-the bulb's default fade setting to take effect. Light Studio supplies its own
-transition duration instead.
+transition. The default fade setting applies to commands that omit an explicit
+transition; native controls may supply their own timing. Light Studio supplies its
+own transition duration. Version 3.4 additionally reads each bulb's starting
+colour, limits adjacent command changes and uses four-second fades for 14 bulbs.
+The vendor's degree/percentage field units were verified in the supplied native
+executable; upstream normalized mesh examples are not this app's contract.
 
 ## Manufacturer downloads
 
@@ -50,8 +53,10 @@ advertised commands and preserve pairing.
 
 ## What this enables now
 
-- Aurora, Comet, Ocean, Embers, Neon, Prism, Breathe and Velvet.
-- An editable lamp path, room selection, brightness and motion controls.
+- 24 calm moods, including Aurora and eight new natural palette fields.
+- An apartment grid with saved 2D lamp positions and tap-to-identify pulses.
+- Room selection, brightness and gentle motion controls.
+- Capture a paused look as a native scene using actual bulb readback.
 - Normal scene/light controls pause the local effect generator.
 - Ordinary fade timing and power-restore behaviour, through native bulb models.
 
