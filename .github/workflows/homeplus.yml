@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -20,6 +23,8 @@ jobs:
           ./build/test-scene-transfer
           clang -fobjc-arc -fblocks smarthome-plus/SpatialLayout.m smarthome-plus/test_spatial_layout.m -framework Foundation -o build/test-spatial-layout
           ./build/test-spatial-layout
+          clang -fobjc-arc -fblocks smarthome-plus/StudioPresets.m smarthome-plus/test_studio_presets.m -framework Foundation -o build/test-studio-presets
+          ./build/test-studio-presets
           cc -std=c11 -O2 -Wall -Wextra -Werror smarthome-plus/test_effects.c -lm -o build/test-effects
           ./build/test-effects
       - name: Verify saved scenes with real Realm 10.11
@@ -54,7 +59,7 @@ jobs:
           ./build/test-capture-realm
       - name: Compile iOS 14 add-on and launch screen
         run: |
-          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
           codesign --force --sign - build/HomePlus.dylib
           file build/HomePlus.dylib
           xcrun ibtool --compile build/HomePlusLaunch.storyboardc smarthome-plus/HomePlusLaunch.storyboard --minimum-deployment-target 14.0 --target-device iphone --target-device ipad
@@ -67,7 +72,7 @@ jobs:
       - name: Exercise UIKit and the fourteen-lamp sender
         run: |
           mkdir -p build/StudioSmoke.app
-          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios14.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
+          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios14.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
           python3 - <<'PY'
           import plistlib,pathlib
           info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'14.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
@@ -89,7 +94,7 @@ jobs:
           xcrun simctl install "$DEVICE" build/StudioSmoke.app
           CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
           xcrun simctl launch --stdout="$CONTAINER/Documents/Smoke.stdout" --stderr="$CONTAINER/Documents/Smoke.stderr" "$DEVICE" local.homeplus.studiosmoke
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 90); do
             if test -f "$CONTAINER/Documents/smoke-report.json"; then break; fi
             sleep 1
           done
@@ -105,6 +110,8 @@ jobs:
           cp "$CONTAINER/Documents/HomeDark.png" build/HomeDark.png
           cp "$CONTAINER/Documents/PausedScene.png" build/PausedScene.png
           cp "$CONTAINER/Documents/ApartmentMap.png" build/ApartmentMap.png
+          cp "$CONTAINER/Documents/Journeys.png" build/Journeys.png
+          cp "$CONTAINER/Documents/SavedMoods.png" build/SavedMoods.png
       - uses: actions/upload-artifact@v4
         with:
           name: Studio-UI-Smoke
@@ -115,3 +122,5 @@ jobs:
             build/HomeDark.png
             build/PausedScene.png
             build/ApartmentMap.png
+            build/Journeys.png
+            build/SavedMoods.png
