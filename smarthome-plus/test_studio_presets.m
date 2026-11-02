@@ -8,7 +8,7 @@ int main(void){@autoreleasepool{
     NSArray *copy=[NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:nil];assert([[HPStudioPresets validRecipes:copy]isEqual:@[recipe]]);
     for(NSString *key in @[@"mode",@"journey",@"brightness",@"motion",@"depth",@"variation",@"phase",@"journeyElapsed"]){NSMutableDictionary *bad=[recipe mutableCopy];bad[key]=@(NAN);assert(![HPStudioPresets validatedRecipe:bad error:nil]);}
     NSArray *badKeys=@[@"mode",@"mode",@"journey",@"brightness",@"motion",@"depth",@"variation",@"phase",@"name",@"scope",@"id"];
-    NSArray *badValues=@[@24,@.5,@3,@2,@0,@0,@(-1),@(-1),@" ",@[],@"not-an-id"];
+    NSArray *badValues=@[@32,@.5,@6,@2,@0,@0,@(-1),@(-1),@" ",@[],@"not-an-id"];
     for(NSUInteger n=0;n<badKeys.count;n++){NSMutableDictionary *bad=[recipe mutableCopy];bad[badKeys[n]]=badValues[n];assert(![HPStudioPresets validatedRecipe:bad error:nil]);}
     assert(([HPStudioPresets validRecipes:@[recipe,recipe,@{},@"bad"]].count==1));
     assert([HPStudioPresets validRecipes:@"bad"].count==0);
