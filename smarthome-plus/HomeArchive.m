@@ -15,9 +15,9 @@ static NSString *HPNewID(void){unsigned char bytes[16];arc4random_buf(bytes,16);
     NSMutableDictionary *p=[seed mutableCopy];NSMutableDictionary *mesh=[HPDecodeMesh(seed)mutableCopy];
     NSString *uuid=HPNewID();NSMutableDictionary *node=[mesh[@"nodes"][0]mutableCopy];node[@"UUID"]=uuid;node[@"deviceKey"]=HPNewID();node[@"unicastAddress"]=@"7E00";node[@"name"]=@"Unenrolled controller";
     NSMutableDictionary *controller=[mesh[@"provisioners"][0]mutableCopy];controller[@"UUID"]=uuid;controller[@"allocatedUnicastRange"]=@[@{@"lowAddress":@"7E00",@"highAddress":@"7EFF"}];
-    mesh[@"meshUUID"]=HPNewID();mesh[@"nodes"]=@[node];mesh[@"provisioners"]=@[controller];mesh[@"groups"]=@[];mesh[@"ivIndex"]=@0;
+    mesh[@"meshUUID"]=NSUUID.UUID.UUIDString;mesh[@"nodes"]=@[node];mesh[@"provisioners"]=@[controller];mesh[@"groups"]=@[];mesh[@"ivIndex"]=[HPDecodeMesh(seed)[@"ivIndex"]isKindOfClass:NSString.class]?@"00000000":(id)@0;
     for(NSString *key in @[@"netKeys",@"appKeys"]){NSMutableArray *keys=[NSMutableArray new];for(NSDictionary *old in mesh[key]){NSMutableDictionary *entry=[old mutableCopy];entry[@"key"]=HPNewID();[entry removeObjectForKey:@"oldKey"];[keys addObject:entry];}mesh[key]=keys;}
-    p[@"mesh.json"]=[NSJSONSerialization dataWithJSONObject:mesh options:0 error:nil];p[@"currenProvisionerUUID_key"]=uuid;p[@"uniqueID"]=uuid;p[@"currenProvisionerSno_key"]=@0;p[@"currentMeshProvisionAddress_key"]=@{uuid:@0x7e01};p[@"HP.JoinPending"]=@YES;p[@"HP.JoinUUID"]=uuid;p[@"HP.JoinKey"]=node[@"deviceKey"];p[@"HP.Profile"]=@"Awaiting invitation";
+    p[@"mesh.json"]=[NSJSONSerialization dataWithJSONObject:mesh options:0 error:nil];p[@"currenProvisionerUUID_key"]=uuid;p[@"uniqueID"]=[NSString stringWithFormat:@"%@-%@-%@-%@-%@",[uuid substringToIndex:8],[uuid substringWithRange:NSMakeRange(8,4)],[uuid substringWithRange:NSMakeRange(12,4)],[uuid substringWithRange:NSMakeRange(16,4)],[uuid substringFromIndex:20]];p[@"currenProvisionerSno_key"]=@0;p[@"currentMeshProvisionAddress_key"]=@{uuid:@0x7e01};p[@"HP.JoinPending"]=@YES;p[@"HP.JoinUUID"]=uuid;p[@"HP.JoinKey"]=node[@"deviceKey"];p[@"HP.Profile"]=@"Awaiting invitation";
     [p removeObjectForKey:@"kUUIDOfConnectedDevices"];[p removeObjectForKey:@"scanList_key"];return p;
 }
 + (NSDictionary *)requestForPreferences:(NSDictionary *)p {
