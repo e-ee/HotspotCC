@@ -1,5 +1,5 @@
 static __weak UIViewController *HPHomeController;
-static char HPShortcutMapKey,HPShortcutDisableKey,HPLongPressKey;
+static char HPShortcutMapKey,HPShortcutDisableKey,HPLongPressKey,HPRemovedLogoKey;
 @interface HPShortcutMap : NSObject
 @property(nonatomic,strong) NSArray *natural,*indexes;
 @end
@@ -59,9 +59,19 @@ static void HPHomeTap(id self,SEL selector,UICollectionView *collection,NSIndexP
 }
 - (void)dismissOrder {[HPTop() dismissViewControllerAnimated:YES completion:nil];}
 @end
+static void HPRemoveLogo(id controller){
+    Ivar ivar=class_getInstanceVariable([controller class],"$__lazy_storage_$_logoView");
+    if(!ivar)return;id logo=object_getIvar(controller,ivar);
+    if(![logo isKindOfClass:UIView.class])return;
+    objc_setAssociatedObject(logo,&HPRemovedLogoKey,@YES,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [logo setHidden:YES];[logo setAccessibilityElementsHidden:YES];
+    UINavigationItem *item=[controller navigationItem];NSMutableArray *kept=[NSMutableArray new];
+    for(UIBarButtonItem *button in item.rightBarButtonItems){UIView *custom=button.customView;if(custom&&(custom==logo||[logo isDescendantOfView:custom]))continue;[kept addObject:button];}
+    if(kept.count!=item.rightBarButtonItems.count)item.rightBarButtonItems=kept;
+}
 static void HPEnhanceHome(id controller){
     Class home=NSClassFromString(@"_TtC13SmartHome_Prd20ReHomeViewController");if(![controller isKindOfClass:home])return;
-    HPHomeController=controller;UICollectionView *collection=HPGet(controller,@"collectionView");
+    HPHomeController=controller;HPRemoveLogo(controller);UICollectionView *collection=HPGet(controller,@"collectionView");
     if(!collection||objc_getAssociatedObject(collection,&HPLongPressKey))return;
     UILongPressGestureRecognizer *press=[[UILongPressGestureRecognizer alloc]initWithTarget:HPManager.shared action:@selector(arrangeShortcuts:)];
     press.minimumPressDuration=.65;[collection addGestureRecognizer:press];objc_setAssociatedObject(collection,&HPLongPressKey,press,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -75,14 +85,18 @@ static NSInteger HPStoredInteger(id object,const char *name,NSInteger fallback){
     Ivar ivar=class_getInstanceVariable([object class],name);if(!ivar)return fallback;
     NSInteger value;memcpy(&value,((const char *)(__bridge const void *)object)+ivar_getOffset(ivar),sizeof(value));return value;
 }
+static NSIndexPath *HPMenuMappedPath(id self,NSIndexPath *path);
 static CGFloat HPMenuHeight(id self,SEL selector,id table,NSIndexPath *path){
     NSInteger section=HPStoredInteger(self,"PROFILE_SECTION",NSIntegerMin),row=HPStoredInteger(self,"PROFILE",NSIntegerMin);
     if(path.section==section&&path.row==row)return 0;
-    return ((CGFloat(*)(id,SEL,id,id))HPMenuHeightOriginal)(self,selector,table,path);
+    return ((CGFloat(*)(id,SEL,id,id))HPMenuHeightOriginal)(self,selector,table,HPMenuMappedPath(self,path));
 }
 static BOOL HPHiddenMenuSection(id object,NSInteger section){return section==HPStoredInteger(object,"HELP_AND_SUPPORT",NSIntegerMin)||section==HPStoredInteger(object,"LEGAL_SECTION",NSIntegerMin);}
-static IMP HPMenuRowsOriginal,HPMenuHeaderOriginal,HPMenuHeaderHeightOriginal;
-static NSInteger HPMenuRows(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return 0;return ((NSInteger(*)(id,SEL,id,NSInteger))HPMenuRowsOriginal)(self,selector,table,section);}
+static IMP HPMenuRowsOriginal,HPMenuHeaderOriginal,HPMenuHeaderHeightOriginal,HPMenuCellOriginal,HPMenuSelectOriginal;
+static NSIndexPath *HPMenuMappedPath(id self,NSIndexPath *path){NSInteger section=HPStoredInteger(self,"NETWORK_STATUS_SECTION",NSIntegerMin),removed=HPStoredInteger(self,"NETWOKR_ANALYSE",NSIntegerMin);if(path.section==section&&removed>=0&&path.row>=removed)return [NSIndexPath indexPathForRow:path.row+1 inSection:path.section];return path;}
+static NSInteger HPMenuRows(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return 0;NSInteger count=((NSInteger(*)(id,SEL,id,NSInteger))HPMenuRowsOriginal)(self,selector,table,section);if(section==HPStoredInteger(self,"NETWORK_STATUS_SECTION",NSIntegerMin)){NSInteger removed=HPStoredInteger(self,"NETWOKR_ANALYSE",NSIntegerMin);if(removed>=0&&removed<count)count--;}return count;}
+static id HPMenuCell(id self,SEL selector,id table,NSIndexPath *path){return ((id(*)(id,SEL,id,id))HPMenuCellOriginal)(self,selector,table,HPMenuMappedPath(self,path));}
+static void HPMenuSelect(id self,SEL selector,id table,NSIndexPath *path){((void(*)(id,SEL,id,id))HPMenuSelectOriginal)(self,selector,table,HPMenuMappedPath(self,path));}
 static id HPMenuHeader(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return nil;return ((id(*)(id,SEL,id,NSInteger))HPMenuHeaderOriginal)(self,selector,table,section);}
 static CGFloat HPMenuHeaderHeight(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return .01;return ((CGFloat(*)(id,SEL,id,NSInteger))HPMenuHeaderHeightOriginal)(self,selector,table,section);}
 static void HPNoExperience(id self,SEL selector,id sender){(void)self;(void)selector;(void)sender;}
@@ -93,7 +107,8 @@ static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HP
 static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualStop();return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
 static id HPManualBrightness(id self,SEL selector,id target,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,id))HPManualBrightnessOriginal)(self,selector,target,l,callback);}
 static void HPHook(Class cls,NSString *name,IMP replacement,IMP *original){
-    Method method=class_getInstanceMethod(cls,NSSelectorFromString(name));if(method){IMP old=method_setImplementation(method,replacement);if(original)*original=old;}
+    SEL selector=NSSelectorFromString(name);Method method=class_getInstanceMethod(cls,selector);
+    if(method){IMP old=method_getImplementation(method);if(!class_addMethod(cls,selector,replacement,method_getTypeEncoding(method)))method_setImplementation(method,replacement);if(original)*original=old;}
 }
 static void HPInstallEnhancements(void){
     Class home=NSClassFromString(@"_TtC13SmartHome_Prd20ReHomeViewController");
@@ -106,6 +121,8 @@ static void HPInstallEnhancements(void){
     Class menu=NSClassFromString(@"_TtC13SmartHome_Prd20ReMenuViewController");
     HPHook(menu,@"tableView:heightForRowAtIndexPath:",(IMP)HPMenuHeight,&HPMenuHeightOriginal);
     HPHook(menu,@"tableView:numberOfRowsInSection:",(IMP)HPMenuRows,&HPMenuRowsOriginal);
+    HPHook(menu,@"tableView:cellForRowAtIndexPath:",(IMP)HPMenuCell,&HPMenuCellOriginal);
+    HPHook(menu,@"tableView:didSelectRowAtIndexPath:",(IMP)HPMenuSelect,&HPMenuSelectOriginal);
     HPHook(menu,@"tableView:viewForHeaderInSection:",(IMP)HPMenuHeader,&HPMenuHeaderOriginal);
     HPHook(menu,@"tableView:heightForHeaderInSection:",(IMP)HPMenuHeaderHeight,&HPMenuHeaderHeightOriginal);
     Class api=NSClassFromString(@"DeviceControlApi");
