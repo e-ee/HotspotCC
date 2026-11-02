@@ -93,6 +93,7 @@ static NSString *HPFloatKey(UIButton *button){return button.tag==1?@"HP.Float.PL
 }
 - (void)keepVisible{if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return;if(self.overlay.hidden||!self.button.superview||!self.studioButton.superview||self.button.hidden||self.studioButton.hidden)[self install];}
 - (void)openController:(UIViewController *)controller{
+    if([NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"]&&![controller isKindOfClass:HPPanel.class])controller=[[HPPanel alloc]initWithStyle:UITableViewStyleInsetGrouped];
     UIViewController *top=HPTop();if(!top||[top isKindOfClass:UIAlertController.class]||[top isKindOfClass:UIDocumentPickerViewController.class])return;
     if([top isKindOfClass:controller.class])return;
     BOOL tools=[top isKindOfClass:HPSpatialEditor.class]||[top isKindOfClass:HPPanel.class]||[top isKindOfClass:HPStudio.class]||[top isKindOfClass:HPPathEditor.class]||[top isKindOfClass:HPBulbSettings.class];
@@ -101,7 +102,7 @@ static NSString *HPFloatKey(UIButton *button){return button.tag==1?@"HP.Float.PL
         [top.navigationController pushViewController:controller animated:YES];return;
     }
     if([controller isKindOfClass:HPStudio.class])controller.navigationItem.leftBarButtonItem=[[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(dismissTools)];
-    UINavigationController *navigation=[[UINavigationController alloc]initWithRootViewController:controller];[top presentViewController:navigation animated:YES completion:nil];
+    UINavigationController *navigation=[[UINavigationController alloc]initWithRootViewController:controller];if([NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"])navigation.modalPresentationStyle=UIModalPresentationFullScreen;[top presentViewController:navigation animated:YES completion:nil];
 }
 - (void)show{[self openController:[[HPPanel alloc]initWithStyle:UITableViewStyleInsetGrouped]];}
 - (void)showStudio{[self openController:[HPStudio new]];}
