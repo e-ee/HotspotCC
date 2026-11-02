@@ -138,10 +138,14 @@ def build(config_zip, module, ldid):
             if p.exists():p.unlink()
         binary=app/'SmartHome Prd';binary.write_bytes(patched_binary)
         shutil.copy2(module,app/'Frameworks/HomePlus.dylib')
+        launch=ROOT/'HomePlusLaunch.storyboardc'
+        assert launch.is_dir(),'Compiled dark launch screen is required'
+        shutil.copytree(launch,app/'HomePlusLaunch.storyboardc',dirs_exist_ok=True)
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
                     CFBundleVersion='3300',CFBundleShortVersionString='3.3.0',UIUserInterfaceStyle='Dark',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
+        info['UILaunchStoryboardName']='HomePlusLaunch'
         info.pop('CFBundleURLTypes',None)
         info['UTExportedTypeDeclarations']=[{'UTTypeIdentifier':'com.ledvance.smart.plus.home','UTTypeDescription':'SYLVANIA Plus Home',
             'UTTypeConformsTo':['public.data'],'UTTypeTagSpecification':{'public.filename-extension':['sylhome','sylbackup'],'public.mime-type':'application/x-sylvania-home'}}]
