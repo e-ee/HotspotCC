@@ -3,6 +3,8 @@
 #import <objc/message.h>
 #import <dlfcn.h>
 #import "SceneTransfer.h"
+#import "HomeArchive.h"
+#import <sqlite3.h>
 
 // All runtime calls below use selectors and ABIs inspected in the supplied 3.0.2 app.
 // The scene-count branch is patched in the executable by make_homeplus.py.
@@ -37,12 +39,13 @@ static NSString *HPMeshUUID(void) {
     NSDictionary *mesh = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
     return mesh[@"meshUUID"];
 }
+static NSString *HPStatePath(void){return [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"HomePlus"];}
 static void HPBootstrap(void) {
     @try {
         HPSeed = [NSDictionary dictionaryWithContentsOfURL:[NSBundle.mainBundle URLForResource:@"HomePlusSeed" withExtension:@"plist"]];
         if (!HPSeed) { HPBootstrapError = @"The saved home is missing from this installation."; return; }
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-        if ([defaults boolForKey:@"HP.Seeded"]) return;
+        if (![defaults boolForKey:@"HP.Seeded"]) {
         NSFileManager *fm = NSFileManager.defaultManager;
         // This is a separate app container. Never enumerate, open or modify the original app container.
         for (NSString *relative in HPSeed[@"Documents"]) {
@@ -61,6 +64,10 @@ static void HPBootstrap(void) {
         for (NSString *key in prefs) [defaults setObject:prefs[key] forKey:key];
         [defaults setBool:YES forKey:@"HP.Seeded"];
         [defaults synchronize];
+        }
+        NSError *restoreError=nil;
+        // Restore before the original app opens Realm or the mesh transport.
+        if(![HPHomeArchive applyPendingAtStatePath:HPStatePath() documentsPath:HPDocuments() defaults:defaults domain:NSBundle.mainBundle.bundleIdentifier error:&restoreError])HPBootstrapError=restoreError.localizedDescription;
     } @catch (NSException *exception) { HPBootstrapError = exception.reason; }
 }
 
@@ -130,7 +137,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         self.button.backgroundColor = [UIColor colorWithRed:0.12 green:0.14 blue:0.19 alpha:0.94];
         self.button.alpha=0.28;
         self.button.layer.cornerRadius = 20;
-        self.button.accessibilityLabel = @"SYLVANIA Plus, scene sharing and backups";
+        self.button.accessibilityLabel = @"SYLVANIA Plus, Light Studio and Home transfer";
         [self.button addTarget:self action:@selector(show) forControlEvents:UIControlEventTouchUpInside];
     }
     if (self.button.superview != window) [window addSubview:self.button];
@@ -156,19 +163,19 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 }
 - (void)done { [self dismissViewControllerAnimated:YES completion:nil]; }
 - (void)refresh {
-    @try { self.scenes=HPExportRoutines(); self.detail=HPBootstrapError; }
+    @try { self.scenes=HPExportRoutines(); self.detail=HPBootstrapError?:[NSUserDefaults.standardUserDefaults stringForKey:@"HP.LastImport"]; }
     @catch (NSException *e) { self.scenes=@[]; self.detail=e.reason; }
     [self.tableView reloadData];
 }
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 4; }
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section==0?4:(section==3?1:3); }
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section==0?4:(section==3?1:(section==2?2:3)); }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     return @[@"Make the room come alive",@"Your home",@"Keep your home portable",@"Direct local control"][section];
 }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section==0) return @"Explore moving colour, then arrange the shortcut row and the path effects take through your lights.";
     if (section==1) return self.detail ?: @"The original scene editor and controls are retained. New scenes have no ten-routine cap.";
-    if (section==2) return @"Scene files contain light settings, without pairing keys. A full home backup includes private pairing data. Imports merge scenes by their identifier.";
+    if (section==2) return @"One Home file carries your paired lights, groups, scenes and ordering. Import it on another numbered Device build to control the same bulbs. Home files include private pairing data.";
     return @"Install Device 1, Device 2 and Device 3 on different devices. Each has its own mesh address and sequence counter. Bluetooth control works without another phone running. Later edits stay local until you share them.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
@@ -181,7 +188,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         cell.textLabel.text=@[@"Scene limit",@"Saved scenes",@"Controller"][path.row];
         cell.detailTextLabel.text=path.row==0?@"Removed":(path.row==1?[NSString stringWithFormat:@"%lu",(unsigned long)self.scenes.count]:[NSUserDefaults.standardUserDefaults stringForKey:@"HP.Profile"]?:HPSeed[@"Profile"]);
     } else if(path.section==2) {
-        cell.textLabel.text=@[@"Share scenes",@"Import scenes",@"Export full home backup"][path.row];
+        cell.textLabel.text=@[@"Export Home",@"Import Home"][path.row];
         cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
     } else {
         cell.textLabel.text=@"Existing lights and groups";cell.detailTextLabel.text=HPSeed[@"Summary"];
@@ -200,46 +207,33 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
     return [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:name]];
 }
-- (void)exportScenes {
-    @try {
-        NSDictionary *document=@{@"format":@"sylvania-plus-scenes",@"version":@1,@"meshUUID":HPMeshUUID(),@"routines":HPExportRoutines()};
-        NSError *error;
-        NSDictionary *valid=[HPSceneTransfer validatedDocument:document meshUUID:HPMeshUUID() error:&error];
-        if (!valid) {HPAlert(self,@"Could not export scenes",error.localizedDescription);return;}
-        NSData *data=[NSJSONSerialization dataWithJSONObject:valid options:NSJSONWritingPrettyPrinted error:&error];
-        NSURL *file=[self exportLocation:@"My_Home.sylscenes"];
-        if (![data writeToURL:file options:NSDataWritingAtomic error:&error]) {HPAlert(self,@"Could not save scenes",error.localizedDescription);return;}
-        [self shareFile:file];
-    } @catch(NSException *e) {HPAlert(self,@"Could not export scenes",e.reason);}
-}
 - (void)exportBackup {
+    [HPLightEngine.shared stop];
     @try {
         id realm=HPRealm();NSURL *realmURL=[self exportLocation:@"default.realm"];
         NSError *error=nil;SEL selector=NSSelectorFromString(@"writeCopyToURL:encryptionKey:error:");
-        BOOL saved=[realm respondsToSelector:selector] && ((BOOL(*)(id,SEL,id,id,NSError **))objc_msgSend)(realm,selector,realmURL,nil,&error);
-        if (!saved) {HPAlert(self,@"Could not create backup",error.localizedDescription?:@"The scene database could not be copied.");return;}
-        NSMutableDictionary *files=[NSMutableDictionary new];
+        BOOL saved=[realm respondsToSelector:selector]&&((BOOL(*)(id,SEL,id,id,NSError **))objc_msgSend)(realm,selector,realmURL,nil,&error);
+        if(!saved){HPAlert(self,@"Could not export Home",error.localizedDescription?:@"The scene database could not be copied.");return;}
+        NSMutableDictionary *files=[[HPHomeArchive documentsAtPath:HPDocuments() error:&error]mutableCopy];
+        if(!files){HPAlert(self,@"Could not export Home",error.localizedDescription);return;}
         files[@"default.realm"]=[NSData dataWithContentsOfURL:realmURL];
-        NSString *documents=HPDocuments();
-        for(NSString *relative in @[@"Network",@"UserModel.sqlite",@"AppStatusAssistant.archiver",@"networkCompareList.archiver"]) {
-            NSString *path=[documents stringByAppendingPathComponent:relative];BOOL directory=NO;
-            if (![NSFileManager.defaultManager fileExistsAtPath:path isDirectory:&directory]) continue;
-            if (directory) {
-                for(NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:path error:nil]) {
-                    NSData *data=[NSData dataWithContentsOfFile:[path stringByAppendingPathComponent:name]];
-                    if (data) files[[relative stringByAppendingPathComponent:name]]=data;
-                }
-            } else {
-                NSData *data=[NSData dataWithContentsOfFile:path];if(data)files[relative]=data;
-            }
+        // SQLite's backup API includes any committed WAL data.
+        NSString *sqlitePath=[HPDocuments() stringByAppendingPathComponent:@"UserModel.sqlite"];
+        if([NSFileManager.defaultManager fileExistsAtPath:sqlitePath]){
+            NSURL *copy=[self exportLocation:@"UserModel.sqlite"];sqlite3 *source=NULL,*target=NULL;
+            int read=sqlite3_open_v2(sqlitePath.fileSystemRepresentation,&source,SQLITE_OPEN_READONLY,NULL);
+            int opened=sqlite3_open(copy.path.fileSystemRepresentation,&target);int result=SQLITE_ERROR;
+            if(read==SQLITE_OK&&opened==SQLITE_OK){sqlite3_backup *backup=sqlite3_backup_init(target,"main",source,"main");if(backup){result=sqlite3_backup_step(backup,-1);sqlite3_backup_finish(backup);}}
+            if(source)sqlite3_close(source);if(target)sqlite3_close(target);
+            if(result!=SQLITE_DONE){HPAlert(self,@"Could not export Home",@"The Home account database is busy. Try again in a moment.");return;}
+            files[@"UserModel.sqlite"]=[NSData dataWithContentsOfURL:copy];
         }
         NSDictionary *preferences=[NSUserDefaults.standardUserDefaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier]?:@{};
-        NSDictionary *backup=@{@"format":@"sylvania-plus-backup",@"version":@1,@"Profile":HPSeed[@"Profile"],@"Preferences":preferences,@"Documents":files};
-        NSData *data=[NSPropertyListSerialization dataWithPropertyList:backup format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
-        NSURL *file=[self exportLocation:@"My_Private_Home.sylbackup"];
-        if(![data writeToURL:file options:NSDataWritingAtomic error:&error]){HPAlert(self,@"Could not save backup",error.localizedDescription);return;}
+        NSData *data=[HPHomeArchive encodeDocument:@{@"Profile":preferences[@"HP.Profile"]?:@"This device",@"Preferences":preferences,@"Documents":files}error:&error];
+        NSURL *file=[self exportLocation:@"My_Home.sylhome"];
+        if(!data||![data writeToURL:file options:NSDataWritingAtomic error:&error]){HPAlert(self,@"Could not export Home",error.localizedDescription);return;}
         [self shareFile:file];
-    } @catch(NSException *e){HPAlert(self,@"Could not create backup",e.reason);}
+    }@catch(NSException *exception){HPAlert(self,@"Could not export Home",exception.reason);}
 }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
     [tableView deselectRowAtIndexPath:path animated:YES];
@@ -250,65 +244,58 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         return;
     }
     if(path.section!=2)return;
-    if(path.row==0)[self exportScenes];
-    else if(path.row==2)[self exportBackup];
+    if(path.row==0)[self exportBackup];
     else {
-        UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc]initWithDocumentTypes:@[@"com.ledvance.smart.plus.scenes",@"public.json"] inMode:UIDocumentPickerModeImport];
+        UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc]initWithDocumentTypes:@[@"com.ledvance.smart.plus.home",@"public.data"] inMode:UIDocumentPickerModeImport];
         picker.delegate=self;[self presentViewController:picker animated:YES completion:nil];
     }
 }
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     NSURL *url=urls.firstObject;if(!url)return;
-    NSNumber *size;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
-    // Defer alerts until the system picker has actually finished dismissing.
-    if(size.unsignedLongLongValue>5*1024*1024){
-        [controller dismissViewControllerAnimated:YES completion:^{HPAlert(self,@"Could not import",@"This scene file is too large.");}];return;
-    }
-    NSError *error;NSData *data=[NSData dataWithContentsOfURL:url options:0 error:&error];
-    id raw=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]:nil;
-    NSDictionary *document=[HPSceneTransfer validatedDocument:raw meshUUID:HPMeshUUID() error:&error];
-    if(!document){
-        NSString *message=error.localizedDescription;
-        [controller dismissViewControllerAnimated:YES completion:^{HPAlert(self,@"Could not import",message);}];return;
-    }
-    UIAlertController *confirmation=[UIAlertController alertControllerWithTitle:@"Import scenes?" message:[NSString stringWithFormat:@"Import %lu scenes into this device. Matching scene IDs will be replaced. Other scenes and light pairings stay as they are.",(unsigned long)[document[@"routines"] count]] preferredStyle:UIAlertControllerStyleAlert];
-    [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [confirmation addAction:[UIAlertAction actionWithTitle:@"Import" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[self importScenes:document[@"routines"]];}]];
-    if(self.presentedViewController==controller)
-        [controller dismissViewControllerAnimated:YES completion:^{[self presentViewController:confirmation animated:YES completion:nil];}];
-    else dispatch_async(dispatch_get_main_queue(),^{[self presentViewController:confirmation animated:YES completion:nil];});
-}
-- (void)importScenes:(NSArray *)scenes {
-    id realm=nil;
-    @try {
-        realm=HPRealm();HPVoid(realm,@"beginWriteTransaction");
-        for(NSDictionary *scene in scenes) {
-            SEL query=NSSelectorFromString(@"objects:withPredicate:");
-            id matches=((id(*)(id,SEL,id,id))objc_msgSend)(realm,query,@"RoutinesInfo",[NSPredicate predicateWithFormat:@"uuid == %@",scene[@"uuid"]]);
-            NSMutableArray *old=[NSMutableArray new];for(id object in matches)[old addObject:object];
-            for(id object in old) {
-                id children=HPField(object,@"routineList");HPSet(realm,@"deleteObjects:",children);HPSet(realm,@"deleteObject:",object);
-            }
-            SEL create=NSSelectorFromString(@"createObject:withValue:");
-            ((id(*)(id,SEL,id,id))objc_msgSend)(realm,create,@"RoutinesInfo",scene);
+    BOOL scoped=[url startAccessingSecurityScopedResource];NSError *error=nil;
+    NSNumber *size;[url getResourceValue:&size forKey:NSURLFileSizeKey error:&error];
+    NSData *data=size.unsignedLongLongValue<=70*1024*1024?[NSData dataWithContentsOfURL:url options:0 error:&error]:nil;
+    NSDictionary *document=[HPHomeArchive readData:data error:&error];
+    if(scoped)[url stopAccessingSecurityScopedResource];
+    NSDictionary *preferences=[NSUserDefaults.standardUserDefaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier];
+    if(document&&! [HPHomeArchive preparedDocument:document receivingPreferences:preferences error:&error])document=nil;
+    // Let Realm validate the copied native database with the running app's schema.
+    if(document)@try{
+        NSURL *realmURL=[self exportLocation:@"Import.realm"];
+        if(![document[@"Documents"][@"default.realm"]writeToURL:realmURL options:NSDataWritingAtomic error:&error])document=nil;
+        else @autoreleasepool{
+            id config=[HPGet(HPRealm(),@"configuration")copy];HPSet(config,@"setFileURL:",realmURL);
+            ((void(*)(id,SEL,BOOL))objc_msgSend)(config,NSSelectorFromString(@"setReadOnly:"),YES);
+            SEL open=NSSelectorFromString(@"realmWithConfiguration:error:");
+            id checked=((id(*)(id,SEL,id,NSError **))objc_msgSend)(NSClassFromString(@"RLMRealm"),open,config,&error);
+            if(!checked)document=nil;
         }
-        NSError *error=nil;SEL commit=NSSelectorFromString(@"commitWriteTransaction:");
-        BOOL ok=((BOOL(*)(id,SEL,NSError **))objc_msgSend)(realm,commit,&error);
-        if(!ok){HPAlert(self,@"Could not import",error.localizedDescription);return;}
-        [self refresh];HPAlert(self,@"Scenes imported",@"Return to Scenes to use them. No lights were paired or reset.");
-    } @catch(NSException *e) {
-        // Roll the entire import back if any field or database operation fails.
-        if(realm && [[realm valueForKey:@"inWriteTransaction"] boolValue])HPVoid(realm,@"cancelWriteTransaction");
-        HPAlert(self,@"Could not import",e.reason);
-    }
+    }@catch(NSException *exception){document=nil;error=[NSError errorWithDomain:@"HomeImport" code:1 userInfo:@{NSLocalizedDescriptionKey:exception.reason?:@"The Home database cannot be opened."}];}
+    NSString *message=error.localizedDescription;
+    NSDictionary *ready=document;
+    void(^present)(void)=^{
+        if(!ready){HPAlert(self,@"Could not import Home",message?:@"Choose a valid SYLVANIA Plus Home file.");return;}
+        UIAlertController *confirmation=[UIAlertController alertControllerWithTitle:@"Import this Home?" message:@"Replace this device's lights, groups, scenes and ordering with the saved Home. Your device keeps its own controller identity. Close and reopen SYLVANIA Plus after importing." preferredStyle:UIAlertControllerStyleAlert];
+        [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [confirmation addAction:[UIAlertAction actionWithTitle:@"Import Home" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){
+            [HPLightEngine.shared stop];NSError *stageError=nil;
+            if([HPHomeArchive stageDocument:ready statePath:HPStatePath() error:&stageError])HPAlert(self,@"Home ready to import",@"Close SYLVANIA Plus from the app switcher, then reopen it to load your Home. No lights need to be paired again.");
+            else HPAlert(self,@"Could not import Home",stageError.localizedDescription);
+        }]];
+        [self presentViewController:confirmation animated:YES completion:nil];
+    };
+    if(self.presentedViewController==controller)[controller dismissViewControllerAnimated:YES completion:present];else dispatch_async(dispatch_get_main_queue(),present);
 }
+
 @end
 
 #import "HomeEnhancements.inc"
+#import "DarkTheme.inc"
 
 static IMP HPOriginalDidAppear;
 static void HPDidAppear(id self,SEL selector,BOOL animated) {
     ((void(*)(id,SEL,BOOL))HPOriginalDidAppear)(self,selector,animated);
+    HPThemeController(self);
     [[HPManager shared]install];
     HPEnhanceHome(self);
 }
@@ -316,6 +303,7 @@ __attribute__((constructor)) static void HPInitialize(void) {
     @autoreleasepool {
         HPBootstrap();
         HPInstallEnhancements();
+        HPInstallDarkTheme();
         Method method=class_getInstanceMethod(UIViewController.class,@selector(viewDidAppear:));
         if(method)HPOriginalDidAppear=method_setImplementation(method,(IMP)HPDidAppear);
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){[[HPManager shared]install];}];
