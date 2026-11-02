@@ -327,13 +327,15 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 #import "HomeEnhancements.inc"
 #import "DarkTheme.inc"
 
+BOOL HPShouldShowSetup(UIViewController *controller){return [NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"]&&HPLegacyController(controller);}
+
 static IMP HPOriginalDidAppear;
 static void HPDidAppear(id self,SEL selector,BOOL animated) {
     ((void(*)(id,SEL,BOOL))HPOriginalDidAppear)(self,selector,animated);
     HPThemeController(self);
     [[HPManager shared]install];
     HPEnhanceHome(self);
-    if([NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"]){UIViewController *top=HPTop();if(![top isKindOfClass:HPPanel.class]&&![top isKindOfClass:UIAlertController.class]&&![top isKindOfClass:UIDocumentPickerViewController.class])dispatch_async(dispatch_get_main_queue(),^{[[HPManager shared]show];});}
+    if(HPShouldShowSetup(self)){UIViewController *top=HPTop();if(![top isKindOfClass:HPPanel.class]&&![top isKindOfClass:UIAlertController.class]&&![top isKindOfClass:UIDocumentPickerViewController.class])dispatch_async(dispatch_get_main_queue(),^{[[HPManager shared]show];});}
 }
 __attribute__((constructor)) static void HPInitialize(void) {
     @autoreleasepool {
