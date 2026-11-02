@@ -7,6 +7,7 @@
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
+static inline double HPMotionRate(double value){double x=HPClamp((isfinite(value)?value:.5)-.15,0,.85)/.85;return .2+2.8*x*x;}
 static inline double HPWrap(double x){return x-floor(x);}
 static inline double HPWave(double x){return .5+.5*sin(x*6.283185307179586);}
 // Two broad, overlapping fields keep neighbouring lights related while avoiding
@@ -36,7 +37,7 @@ static inline HPColor HPPattern(int mode,double seconds,double position,double b
     if(mode>=16)return HPNaturalField(mode,seconds,position,.5,brightness,speed);
     double t=seconds*speed,h=.6,s=.5,l=.52;
     switch(mode){
-        case 0:{double ribbon=HPWave(position*.65-t/180.);h=.40+.34*ribbon;s=.46+.12*HPWave(position*.5+t/240.);l=.49+.055*HPWave(position-t/160.);break;}
+        case 0:{double ribbon=HPWave(position*.90-t/180.+.20);h=.31+.43*pow(ribbon,1.6);s=.82+.10*(1-ribbon);l=.49+.055*HPWave(position-t/160.);break;}
         case 1:{double head=HPWave(position-t/90.);head=head*head;h=.52+.12*(1-head);s=.48+.10*(1-head);l=.47+.09*head;break;}
         case 2:{double swell=HPWave(position*.8-t/200.);h=.49+.105*swell;s=.46+.08*HPWave(position+t/210.);l=.49+.045*swell;break;}
         case 3:{double glow=.5+.32*sin(t*.035+position*5)+.18*sin(t*.019+position*9);h=.055+.03*glow;s=.52+.07*glow;l=.49+.045*glow;break;}
@@ -75,6 +76,17 @@ static inline HPColor HPPattern2D(int mode,double seconds,double x,double y,doub
     return HPPattern(mode,seconds,position,brightness,speed);
 }
 static inline HPWireColor HPVendorColor(HPColor color){return (HPWireColor){(uint16_t)lround(HPClamp(color.hue,0,1)*360),(uint16_t)lround(HPClamp(color.saturation,0,1)*100),(uint16_t)lround(HPClamp(color.lightness,0,1)*100)};}
+// The slider spans pale colour to full saturation, rather than merely scaling
+// an already muted palette. Hue and brightness are untouched.
+static inline double HPColourDepth(double saturation,double depth){
+    double x=(HPClamp(isfinite(depth)?depth:1,.25,1)-.25)/.75;
+    return HPClamp(HPClamp(saturation,0,1)*.25*(1-x)+x,0,1);
+}
+static inline double HPHeldDepth(double saturation,double startingDepth,double depth){
+    saturation=HPClamp(saturation,0,1);startingDepth=HPClamp(startingDepth,.25,1);depth=HPClamp(depth,.25,1);
+    if(depth>=startingDepth)return startingDepth>=.999999?saturation:saturation+(1-saturation)*(depth-startingDepth)/(1-startingDepth);
+    return startingDepth<=.250001?saturation:saturation*(depth-.25)/(startingDepth-.25);
+}
 // Each chapter lasts six active minutes: four to settle, two to dissolve.
 // Related palettes interpolate without crossing the hue seam. The next chapter
 // uses the same field phase, so every boundary (including the loop) is continuous.
@@ -98,7 +110,7 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
         HPColor b=HPPattern2D(chapters[journey][(chapter+1)%counts[journey]],phase,x,y,brightness,1);
         result=(HPColor){a.hue+(b.hue-a.hue)*mix,a.saturation+(b.saturation-a.saturation)*mix,a.lightness+(b.lightness-a.lightness)*mix};
     }else result=HPPattern2D(mode,phase,x,y,brightness,1);
-    result.saturation*=isfinite(depth)?HPClamp(depth,.25,1):1;
+    result.saturation=HPColourDepth(result.saturation,depth);
     return result;
 }
 // Older firmware may report normalized status. Command units stay degrees/percent.
