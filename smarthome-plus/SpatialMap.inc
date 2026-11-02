@@ -24,14 +24,14 @@
     CGContextRef c=UIGraphicsGetCurrentContext();CGRect plot=[self plot];CGContextSetStrokeColorWithColor(c,[UIColor colorWithWhite:1 alpha:.075].CGColor);CGContextSetLineWidth(c,.5);
     for(int i=0;i<=8;i++){CGFloat x=plot.origin.x+plot.size.width*i/8.,y=plot.origin.y+plot.size.height*i/8.;CGContextMoveToPoint(c,x,plot.origin.y);CGContextAddLineToPoint(c,x,CGRectGetMaxY(plot));CGContextMoveToPoint(c,plot.origin.x,y);CGContextAddLineToPoint(c,CGRectGetMaxX(plot),y);}CGContextStrokePath(c);
 }
-- (void)pick:(UIButton *)pin{for(UIButton *p in self.pins)p.layer.borderWidth=p==pin?2:1;if(self.picked)self.picked(self.lights[pin.tag]);}
+- (void)pick:(UIButton *)pin{[self bringSubviewToFront:pin];for(UIButton *p in self.pins)p.layer.borderWidth=p==pin?2:1;if(self.picked)self.picked(self.lights[pin.tag]);}
 - (void)moveLightAtIndex:(NSUInteger)index to:(CGPoint)point{
     if(index>=self.lights.count)return;point.x=HPClamp(point.x,0,1);point.y=HPClamp(point.y,0,1);
     NSMutableArray *lights=[self.lights mutableCopy];NSMutableDictionary *record=[lights[index]mutableCopy];record[@"x"]=@(point.x);record[@"y"]=@(point.y);lights[index]=record;_lights=lights;
     if(self.moved)self.moved(record,point);[self setNeedsLayout];
 }
 - (void)drag:(UIPanGestureRecognizer *)pan{
-    UIButton *pin=(id)pan.view;if(pan.state==UIGestureRecognizerStateBegan){self.draggingPin=pin;self.dragStart=pin.center;}
+    UIButton *pin=(id)pan.view;if(pan.state==UIGestureRecognizerStateBegan){self.draggingPin=pin;[self bringSubviewToFront:pin];self.dragStart=pin.center;}
     CGPoint delta=[pan translationInView:self];CGRect plot=[self plot];CGPoint center=CGPointMake(HPClamp(self.dragStart.x+delta.x,plot.origin.x,CGRectGetMaxX(plot)),HPClamp(self.dragStart.y+delta.y,plot.origin.y,CGRectGetMaxY(plot)));pin.center=center;
     if(pan.state==UIGestureRecognizerStateEnded||pan.state==UIGestureRecognizerStateCancelled){self.draggingPin=nil;[self moveLightAtIndex:pin.tag to:CGPointMake((center.x-plot.origin.x)/MAX(1,plot.size.width),(center.y-plot.origin.y)/MAX(1,plot.size.height))];}
 }
@@ -39,6 +39,8 @@
 @interface HPSpatialEditor:UIViewController
 @property(nonatomic,strong) HPRoomCanvas *canvas;
 @property(nonatomic,strong) UILabel *status;
+@property(nonatomic,strong) UIButton *identifyButton,*nextButton;
+@property(nonatomic) NSUInteger selected;
 @end
 @implementation HPSpatialEditor
 - (UILabel *)label:(NSString *)text size:(CGFloat)size{
@@ -50,20 +52,28 @@
     UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=14;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:18],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:20],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-20],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-40]]];
     [stack addArrangedSubview:[self label:@"Give the light a place." size:26]];
-    UILabel *hint=[self label:@"Drag each numbered light to its place around your apartment. Tap it to identify it with one short pulse, then restore its brightness." size:13];hint.textColor=[UIColor colorWithWhite:.67 alpha:1];[stack addArrangedSubview:hint];
+    UILabel *hint=[self label:@"Drag each numbered light to its place around your apartment. Tap to show a bright amber or cyan marker for a few seconds. Its previous colour returns afterward." size:13];hint.textColor=[UIColor colorWithWhite:.67 alpha:1];[stack addArrangedSubview:hint];
     self.status=[self label:@"Studio is paused while you map. Positions save automatically." size:13];[stack addArrangedSubview:self.status];
     self.canvas=[HPRoomCanvas new];self.canvas.backgroundColor=[UIColor colorWithRed:.065 green:.08 blue:.11 alpha:1];self.canvas.layer.cornerRadius=22;self.canvas.clipsToBounds=YES;self.canvas.lights=HPLightRecords();[self.canvas.heightAnchor constraintEqualToConstant:MIN(620,MAX(350,UIScreen.mainScreen.bounds.size.height*.5))].active=YES;[stack addArrangedSubview:self.canvas];
     __weak HPSpatialEditor *weakSelf=self;
     self.canvas.moved=^(NSDictionary *light,CGPoint point){
         NSString *mesh=HPMeshUUID()?:@"current";NSMutableDictionary *layouts=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.LightLayout"]mutableCopy]?:[NSMutableDictionary new];layouts[mesh]=[HPSpatialLayout layout:layouts[mesh]moving:light[@"id"]x:point.x y:point.y];[NSUserDefaults.standardUserDefaults setObject:layouts forKey:@"HP.LightLayout"];[NSUserDefaults.standardUserDefaults synchronize];weakSelf.status.text=[NSString stringWithFormat:@"Placed %@",light[@"name"]];[NSNotificationCenter.defaultCenter postNotificationName:@"HP.LayoutChanged" object:nil];
     };
-    self.canvas.picked=^(NSDictionary *light){
-        HPSpatialEditor *editor=weakSelf;if(!editor)return;[HPLightEngine.shared stop];editor.status.text=[NSString stringWithFormat:@"Identifying %@…",light[@"name"]];
-        HPIdentifyLight(light,^(NSError *error){weakSelf.status.text=error.localizedDescription?:[NSString stringWithFormat:@"%@ · brightness restored",light[@"name"]];});
-    };
+    self.canvas.picked=^(NSDictionary *light){HPSpatialEditor *editor=weakSelf;if(!editor||HPIdentifying)return;editor.selected=[editor.canvas.lights indexOfObject:light];[editor identify];};
+    UIStackView *actions=[UIStackView new];actions.axis=UILayoutConstraintAxisHorizontal;actions.spacing=12;actions.distribution=UIStackViewDistributionFillEqually;
+    self.identifyButton=[UIButton buttonWithType:UIButtonTypeSystem];self.nextButton=[UIButton buttonWithType:UIButtonTypeSystem];[self.identifyButton setTitle:@"Identify selected"forState:UIControlStateNormal];[self.nextButton setTitle:@"Next light"forState:UIControlStateNormal];[self.identifyButton addTarget:self action:@selector(identify)forControlEvents:UIControlEventTouchUpInside];[self.nextButton addTarget:self action:@selector(nextLight)forControlEvents:UIControlEventTouchUpInside];
+    for(UIButton *button in @[self.identifyButton,self.nextButton]){button.backgroundColor=[UIColor colorWithRed:.18 green:.19 blue:.27 alpha:1];button.layer.cornerRadius=13;[button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:44].active=YES;[actions addArrangedSubview:button];}[stack insertArrangedSubview:actions atIndex:3];
     [stack addArrangedSubview:[self label:@"Your lights" size:16]];
-    for(NSUInteger i=0;i<self.canvas.lights.count;i++){NSDictionary *light=self.canvas.lights[i];UILabel *name=[self label:[NSString stringWithFormat:@"%lu   %@",(unsigned long)i+1,light[@"name"]]size:13];name.textColor=[UIColor colorWithWhite:.7 alpha:1];[stack addArrangedSubview:name];}
-    UILabel *note=[self label:@"The starting grid is a guide. Your placements drive the direction and distance of spatial effects. Returning to Studio keeps the lights paused until you choose a mood." size:12];note.textColor=[UIColor colorWithWhite:.55 alpha:1];[stack addArrangedSubview:note];
+    for(NSUInteger i=0;i<self.canvas.lights.count;i++){NSDictionary *light=self.canvas.lights[i];UIButton *name=[UIButton buttonWithType:UIButtonTypeSystem];name.tag=i;[name setTitle:[NSString stringWithFormat:@"%lu   %@",(unsigned long)i+1,light[@"name"]]forState:UIControlStateNormal];name.contentHorizontalAlignment=UIControlContentHorizontalAlignmentLeft;[name addTarget:self action:@selector(selectNamed:)forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:name];}
+    UILabel *note=[self label:@"The starting grid is a guide. Your placements drive the direction and distance of spatial effects. Returning to Studio keeps the lights paused until you tap Resume or choose a mood." size:12];note.textColor=[UIColor colorWithWhite:.55 alpha:1];[stack addArrangedSubview:note];
+}
+- (void)selectNamed:(UIButton *)button{if(HPIdentifying)return;self.selected=button.tag;[self identify];}
+- (void)nextLight{if(HPIdentifying||!self.canvas.lights.count)return;self.selected=(self.selected+1)%self.canvas.lights.count;[self identify];}
+- (void)identify{
+    if(HPIdentifying||self.selected>=self.canvas.lights.count)return;NSDictionary *light=self.canvas.lights[self.selected];[HPLightEngine.shared stop];
+    for(UIButton *pin in self.canvas.pins)pin.layer.borderWidth=pin.tag==(NSInteger)self.selected?3:1;[self.canvas bringSubviewToFront:self.canvas.pins[self.selected]];
+    self.status.text=[NSString stringWithFormat:@"%lu · %@ · look for amber or cyan",(unsigned long)self.selected+1,light[@"name"]];self.identifyButton.enabled=NO;self.nextButton.enabled=NO;
+    __weak HPSpatialEditor *weakSelf=self;HPIdentifyLight(light,^(NSError *error){HPSpatialEditor *editor=weakSelf;if(!editor)return;editor.status.text=error.localizedDescription?:[NSString stringWithFormat:@"%lu · %@ · colour restored",(unsigned long)editor.selected+1,light[@"name"]];editor.identifyButton.enabled=YES;editor.nextButton.enabled=YES;});
 }
 - (void)done{if(self.navigationController.viewControllers.count>1)[self.navigationController popViewControllerAnimated:YES];else[self dismissViewControllerAnimated:YES completion:nil];}
 @end
