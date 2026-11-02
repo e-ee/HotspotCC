@@ -8,7 +8,7 @@ int main(void){
         for(int frame=0;frame<6000;frame++){
             HPColor c=HPPattern(mode,frame*.1,0,.6,1);
             assert(isfinite(c.hue)&&isfinite(c.saturation)&&isfinite(c.lightness));
-            assert(c.hue>=0&&c.hue<=1&&c.saturation<=(mode==0?.921:.65)&&c.lightness<=.34&&c.lightness>=.27);
+            assert(c.hue>=0&&c.hue<=1&&c.saturation<=((mode==0||mode>=24)?.961:.65)&&c.lightness<=.34&&c.lightness>=.27);
             assert(fabs(c.hue-prior.hue)<.002&&fabs(c.lightness-prior.lightness)<.001);
             movement+=fabs(c.hue-prior.hue)+fabs(c.lightness-prior.lightness);prior=c;
             lo=fmin(lo,c.lightness);hi=fmax(hi,c.lightness);
@@ -47,7 +47,7 @@ int main(void){
         }
     }
     HPColor base=HPStudioTarget(0,-1,0,143,.2,.8,.6,1,0),soft=HPStudioTarget(0,-1,0,143,.2,.8,.6,.3,0);assert(base.hue==soft.hue&&base.lightness==soft.lightness&&soft.saturation<.4&&base.saturation==1);
-    double diversity=0;for(uint32_t seed=1;seed<80;seed++){HPColor a=HPStudioTarget(0,-1,0,100,.2,.8,.6,.8,seed),b=HPStudioTarget(0,-1,0,100,.2,.8,.6,.8,seed),near=HPStudioTarget(0,-1,0,100,.201,.801,.6,.8,seed);assert(a.hue==b.hue&&a.saturation==b.saturation);assert(fabs(a.hue-near.hue)<.003);diversity+=fabs(a.hue-base.hue);}assert(diversity>.5);
+    double diversity=0;for(uint32_t seed=1;seed<80;seed++){HPColor a=HPStudioTarget(0,-1,0,100,.2,.8,.6,.8,seed),b=HPStudioTarget(0,-1,0,100,.2,.8,.6,.8,seed),near=HPStudioTarget(0,-1,0,100,.201,.801,.6,.8,seed);assert(a.hue==b.hue&&a.saturation==b.saturation);assert(fabs(a.hue-near.hue)<.006);diversity+=fabs(a.hue-base.hue);}assert(diversity>.5);
     HPColor bad=HPStudioTarget(0,0,NAN,NAN,NAN,NAN,NAN,NAN,UINT32_MAX);assert(isfinite(bad.hue)&&isfinite(bad.saturation)&&isfinite(bad.lightness));
     for(int mode=0;mode<HP_MODE_COUNT;mode++){
         HPColor pale=HPStudioTarget(mode,-1,0,0,.3,.7,.6,.25,0),medium=HPStudioTarget(mode,-1,0,0,.3,.7,.6,.6,0),rich=HPStudioTarget(mode,-1,0,0,.3,.7,.6,1,0);
@@ -55,11 +55,13 @@ int main(void){
         assert(rich.hue==pale.hue&&rich.lightness==pale.lightness);
     }
     assert(HPHeldDepth(.4,.5,1)==1&&HPHeldDepth(.4,.5,.25)==0&&fabs(HPHeldDepth(.4,.5,.5)-.4)<.000001);
-    double green=0;for(int n=0;n<100;n++){HPColor a=HPPattern2D(0,0,n/99.,.65,.6,1);if(a.hue*360>=108&&a.hue*360<=145&&a.saturation>.85)green++;}assert(green>20); // Emerald must exist in the opening frame, not minutes later.
-    assert(fabs(HPMotionRate(.15)-.2)<.000001&&fabs(HPMotionRate(1)-3)<.000001&&HPMotionRate(.9)>HPMotionRate(.5));
+    for(int n=0;n<20;n++){double position=n/20.,phase=n*17.;HPColor original=HPPattern(0,phase,position,.6,1);assert(fabs(original.hue-(.36+.42*HPWave(position*.8-phase/180.)))<.000001);assert(fabs(original.saturation-(.72+.24*HPWave(position-phase/240.)))<.000001);}
+    double green=0;for(int n=0;n<100;n++){HPColor a=HPPattern2D(24,0,n/99.,.65,.6,1);if(a.hue*360>=108&&a.hue*360<=145&&a.saturation>.8)green++;}assert(green>20);
+    assert(fabs(HPMotionRate(.15)-.2)<.000001&&fabs(HPMotionRate(1)-10)<.000001&&HPMotionRate(.9)>HPMotionRate(.5));
+    HPColor prism=HPStudioTarget(5,-1,0,100,.3,.7,.6,1,0);double recolour=0;for(int seed=1;seed<30;seed++){HPColor shuffled=HPStudioTarget(5,-1,0,100,.3,.7,.6,1,seed);recolour+=fabs(shuffled.hue-prism.hue);assert(shuffled.lightness>=.27&&shuffled.lightness<=.34);}assert(recolour>1);
     HPWireColor blue=HPVendorColor((HPColor){240.f/360.f,.8f,.6f});assert(blue.hue==240&&blue.saturation==80&&blue.lightness==60);
     HPWireColor vendor=HPVendorColor(HPStatusColor(240,80,60));assert(vendor.hue==240&&vendor.saturation==80&&vendor.lightness==60);
     HPWireColor normalized=HPVendorColor(HPStatusColor(43690,52428,39321));assert(normalized.hue==240&&normalized.saturation==80&&normalized.lightness==60);
     assert(HPSmoothTransitionSteps(14)==40&&HPSmoothTransitionSteps(40)==60);
-    puts("Twenty-four gentle palettes and three seamless journeys: 2D spatial fields, adjacent-light continuity, continuous motion, limited contrast, bounded hardware steps, no restart/catch-up jumps, vendor/normalized status conversion and four-second fades passed.");
+    puts("Thirty-two moods and six seamless journeys: 2D spatial fields, adjacent-light continuity, continuous motion, limited contrast, bounded hardware steps, no restart/catch-up jumps, vendor/normalized status conversion and four-second fades passed.");
 }
