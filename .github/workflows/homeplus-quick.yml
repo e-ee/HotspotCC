@@ -1,8 +1,5 @@
 name: SYLVANIA Plus quick build
 on:
-  push:
-    branches: [smarthome-plus]
-    paths: ['smarthome-plus/*.inc', 'smarthome-plus/*.m', 'smarthome-plus/*.h']
   workflow_dispatch:
 concurrency:
   group: homeplus-quick
