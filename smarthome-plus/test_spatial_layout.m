@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import "SpatialLayout.h"
 #include <assert.h>
+#include <math.h>
 int main(void){@autoreleasepool{
     NSMutableArray *lamps=[NSMutableArray new];for(int i=0;i<14;i++)[lamps addObject:@{@"id":[NSString stringWithFormat:@"lamp-%d",i],@"address":@(32+i),@"name":@"Lamp"}];
     NSArray *initial=[HPSpatialLayout positionedLights:lamps layout:nil];assert(initial.count==14);NSMutableSet *points=[NSMutableSet new];for(NSDictionary *light in initial){assert([light[@"x"]doubleValue]>0&&[light[@"x"]doubleValue]<1&&[light[@"y"]doubleValue]>0&&[light[@"y"]doubleValue]<1);[points addObject:@[light[@"x"],light[@"y"]]];}assert(points.count==14);
