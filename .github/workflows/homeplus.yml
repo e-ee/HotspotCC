@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -107,6 +110,8 @@ jobs:
           cp "$CONTAINER/Documents/HomeDark.png" build/HomeDark.png
           cp "$CONTAINER/Documents/PausedScene.png" build/PausedScene.png
           cp "$CONTAINER/Documents/ApartmentMap.png" build/ApartmentMap.png
+          cp "$CONTAINER/Documents/AuroraGreen.png" build/AuroraGreen.png
+          cp "$CONTAINER/Documents/StudioControls.png" build/StudioControls.png
           cp "$CONTAINER/Documents/Journeys.png" build/Journeys.png
           cp "$CONTAINER/Documents/SavedMoods.png" build/SavedMoods.png
       - uses: actions/upload-artifact@v4
@@ -119,5 +124,7 @@ jobs:
             build/HomeDark.png
             build/PausedScene.png
             build/ApartmentMap.png
+            build/AuroraGreen.png
+            build/StudioControls.png
             build/Journeys.png
             build/SavedMoods.png
