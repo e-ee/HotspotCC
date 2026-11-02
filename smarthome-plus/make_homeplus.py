@@ -165,7 +165,7 @@ def build(config_zip, module, ldid):
         shutil.copytree(launch,app/'HomePlusBlankLaunch360.storyboardc',dirs_exist_ok=True)
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
-                    CFBundleVersion='3600',CFBundleShortVersionString='3.6.0',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
+                    CFBundleVersion='3601',CFBundleShortVersionString='3.6.1',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
         for key in list(info):
             if key.startswith('UILaunch'):info.pop(key)
