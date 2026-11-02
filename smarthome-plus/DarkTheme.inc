@@ -1,6 +1,6 @@
 static UIColor *HPNightBackground(void){return [UIColor colorWithRed:.035 green:.045 blue:.065 alpha:1];}
 static UIColor *HPNightSurface(void){return [UIColor colorWithRed:.085 green:.10 blue:.135 alpha:1];}
-static char HPBadgeSurfaceKey,HPBadgeTextKey,HPReadableLabelKey,HPWhiteNavKey;
+static char HPBadgeClearKey,HPBadgeSurfaceKey,HPBadgeTextKey,HPReadableLabelKey,HPWhiteNavKey;
 static BOOL HPTheming,HPNavStyling;
 static BOOL HPNeutral(UIColor *color,CGFloat *value){
     if(!color)return NO;CGFloat r,g,b,a;UIColor *resolved=[color resolvedColorWithTraitCollection:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark]];
@@ -24,7 +24,7 @@ static NSAttributedString *HPReadableAttributes(UILabel *label,NSAttributedStrin
 }
 static void HPThemeTree(UIView *view);
 static void HPStyleBadge(UIView *badge){
-    UIView *content=HPGet(badge,@"view");objc_setAssociatedObject(badge,&HPBadgeSurfaceKey,@YES,OBJC_ASSOCIATION_RETAIN_NONATOMIC);badge.backgroundColor=HPNightSurface();
+    UIView *content=HPGet(badge,@"view");BOOL wrapper=[content isKindOfClass:UIView.class]&&content!=badge;objc_setAssociatedObject(badge,wrapper?&HPBadgeClearKey:&HPBadgeSurfaceKey,@YES,OBJC_ASSOCIATION_RETAIN_NONATOMIC);badge.backgroundColor=wrapper?UIColor.clearColor:HPNightSurface();
     if([content isKindOfClass:UIView.class]){objc_setAssociatedObject(content,&HPBadgeSurfaceKey,@YES,OBJC_ASSOCIATION_RETAIN_NONATOMIC);content.backgroundColor=HPNightSurface();}
     id label=HPGet(badge,@"title");if([label isKindOfClass:UILabel.class]){objc_setAssociatedObject(label,&HPBadgeTextKey,@YES,OBJC_ASSOCIATION_RETAIN_NONATOMIC);[label setTextColor:UIColor.whiteColor];NSAttributedString *old=[label attributedText],*text=HPReadableAttributes(label,old);if(text!=old)[label setAttributedText:text];}
     for(UIView *child in badge.subviews)HPThemeTree(child);
@@ -57,7 +57,7 @@ static IMP HPLayoutOriginal,HPViewWindowOriginal,HPBadgeLayoutOriginal,HPBackgro
 static void HPNightLayout(id self,SEL selector){((void(*)(id,SEL))HPLayoutOriginal)(self,selector);if(!HPTheming&&[self isViewLoaded]){HPTheming=YES;HPThemeController(self);HPTheming=NO;}}
 static void HPNightWindow(UIView *self,SEL selector){((void(*)(id,SEL))HPViewWindowOriginal)(self,selector);if(!self.window||HPTheming||HPThemeExempt(self))return;UIResponder *owner=self;while(owner&&![owner isKindOfClass:UIViewController.class])owner=owner.nextResponder;if(owner&&HPLegacyController((id)owner)){HPTheming=YES;HPThemeTree(self);HPTheming=NO;}}
 static void HPBadgeLayout(id self,SEL selector){((void(*)(id,SEL))HPBadgeLayoutOriginal)(self,selector);HPStyleBadge(self);}
-static void HPNightSetBackground(UIView *self,SEL selector,UIColor *color){if(objc_getAssociatedObject(self,&HPBadgeSurfaceKey))color=HPNightSurface();((void(*)(id,SEL,id))HPBackgroundOriginal)(self,selector,color);}
+static void HPNightSetBackground(UIView *self,SEL selector,UIColor *color){if(objc_getAssociatedObject(self,&HPBadgeClearKey))color=UIColor.clearColor;else if(objc_getAssociatedObject(self,&HPBadgeSurfaceKey))color=HPNightSurface();((void(*)(id,SEL,id))HPBackgroundOriginal)(self,selector,color);}
 static void HPNightText(UILabel *self,SEL selector,UIColor *color){if(objc_getAssociatedObject(self,&HPBadgeTextKey))color=UIColor.whiteColor;else if(objc_getAssociatedObject(self,&HPReadableLabelKey))color=HPReadableText(color);((void(*)(id,SEL,id))HPTextColorOriginal)(self,selector,color);}
 static void HPNightAttributed(UILabel *self,SEL selector,NSAttributedString *text){((void(*)(id,SEL,id))HPAttributedOriginal)(self,selector,HPReadableAttributes(self,text));}
 static void HPNightLabelLayout(UILabel *self,SEL selector){((void(*)(id,SEL))HPLabelLayoutOriginal)(self,selector);if(objc_getAssociatedObject(self,&HPReadableLabelKey)){UIColor *color=objc_getAssociatedObject(self,&HPBadgeTextKey)?UIColor.whiteColor:HPReadableText(self.textColor);if(color&&![color isEqual:self.textColor])self.textColor=color;NSAttributedString *old=self.attributedText,*text=HPReadableAttributes(self,old);if(text!=old)self.attributedText=text;}}
