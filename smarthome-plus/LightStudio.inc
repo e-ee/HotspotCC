@@ -4,11 +4,11 @@
 #import "LightReadback.inc"
 #import <unistd.h>
 
-static NSArray *HPThemeNames(void){return @[@"Aurora",@"Comet",@"Ocean",@"Embers",@"Neon",@"Prism",@"Breathe",@"Velvet",@"Sunset",@"Moonlight",@"Fireflies",@"Tide",@"Silk",@"Rain",@"Dawn",@"Orbit",@"Forest Mist",@"Lagoon",@"Heather",@"Opal",@"Blue Hour",@"Coast",@"Rose Dusk",@"Polar Mist"];}
-static NSArray *HPThemeDetails(void){return @[@"Deep emerald veils and violet",@"A soft glow drifting through home",@"Long, quiet teal swells",@"A steady, living amber glow",@"Soft rose and turquoise drift",@"A slow journey through colour",@"Gentle, warm breathing light",@"Quiet plum and indigo",@"Honey and peach across home",@"Soft silver-blue moonlight",@"Warm pools wandering nearby",@"Quiet rings through your space",@"Rose and lilac ribbons",@"Cool light drifting downward",@"A slow wash of warm morning",@"Colour circling the apartment",@"Sage and eucalyptus in the mist",@"Still turquoise, deepening blue",@"Lilac hills under a quiet sky",@"Pearl, sea glass and lavender",@"The sky just after sunset",@"Pale blue meeting soft green",@"Dusty rose fading into mauve",@"Jade and ice-blue veils"];}
-static NSArray *HPThemeOrder(void){return @[@0,@16,@17,@18,@19,@20,@21,@22,@23,@2,@8,@9,@11,@12,@13,@14,@3,@6,@7,@1,@4,@5,@10,@15];}
-static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening"];}
-static NSArray *HPJourneyDetails(void){return @[@"Emerald veils, lilac and blue hour",@"Sea glass, deep water and moonlight",@"Peach, embers and quiet fireflies"];}
+static NSArray *HPThemeNames(void){return @[@"Aurora",@"Comet",@"Ocean",@"Embers",@"Neon",@"Prism",@"Breathe",@"Velvet",@"Sunset",@"Moonlight",@"Fireflies",@"Tide",@"Silk",@"Rain",@"Dawn",@"Orbit",@"Forest Mist",@"Lagoon",@"Heather",@"Opal",@"Blue Hour",@"Coast",@"Rose Dusk",@"Polar Mist",@"Emerald Sky",@"Fjord",@"Cherry Blossom",@"Solstice",@"Nebula",@"Sea Glass",@"Candle Garden",@"Kaleidoscope"];}
+static NSArray *HPThemeDetails(void){return @[@"Original jade, blue and violet ribbons",@"A soft glow drifting through home",@"Long, quiet teal swells",@"A steady, living amber glow",@"Soft rose and turquoise drift",@"A slow journey through colour",@"Gentle, warm breathing light",@"Quiet plum and indigo",@"Honey and peach across home",@"Soft silver-blue moonlight",@"Warm pools wandering nearby",@"Quiet rings through your space",@"Rose and lilac ribbons",@"Cool light drifting downward",@"A slow wash of warm morning",@"Colour circling the apartment",@"Sage and eucalyptus in the mist",@"Still turquoise, deepening blue",@"Lilac hills under a quiet sky",@"Pearl, sea glass and lavender",@"The sky just after sunset",@"Pale blue meeting soft green",@"Dusty rose fading into mauve",@"Jade and ice-blue veils",@"Deep greens in layered ribbons",@"Blue water flowing between cliffs",@"Rose and lilac petals drifting",@"Amber and gold flowing softly",@"Violet clouds in deep blue",@"Jade and turquoise crossing gently",@"Wandering pools of candlelight",@"Mirrored colour fields turning slowly"];}
+static NSArray *HPThemeOrder(void){return @[@0,@24,@25,@26,@27,@28,@29,@30,@31,@16,@17,@18,@19,@20,@21,@22,@23,@2,@8,@9,@11,@12,@13,@14,@3,@6,@7,@1,@4,@5,@10,@15];}
+static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening",@"Forest after rain",@"Velvet night",@"Golden hour"];}
+static NSArray *HPJourneyDetails(void){return @[@"Jade ribbons, lilac and blue hour",@"Sea glass, deep water and moonlight",@"Peach, embers and quiet fireflies",@"Emerald, sea glass and fjord blue",@"Blossom, violet clouds and moonlight",@"Sunrise, golden skies and candlelight"];}
 static NSString *HPMoodStorageKey(void){return HPMeshUUID()?:@"current";}
 static NSArray *HPSavedMoods(void){return [HPStudioPresets validRecipes:[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"][HPMoodStorageKey()]];}
 static void HPStoreMoods(NSArray *moods){NSMutableDictionary *homes=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"]mutableCopy]?:[NSMutableDictionary new];homes[HPMoodStorageKey()]=moods;[NSUserDefaults.standardUserDefaults setObject:homes forKey:@"HP.StudioMoods"];}
@@ -61,8 +61,12 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget;
 - (void)changeBrightness:(float)value;
 - (void)changeMotion:(float)value;
+
 - (void)changeDepth:(float)value;
 - (void)requestRetarget;
+- (void)shuffleColours;
+- (void)restoreColours;
+- (void)applyColourVariation:(uint32_t)variation;
 - (BOOL)prepareHeldAdjustment;
 - (void)completeRetarget:(NSString *)key;
 - (NSString *)moodName;
@@ -161,6 +165,20 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(!isfinite(value))return;self.speed=HPClamp(value,.15,1);[NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];
     self.status=self.mode>=0?@"Motion updated":@"Motion set · tap Resume to see it";
 }
+- (void)applyColourVariation:(uint32_t)variation{
+    if(![self prepareHeldAdjustment])return;self.variation=variation;
+    if(self.adjusting)for(NSDictionary *light in self.lights){HPBulbMotion *held=self.heldTargets[light[@"id"]];if(!held)continue;HPColor c=held.color;c.hue=[self targetForLight:light].hue;held.color=c;}
+    [self requestRetarget];self.status=variation?@"Fading into a fresh colour arrangement":@"Restoring the original palette";
+}
+- (void)shuffleColours{
+    uint32_t value=self.variation;
+    for(int attempt=0;attempt<8;attempt++){
+        value=arc4random_uniform(1000000)+1;if(value==self.variation)continue;double difference=0;
+        for(NSDictionary *light in self.lights){double x=[light[@"x"]doubleValue],y=[light[@"y"]doubleValue];HPColor a=[self targetForLight:light],b=HPStudioTarget((int)self.lastMode,(int)self.journey,self.journeyElapsed,self.phase,x,y,self.brightness,self.depth,value);double delta=fabs(a.hue-b.hue);difference+=MIN(delta,1-delta);}
+        if(difference>self.lights.count*.025)break;
+    }[self applyColourVariation:value];
+}
+- (void)restoreColours{[self applyColourVariation:0];}
 - (void)stop {
     BOOL was=self.timer!=nil;[self.timer invalidate];self.timer=nil;self.mode=-1;self.adjusting=NO;self.heldTargets=nil;self.retargets=nil;self.generation++;
     if(self.assertion){HPVoid(self.assertion,@"invalidate");self.assertion=nil;}
@@ -335,13 +353,18 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 
 @interface HPStudioScrollView:UIScrollView @end
 @implementation HPStudioScrollView
-- (BOOL)touchesShouldCancelInContentView:(UIView *)view{for(UIView *v=view;v&&v!=self;v=v.superview)if([v isKindOfClass:UISlider.class])return NO;return [super touchesShouldCancelInContentView:view];}
+- (BOOL)touchesShouldCancelInContentView:(UIView *)view{
+    // UIKit otherwise returns NO for UIControl, including our full-width cards.
+    // A vertical pan must cancel a card press and scroll; slider tracking stays local.
+    for(UIView *v=view;v&&v!=self;v=v.superview)if([v isKindOfClass:UISlider.class])return NO;
+    return YES;
+}
 @end
 @interface HPStudio : UIViewController
 @property(nonatomic,strong) UILabel *status;
 @property(nonatomic,strong) HPStudioPreview *preview;
 @property(nonatomic,strong) NSTimer *previewTimer;
-@property(nonatomic,strong) UIButton *scopeButton,*pause,*save;
+@property(nonatomic,strong) UIButton *scopeButton,*pause,*save,*shuffleButton;
 @property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider;
 @property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel;
 @property(nonatomic,strong) UISegmentedControl *category;
@@ -366,7 +389,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     [super viewDidLoad];self.title=@"Light Studio";self.view.backgroundColor=[UIColor colorWithRed:.035 green:.045 blue:.07 alpha:1];self.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;
     UINavigationBarAppearance *appearance=[UINavigationBarAppearance new];[appearance configureWithOpaqueBackground];appearance.backgroundColor=self.view.backgroundColor;appearance.titleTextAttributes=@{NSForegroundColorAttributeName:UIColor.whiteColor};self.navigationItem.standardAppearance=appearance;self.navigationItem.scrollEdgeAppearance=appearance;self.navigationItem.compactAppearance=appearance;
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc]initWithTitle:@"More" style:UIBarButtonItemStylePlain target:self action:@selector(more)];
-    UIScrollView *scroll=[HPStudioScrollView new];scroll.delaysContentTouches=NO;scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=12;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
+    UIScrollView *scroll=[HPStudioScrollView new];scroll.delaysContentTouches=NO;scroll.canCancelContentTouches=YES;scroll.alwaysBounceVertical=YES;scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=12;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-110],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:20],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-20],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-40]]];
     [stack addArrangedSubview:[self text:@"Let the room exhale." size:26]];
     UIStackView *room=[UIStackView new];room.axis=UILayoutConstraintAxisHorizontal;room.distribution=UIStackViewDistributionEqualSpacing;
@@ -378,6 +401,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     UIStackView *actions=[UIStackView new];actions.axis=UILayoutConstraintAxisHorizontal;actions.spacing=10;actions.distribution=UIStackViewDistributionFillEqually;
     self.pause=[self button:@"Resume" action:@selector(toggle)filled:YES];self.save=[self button:@"Save as scene"action:@selector(saveScene)filled:NO];[actions addArrangedSubview:self.pause];[actions addArrangedSubview:self.save];[stack addArrangedSubview:actions];
     self.status=[self text:@""size:12];self.status.textColor=[UIColor colorWithWhite:.64 alpha:1];[self.status.heightAnchor constraintGreaterThanOrEqualToConstant:30].active=YES;[stack addArrangedSubview:self.status];
+    self.shuffleButton=[self button:@"Shuffle colours"action:@selector(shuffleColours)filled:NO];self.shuffleButton.accessibilityIdentifier=@"HP.ShuffleColours";self.shuffleButton.accessibilityHint=@"Give this mode a new palette or mirror its flow. The room fades into the new look.";[stack addArrangedSubview:self.shuffleButton];
     self.category=[[UISegmentedControl alloc]initWithItems:@[@"Moods",@"Journeys",@"My moods"]];self.category.selectedSegmentIndex=0;self.category.selectedSegmentTintColor=[UIColor colorWithRed:.25 green:.23 blue:.34 alpha:1];[self.category setTitleTextAttributes:@{NSForegroundColorAttributeName:UIColor.whiteColor}forState:UIControlStateNormal];[self.category addTarget:self action:@selector(buildGallery)forControlEvents:UIControlEventValueChanged];[stack addArrangedSubview:self.category];
     self.gallery=[UIStackView new];self.gallery.axis=UILayoutConstraintAxisVertical;self.gallery.spacing=11;[stack addArrangedSubview:self.gallery];[self buildGallery];[self reloadPreview];
 }
@@ -407,7 +431,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
     HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.status;[self.scopeButton setTitle:engine.scope forState:UIControlStateNormal];[self.pause setTitle:engine.mode>=0?@"Pause":@"Resume"forState:UIControlStateNormal];self.pause.enabled=!self.captureReader&&!HPIdentifying;self.navigationItem.rightBarButtonItem.enabled=!self.captureReader&&!HPIdentifying;self.save.enabled=engine.mode<0&&!engine.adjusting&&engine.lights.count>0&&!self.captureReader&&!HPIdentifying;self.save.alpha=self.save.enabled?1:.4;
-    BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;
+    BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.shuffleButton.enabled=enabled&&engine.lights.count>0;
     self.brightnessLabel.text=[NSString stringWithFormat:@"Brightness %.0f%%",engine.brightness*100];self.motionLabel.text=[NSString stringWithFormat:@"Motion %.1f×",HPMotionRate(engine.speed)];self.depthLabel.text=[NSString stringWithFormat:@"Colour depth %.0f%%",engine.depth*100];
     // Do not assign slider.value on the refresh timer; the user's thumb owns it.
     for(UIView *row in self.gallery.arrangedSubviews){NSArray *cards=[row isKindOfClass:UIStackView.class]?[(UIStackView *)row arrangedSubviews]:@[row];for(UIView *view in cards)if([view isKindOfClass:HPModeCard.class]){HPModeCard *card=(id)view;BOOL selected=self.category.selectedSegmentIndex==0?engine.journey<0&&card.tag==engine.lastMode:self.category.selectedSegmentIndex==1&&card.tag==engine.journey;card.layer.borderWidth=selected?2:.5;card.layer.borderColor=[UIColor colorWithWhite:1 alpha:selected?.68:.13].CGColor;card.accessibilityTraits=UIAccessibilityTraitButton|(selected?UIAccessibilityTraitSelected:0);}}
@@ -418,12 +442,13 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)brightness:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeBrightness:slider.value];[self refresh];}
 - (void)speed:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeMotion:slider.value];[self refresh];}
 - (void)depth:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeDepth:slider.value];[self refresh];}
+- (void)shuffleColours{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared shuffleColours];[self refresh];}
 - (void)stop{[HPLightEngine.shared stop];[self refresh];}
 - (void)toggle{if(HPLightEngine.shared.mode>=0)[self stop];else[HPLightEngine.shared resume];[self refresh];}
 - (void)more{
     UIAlertController *sheet=[UIAlertController alertControllerWithTitle:@"Make this mood yours" message:@"Your changes fade in over a few seconds. Brightness and Colour depth also shape a paused look. Motion changes travel speed when running."preferredStyle:UIAlertControllerStyleActionSheet];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Save moving mood"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[self promptSaveMood];}]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Another variation"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){HPLightEngine.shared.variation=arc4random_uniform(1000000)+1;HPLightEngine.shared.status=HPLightEngine.shared.mode>=0?@"Easing into a new arrangement":@"New variation ready · tap Resume";[self refresh];}]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Restore original colours"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[HPLightEngine.shared restoreColours];[self refresh];}]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Map lights"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[self mapLights];}]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel"style:UIAlertActionStyleCancel handler:nil]];sheet.popoverPresentationController.barButtonItem=self.navigationItem.rightBarButtonItem;[self presentViewController:sheet animated:YES completion:nil];
 }
