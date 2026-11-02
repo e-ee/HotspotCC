@@ -23,8 +23,12 @@ a claim of video-frame-rate output from every lamp.
 The original SDK's short HSL convenience method explicitly sets a zero-duration
 transition. The default fade setting applies to commands that omit an explicit
 transition; native controls may supply their own timing. Light Studio supplies its
-own transition duration. Version 3.4 additionally reads each bulb's starting
-colour, limits adjacent command changes and uses four-second fades for 14 bulbs.
+own transition duration. Version 3.5 retains bounded adjacent command changes and four-second fades for
+14 bulbs, but removes 3.4's mandatory initial colour query. Some installations
+can send working colour commands without answering that query. Effects now use
+last known SDK/cache state rather than waiting indefinitely for a read reply.
+Read timeouts explicitly cancel their own message handle. Cache values use raw
+16-bit mesh units; outgoing vendor command values use degrees/percent.
 The vendor's degree/percentage field units were verified in the supplied native
 executable; upstream normalized mesh examples are not this app's contract.
 
@@ -54,8 +58,9 @@ advertised commands and preserve pairing.
 ## What this enables now
 
 - 24 calm moods, including Aurora and eight new natural palette fields.
-- An apartment grid with saved 2D lamp positions and tap-to-identify pulses.
-- Room selection, brightness and gentle motion controls.
+- An apartment grid with saved 2D lamp positions and tap-to-identify colour markers, explicit Identify/Next controls and HSL restoration.
+- Room selection, brightness, gentle motion and colour-depth controls.
+- Three slow palette journeys and saved animated mood recipes.
 - Capture a paused look as a native scene using actual bulb readback.
 - Normal scene/light controls pause the local effect generator.
 - Ordinary fade timing and power-restore behaviour, through native bulb models.
