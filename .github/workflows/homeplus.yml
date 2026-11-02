@@ -1,0 +1,30 @@
+name: SYLVANIA Plus
+on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', '.github/workflows/homeplus.yml']
+  workflow_dispatch:
+concurrency:
+  group: smarthome-plus
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test scene transfer boundaries and validation
+        run: |
+          mkdir -p build
+          clang -fobjc-arc -fblocks smarthome-plus/SceneTransfer.m smarthome-plus/test_scene_transfer.m -framework Foundation -o build/test-scene-transfer
+          ./build/test-scene-transfer
+      - name: Compile iOS 15 add-on
+        run: |
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          codesign --force --sign - build/HomePlus.dylib
+          file build/HomePlus.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HomePlus-arm64
+          path: build/HomePlus.dylib
