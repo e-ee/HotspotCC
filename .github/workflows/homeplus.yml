@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -18,14 +21,46 @@ jobs:
           ./build/test-home-archive
           clang -fobjc-arc -fblocks smarthome-plus/SceneTransfer.m smarthome-plus/test_scene_transfer.m -framework Foundation -o build/test-scene-transfer
           ./build/test-scene-transfer
+          clang -fobjc-arc -fblocks smarthome-plus/SpatialLayout.m smarthome-plus/test_spatial_layout.m -framework Foundation -o build/test-spatial-layout
+          ./build/test-spatial-layout
           cc -std=c11 -O2 -Wall -Wextra -Werror smarthome-plus/test_effects.c -lm -o build/test-effects
           ./build/test-effects
-      - name: Compile iOS 15 add-on
+      - name: Verify saved scenes with real Realm 10.11
         run: |
-          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -lsqlite3 -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 https://github.com/realm/realm-swift/releases/download/v10.11.0/Carthage.xcframework.zip --output build/realm-sdk.zip
+          python3 - <<'PYREALM'
+          import pathlib,zipfile,plistlib,stat,os,platform
+          z=zipfile.ZipFile('build/realm-sdk.zip')
+          info_name=next(n for n in z.namelist() if n.endswith('Realm.xcframework/Info.plist'))
+          info=plistlib.loads(z.read(info_name))
+          arch='arm64' if platform.machine()=='arm64' else 'x86_64'
+          lib=next(l for l in info['AvailableLibraries'] if l['SupportedPlatform']=='macos' and arch in l['SupportedArchitectures'])
+          prefix=info_name[:-len('Info.plist')]+lib['LibraryIdentifier']+'/'+lib['LibraryPath']+'/'
+          root=pathlib.Path('build/realm-native/Realm.framework');root.mkdir(parents=True,exist_ok=True)
+          links=[]
+          for f in z.infolist():
+              if not f.filename.startswith(prefix):continue
+              rel=pathlib.PurePosixPath(f.filename[len(prefix):])
+              assert not rel.is_absolute() and '..' not in rel.parts
+              out=root/pathlib.Path(*rel.parts)
+              if f.is_dir():out.mkdir(parents=True,exist_ok=True);continue
+              if stat.S_ISLNK(f.external_attr>>16):links.append((out,z.read(f).decode()));continue
+              out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(z.read(f));out.chmod((f.external_attr>>16)&0o777 or 0o644)
+          for out,target in links:
+              out.parent.mkdir(parents=True,exist_ok=True);out.symlink_to(target)
+          version=plistlib.loads((root/'Resources/Info.plist').read_bytes())['CFBundleShortVersionString']
+          assert version.startswith('10.11'),version
+          print('Testing native scene schema with Realm',version,arch)
+          PYREALM
+          codesign --force --deep --sign - build/realm-native/Realm.framework
+          clang -fobjc-arc -fblocks smarthome-plus/SceneCapture.m smarthome-plus/test_capture_realm.m -Fbuild/realm-native -framework Realm -framework Foundation -Wl,-rpath,@executable_path/realm-native -o build/test-capture-realm
+          ./build/test-capture-realm
+      - name: Compile iOS 14 add-on and launch screen
+        run: |
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
           codesign --force --sign - build/HomePlus.dylib
           file build/HomePlus.dylib
-          xcrun ibtool --compile build/HomePlusLaunch.storyboardc smarthome-plus/HomePlusLaunch.storyboard --minimum-deployment-target 15.0 --target-device iphone --target-device ipad
+          xcrun ibtool --compile build/HomePlusLaunch.storyboardc smarthome-plus/HomePlusLaunch.storyboard --minimum-deployment-target 14.0 --target-device iphone --target-device ipad
       - uses: actions/upload-artifact@v4
         with:
           name: HomePlus-arm64
@@ -35,11 +70,13 @@ jobs:
       - name: Exercise UIKit and the fourteen-lamp sender
         run: |
           mkdir -p build/StudioSmoke.app
-          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios15.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
+          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios14.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
           python3 - <<'PY'
           import plistlib,pathlib
-          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'15.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
+          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'14.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
           pathlib.Path('build/StudioSmoke.app/Info.plist').write_bytes(plistlib.dumps(info))
+          seed={'Profile':'Simulator','Summary':'14 lights / 0 groups','Documents':{},'Preferences':{'HP.Profile':'Simulator','mesh.json':b'{"groups":[],"nodes":[]}'}}
+          pathlib.Path('build/StudioSmoke.app/HomePlusSeed.plist').write_bytes(plistlib.dumps(seed))
           PY
           codesign --force --sign - build/StudioSmoke.app
           xcrun simctl list devices available --json > build/devices.json
@@ -55,7 +92,7 @@ jobs:
           xcrun simctl install "$DEVICE" build/StudioSmoke.app
           xcrun simctl launch "$DEVICE" local.homeplus.studiosmoke
           CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             if test -f "$CONTAINER/Documents/smoke-report.json"; then break; fi
             sleep 1
           done
@@ -64,6 +101,8 @@ jobs:
           cp "$CONTAINER/Documents/LightStudio.png" build/LightStudio.png
           cp "$CONTAINER/Documents/LegacyDark.png" build/LegacyDark.png
           cp "$CONTAINER/Documents/HomeDark.png" build/HomeDark.png
+          cp "$CONTAINER/Documents/PausedScene.png" build/PausedScene.png
+          cp "$CONTAINER/Documents/ApartmentMap.png" build/ApartmentMap.png
       - uses: actions/upload-artifact@v4
         with:
           name: Studio-UI-Smoke
@@ -72,3 +111,5 @@ jobs:
             build/LightStudio.png
             build/LegacyDark.png
             build/HomeDark.png
+            build/PausedScene.png
+            build/ApartmentMap.png
