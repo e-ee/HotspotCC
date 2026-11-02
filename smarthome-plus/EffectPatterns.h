@@ -53,5 +53,12 @@ static inline HPColor HPPattern(int mode,double seconds,double position,double b
     }
     return (HPColor){(float)HPWrap(h),(float)HPClamp(s,0,1),(float)HPClamp(l*brightness,.008,1)};
 }
-static inline uint16_t HPWord(float value){return (uint16_t)lround(HPClamp(value,0,1)*65535);}
+// The supplied app's OpMessage implementation forwards degrees / percent as
+// UInt16 fields. It does NOT use the upstream Telink normalized 0..65535 units.
+typedef struct { uint16_t hue,saturation,lightness; } HPWireColor;
+static inline HPWireColor HPVendorColor(HPColor color){
+    return (HPWireColor){(uint16_t)lround(HPWrap(color.hue)*360),
+        (uint16_t)lround(HPClamp(color.saturation,0,1)*100),
+        (uint16_t)lround(HPClamp(color.lightness,0,1)*100)};
+}
 #endif
