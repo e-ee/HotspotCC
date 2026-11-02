@@ -96,6 +96,7 @@ static NSArray *HPExportRoutines(void) {
     return scenes;
 }
 
+static void HPAlert(UIViewController *controller, NSString *title, NSString *message);
 #import "LightStudio.inc"
 
 @interface HPPanel : UITableViewController <UIDocumentPickerDelegate>
