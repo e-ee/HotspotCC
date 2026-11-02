@@ -1,0 +1,11 @@
+*.ipa
+*.dylib
+*.zip
+*.realm*
+*.sqlite*
+*.plist
+private-*/
+current-documents/
+stage-*/
+release/
+__pycache__/
