@@ -1,44 +1,68 @@
-# SYLVANIA Plus 3.2 / Light Studio
+# SYLVANIA Plus 3.3 / After Dark
 
-Local improvements to the user's own SYLVANIA Smart Home 3.0.2 installation:
+An improvement to the user's own SYLVANIA Smart Home 3.0.2 installation, retaining
+the original controls, current paired bulbs and separate original app.
 
-- Remove the verified ten-routine gate while retaining the original scene UI.
-- Seed a separate app container from the user's current backup.
-- Prepare three independent mesh controller identities for additional devices.
-- Export/import routines using a key-free, network-specific JSON format.
-- Export a recovery archive containing the private local home state.
-- Arrange the native home shortcut strip and a physical lamp travel path.
-- Run eight spatial colour effects with bounded, backpressured SDK writes.
-- Configure default fades and power-cut behaviour through existing bulb models.
-- Hide the retired smart-home-experiences entry and reduce floating-button opacity.
+- Remove the verified ten-scene branch without replacing the scene editor.
+- Install as `com.ledvance.smart.plus` with three distinct controller identities.
+- Export and import one complete Home with scenes, groups, pairings and ordering.
+- Keep the receiving controller's identity and advance its existing sequence
+  counter; apply Home restoration on restart before the native databases open.
+- Preserve Realm database bytes instead of rejecting legacy scene sentinels.
+- Restore an interrupted Home import using a file and preferences journal.
+- Run eight generative lighting moods, with configurable brightness, speed,
+  room scope and lamp order, using the original vendor colour units.
+- Apply a dark theme to legacy fixed colours as well as the new panels.
+- Hide the retired smart-home experience and support/legal menu sections.
+- Retain scene shortcut ordering, default fades and power-on settings.
 
-No app binaries, Realm databases, pairing keys, controller UUIDs or private seeds
-are committed here. The local packager reads the user's own `smarthome.zip`,
-including `Documents/decrypted-app.ipa` and the current preferences.
+## Colour fix
 
-Build `HomePlus.dylib` with `.github/workflows/homeplus.yml`. Tests validate the
-actual Foundation scene transfer code at counts around and well above ten.
-`make_homeplus.py` validates the exact input executable, changes the one branch,
-adds the module, assigns separate controller allocations, signs the app for
-TrollStore and checks the resulting IPA and CodeDirectory hashes.
+`DeviceControlApi.setHSL:color:sat:lightness:onCompletion:` calls the original
+`OpMessage.changeHSLWithAddress:saturation:brightness:address:isGet:...` method.
+At unslid address `0x1002e4070`, that method forwards the supplied floats as
+UInt16 values **without normalizing to 65,535**. The input is hue in degrees,
+saturation and brightness in percent. The generic upstream Telink example uses
+a different contract and was an incorrect reference for this vendor app.
 
-```sh
-python3 make_homeplus.py --config /private/path/smarthome.zip \
-  --module /path/HomePlus.dylib --ldid /path/ldid
-```
+`verify_native_color.py` executes that actual native method locally under
+Unicorn against the exact supplied executable. Blue 240/80/60 reaches the SDK as
+240/80/60, as do independent green and magenta cases. `HPVendorColor` now emits
+that contract. The native convenience HSL method is left unmodified.
 
-Keep the generated `private-profiles.plist` private and preserve it across
-rebuilds. Do not distribute the same numbered controller profile to multiple
-physical devices. Install updates over the corresponding Plus installation;
-resetting its sequence counter can make existing bulbs reject its messages.
+## Home files
 
-The native app remains iOS 15.0 minimum. The new package uses the separate bundle
-ID `com.ledvance.smart.plus` so the original remains installed. Runtime calls use
-selectors and ABI signatures checked against the original binary and Realm
-10.11.0 sources. The Objective-C module is not a claim of on-device testing:
-startup, native database import/export and radio behaviour need hardware checks.
+`HomeArchive` writes a binary `.sylhome` file, version 2, containing preferences,
+a consistent Realm snapshot, the SQLite backup and the saved Network documents.
+Document checksums detect damaged copies. The importer also accepts version 1
+`.sylbackup` files from earlier Plus releases. Per-scene JSON sharing is removed
+from the UI. `SceneTransfer` remains only for stable ordering and legacy tests.
 
-See the install package's `INSTALL.txt` and `FEATURES_AND_FINDINGS.md` for the
-current deliverable, limitations and grounded feature roadmap.
+Import validates the native Realm copy with the running app's configuration,
+then stages a full Home. On restart, before the original app opens Realm or its
+mesh connection, the receiver keeps its controller UUID, local node, allocation,
+profile and a monotonic sequence counter. A restore journal covers interrupted
+file replacement. No other app container is read or changed.
 
-The native ARGB scene colour regression is fixed. SimulatorSmoke.m runs real UIKit and the actual effect sender against fourteen simulated lamp endpoints, verifies queue backpressure and manual-control cancellation, and captures a UI screenshot. The test fixture is not linked into production. See FIRMWARE_FINDINGS.md for the inspected manufacturer images and supported node models. No firmware is flashed.
+## Build and privacy
+
+No app binaries, Realm databases, pairing keys, real controller UUIDs or private
+seeds are committed. `make_homeplus.py` reads the user's own backup locally,
+checks the exact original executable, applies the single scene-limit patch,
+injects the add-on and dark launch screen, signs for TrollStore, and validates
+archive contents and CodeDirectory hashes. Preserve `private-profiles.plist`
+across rebuilds; never share the same numbered identity between phones.
+
+Build the module and launch storyboard with `.github/workflows/homeplus.yml`.
+Tests cover Home restoration, native unit conversion, pattern motion and bounds,
+legacy ordering, fourteen simulated send targets, queue backpressure, manual
+cancellation, hidden menu sections and dark legacy text. UIKit screenshots are
+captured for visual inspection. Test doubles are not linked into the release.
+
+The original app requires iOS 15.0. Updates install over the corresponding Plus
+number, preserving the existing container and any scenes created since the seed
+backup. The original SYLVANIA app stays installed. No firmware is flashed.
+
+Physical BLE behaviour, lamp interpolation and background operation require
+validation on the user's device. Studio's moods are generative, not measured
+music/audio or screen synchronization.
