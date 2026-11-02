@@ -50,6 +50,7 @@ static void HPBootstrap(void) {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         if (![defaults boolForKey:@"HP.Seeded"]) {
         NSFileManager *fm = NSFileManager.defaultManager;
+        NSDictionary *seedPrefs=HPSeed[@"Universal"]?[HPHomeArchive isolatedPreferences:HPSeed[@"Preferences"]]:HPSeed[@"Preferences"];
         // This is a separate app container. Never enumerate, open or modify the original app container.
         for (NSString *relative in HPSeed[@"Documents"]) {
             if ([relative hasPrefix:@"/"] || [[relative pathComponents] containsObject:@".."])
@@ -58,16 +59,17 @@ static void HPBootstrap(void) {
             if ([fm fileExistsAtPath:path]) continue;
             NSError *error;
             if (![fm createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:&error] ||
-                ![HPSeed[@"Documents"][relative] writeToFile:path options:NSDataWritingAtomic error:&error])
+                ![(HPSeed[@"Universal"]&&[relative hasPrefix:@"Network/"]?seedPrefs[@"mesh.json"]:HPSeed[@"Documents"][relative]) writeToFile:path options:NSDataWritingAtomic error:&error])
                 @throw [NSException exceptionWithName:@"HPSeed" reason:error.localizedDescription userInfo:nil];
         }
-        NSDictionary *prefs = HPSeed[@"Preferences"];
+        NSDictionary *prefs = seedPrefs;
         if (![prefs[@"mesh.json"] isKindOfClass:NSData.class])
             @throw [NSException exceptionWithName:@"HPSeed" reason:@"Saved light network is unavailable." userInfo:nil];
         for (NSString *key in prefs) [defaults setObject:prefs[key] forKey:key];
         [defaults setBool:YES forKey:@"HP.Seeded"];
         [defaults synchronize];
         }
+        if(![defaults stringForKey:@"HP.EnrollmentAuthority"]&&HPSeed[@"AuthorityUUID"])[defaults setObject:HPSeed[@"AuthorityUUID"]forKey:@"HP.EnrollmentAuthority"];
         NSError *restoreError=nil;
         // Restore before the original app opens Realm or the mesh transport.
         if(![HPHomeArchive applyPendingAtStatePath:HPStatePath() documentsPath:HPDocuments() defaults:defaults domain:NSBundle.mainBundle.bundleIdentifier error:&restoreError])HPBootstrapError=restoreError.localizedDescription;
@@ -100,6 +102,8 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 #import "LightStudio.inc"
 
 @interface HPPanel : UITableViewController <UIDocumentPickerDelegate>
+@property(nonatomic) BOOL enrollmentOnly;
+@property(nonatomic,strong) NSDictionary *enrollmentRequest;
 @property(nonatomic,strong) NSArray *scenes;
 @property(nonatomic,strong) NSString *detail;
 @end
@@ -151,8 +155,9 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 
 @implementation HPPanel
 - (void)viewDidLoad {
-    [super viewDidLoad]; self.title = @"SYLVANIA Plus";
+    [super viewDidLoad]; self.enrollmentOnly=[NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"];self.title=self.enrollmentOnly?@"Add this device":@"SYLVANIA Plus";
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(done)];
+    if(self.enrollmentOnly)self.navigationItem.rightBarButtonItem=nil;
     [self refresh];
 }
 - (void)done { [self dismissViewControllerAnimated:YES completion:nil]; }
@@ -161,19 +166,22 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     @catch (NSException *e) { self.scenes=@[]; self.detail=e.reason; }
     [self.tableView reloadData];
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 4; }
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section==0?4:(section==3?1:(section==2?2:3)); }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.enrollmentOnly?1:4; }
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return self.enrollmentOnly?2:(section==0?4:(section==3?1:(section==2?3:3))); }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    if(self.enrollmentOnly)return @"Connect to your existing Home";
     return @[@"Make the room come alive",@"Your home",@"Keep your home portable",@"Direct local control"][section];
 }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    if(self.enrollmentOnly)return @"Share a setup request with your main controller. Import the invitation it returns, then close and reopen Plus. No bulbs need re-pairing.";
     if (section==0) return @"Explore moving colour, then arrange the shortcut row and the path effects take through your lights.";
     if (section==1) return self.detail ?: @"The original scene editor and controls are retained. New scenes have no ten-routine cap.";
-    if (section==2) return @"One Home file carries your paired lights, groups, scenes and ordering. Import it on another numbered Device build to control the same bulbs. Home files include private pairing data.";
-    return @"Install Device 1, Device 2 and Device 3 on different devices. Each has its own mesh address and sequence counter. Bluetooth control works without another phone running. Later edits stay local until you share them.";
+    if (section==2) return @"Export Home updates existing controllers. To add a device, share its setup request with the main controller and import the returned invitation. Files contain private pairing data.";
+    return @"One universal IPA works across your devices. Each enrolled installation has its own mesh address and sequence counter. Your main controller reserves addresses for new devices. Later Home edits are shared manually.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     UITableViewCell *cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
+    if(self.enrollmentOnly){cell.textLabel.text=@[@"Share setup request",@"Import invitation"][path.row];cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;return cell;}
     if(path.section==0){
         cell.textLabel.text=@[@"Open Light Studio",@"Arrange scene shortcuts",@"Map light travel path",@"Everyday light behaviour"][path.row];cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         if(path.row==0){cell.textLabel.textColor=[UIColor colorWithRed:.48 green:.23 blue:.8 alpha:1];cell.textLabel.font=[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];}
@@ -182,7 +190,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         cell.textLabel.text=@[@"Scene limit",@"Saved scenes",@"Controller"][path.row];
         cell.detailTextLabel.text=path.row==0?@"Removed":(path.row==1?[NSString stringWithFormat:@"%lu",(unsigned long)self.scenes.count]:[NSUserDefaults.standardUserDefaults stringForKey:@"HP.Profile"]?:HPSeed[@"Profile"]);
     } else if(path.section==2) {
-        cell.textLabel.text=@[@"Export Home",@"Import Home"][path.row];
+        cell.textLabel.text=@[@"Export Home",@"Import Home",@"Create device invitation"][path.row];
         cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
     } else {
         cell.textLabel.text=@"Existing lights and groups";cell.detailTextLabel.text=HPSeed[@"Summary"];
@@ -201,7 +209,16 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
     return [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:name]];
 }
+- (void)shareSetupRequest {
+    NSDictionary *request=[HPHomeArchive requestForPreferences:NSUserDefaults.standardUserDefaults.dictionaryRepresentation];if(!request)return;
+    NSURL *url=[self exportLocation:@"Device_Setup.sylrequest"];NSError *error=nil;NSData *data=[NSPropertyListSerialization dataWithPropertyList:request format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
+    if([data writeToURL:url options:NSDataWritingAtomic error:&error])[self shareFile:url];else HPAlert(self,@"Could not share request",error.localizedDescription);
+}
+- (void)chooseHomeFile {
+    UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc]initWithDocumentTypes:@[@"com.ledvance.smart.plus.home",@"public.data"]inMode:UIDocumentPickerModeImport];picker.delegate=self;[self presentViewController:picker animated:YES completion:nil];
+}
 - (void)exportBackup {
+    NSDictionary *invitationRequest=self.enrollmentRequest;self.enrollmentRequest=nil;
     [HPLightEngine.shared stop];
     @try {
         id realm=HPRealm();NSURL *realmURL=[self exportLocation:@"default.realm"];
@@ -223,14 +240,26 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
             files[@"UserModel.sqlite"]=[NSData dataWithContentsOfURL:copy];
         }
         NSDictionary *preferences=[NSUserDefaults.standardUserDefaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier]?:@{};
-        NSData *data=[HPHomeArchive encodeDocument:@{@"Profile":preferences[@"HP.Profile"]?:@"This device",@"Preferences":preferences,@"Documents":files}error:&error];
-        NSURL *file=[self exportLocation:@"My_Home.sylhome"];
+        NSMutableDictionary *home=[@{@"Profile":preferences[@"HP.Profile"]?:@"This device",@"Preferences":preferences,@"Documents":files}mutableCopy];
+        NSString *ledgerPath=[HPStatePath()stringByAppendingPathComponent:@"DeviceReservations.plist"];NSDictionary *ledger=[NSDictionary dictionaryWithContentsOfFile:ledgerPath]?:@{};
+        NSDictionary *request=invitationRequest;
+        if(!request&&ledger.count){NSString *uid=ledger.allKeys.firstObject;request=@{@"format":@"sylvania-plus-device-request",@"version":@1,@"UUID":uid,@"deviceKey":ledger[uid][@"node"][@"deviceKey"]};}
+        if(request){
+            NSDictionary *valid=[HPHomeArchive readData:[HPHomeArchive encodeDocument:home error:&error]error:&error];
+            NSDictionary *result=valid?[HPHomeArchive invitationForDocument:valid request:request reservations:ledger error:&error]:nil;
+            if(!result){HPAlert(self,@"Could not create Home file",error.localizedDescription);return;}
+            if(invitationRequest){if(![NSFileManager.defaultManager createDirectoryAtPath:HPStatePath()withIntermediateDirectories:YES attributes:nil error:&error]||![result[@"reservations"]writeToFile:ledgerPath atomically:YES]){HPAlert(self,@"Could not reserve controller address",@"The invitation was not shared. Try again after freeing storage.");return;}}
+            home=[result[@"document"]mutableCopy];if(!invitationRequest)[home removeObjectForKey:@"EnrollmentRecipient"];
+        }
+        NSData *data=[HPHomeArchive encodeDocument:home error:&error];
+        NSURL *file=[self exportLocation:invitationRequest?@"Device_Invitation.sylhome":@"My_Home.sylhome"];
         if(!data||![data writeToURL:file options:NSDataWritingAtomic error:&error]){HPAlert(self,@"Could not export Home",error.localizedDescription);return;}
         [self shareFile:file];
     }@catch(NSException *exception){HPAlert(self,@"Could not export Home",exception.reason);}
 }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
     [tableView deselectRowAtIndexPath:path animated:YES];
+    if(self.enrollmentOnly){if(path.row==0)[self shareSetupRequest];else[self chooseHomeFile];return;}
     if(path.section==0){
         if(path.row==0)[self.navigationController pushViewController:[HPStudio new] animated:YES];
         else if(path.row==2)[self.navigationController pushViewController:[HPSpatialEditor new] animated:YES];
@@ -239,10 +268,9 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         return;
     }
     if(path.section!=2)return;
-    if(path.row==0)[self exportBackup];
-    else {
-        UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc]initWithDocumentTypes:@[@"com.ledvance.smart.plus.home",@"public.data"] inMode:UIDocumentPickerModeImport];
-        picker.delegate=self;[self presentViewController:picker animated:YES completion:nil];
+    if(path.row==0)[self exportBackup];else{
+        if(path.row==2){NSString *authority=[NSUserDefaults.standardUserDefaults stringForKey:@"HP.EnrollmentAuthority"];if(![authority isEqual:[NSUserDefaults.standardUserDefaults stringForKey:@"currenProvisionerUUID_key"]]){HPAlert(self,@"Use your main controller",@"Create invitations on the original Device 1 installation. Import the new device's setup request there.");return;}}
+        [self chooseHomeFile];
     }
 }
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
@@ -250,6 +278,16 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     BOOL scoped=[url startAccessingSecurityScopedResource];NSError *error=nil;
     NSNumber *size;[url getResourceValue:&size forKey:NSURLFileSizeKey error:&error];
     NSData *data=size.unsignedLongLongValue<=70*1024*1024?[NSData dataWithContentsOfURL:url options:0 error:&error]:nil;
+    id request=data?[NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:nil error:nil]:nil;
+    if([request isKindOfClass:NSDictionary.class]&&[request[@"format"]isEqual:@"sylvania-plus-device-request"]){
+        if(scoped)[url stopAccessingSecurityScopedResource];
+        void(^approve)(void)=^{
+            NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
+            if([defaults boolForKey:@"HP.JoinPending"]||![[defaults stringForKey:@"HP.EnrollmentAuthority"]isEqual:[defaults stringForKey:@"currenProvisionerUUID_key"]]){HPAlert(self,@"Use your main controller",@"Open this setup request on the original Device 1 installation.");return;}
+            UIAlertController *confirm=[UIAlertController alertControllerWithTitle:@"Add this device?"message:@"Reserve a unique controller address and share an invitation for this installation. Keep the invitation private."preferredStyle:UIAlertControllerStyleAlert];
+            [confirm addAction:[UIAlertAction actionWithTitle:@"Cancel"style:UIAlertActionStyleCancel handler:nil]];[confirm addAction:[UIAlertAction actionWithTitle:@"Create invitation"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){self.enrollmentRequest=request;[self exportBackup];}]];[self presentViewController:confirm animated:YES completion:nil];
+        };if(self.presentedViewController==controller)[controller dismissViewControllerAnimated:YES completion:approve];else dispatch_async(dispatch_get_main_queue(),approve);return;
+    }
     NSDictionary *document=[HPHomeArchive readData:data error:&error];
     if(scoped)[url stopAccessingSecurityScopedResource];
     NSDictionary *preferences=[NSUserDefaults.standardUserDefaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier];
@@ -295,6 +333,7 @@ static void HPDidAppear(id self,SEL selector,BOOL animated) {
     HPThemeController(self);
     [[HPManager shared]install];
     HPEnhanceHome(self);
+    if([NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"]){UIViewController *top=HPTop();if(![top isKindOfClass:HPPanel.class]&&![top isKindOfClass:UIAlertController.class]&&![top isKindOfClass:UIDocumentPickerViewController.class])dispatch_async(dispatch_get_main_queue(),^{[[HPManager shared]show];});}
 }
 __attribute__((constructor)) static void HPInitialize(void) {
     @autoreleasepool {
