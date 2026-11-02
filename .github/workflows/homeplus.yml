@@ -145,3 +145,4 @@ jobs:
             build/Smoke.stdout
             build/Smoke.stderr
             build/failure-report.json
+# Enrollment presentation covers native pages and excludes system share sheets.
