@@ -1,0 +1,28 @@
+name: SYLVANIA Plus quick build
+on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.inc', 'smarthome-plus/*.m', 'smarthome-plus/*.h', '.github/workflows/homeplus-quick.yml']
+  workflow_dispatch:
+concurrency:
+  group: homeplus-quick
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile iOS 14 add-on and launch screen
+        run: |
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          codesign --force --sign - build/HomePlus.dylib
+          file build/HomePlus.dylib
+          xcrun ibtool --compile build/HomePlusLaunch.storyboardc smarthome-plus/HomePlusLaunch.storyboard --minimum-deployment-target 14.0 --target-device iphone --target-device ipad
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HomePlus-arm64
+          path: |
+            build/HomePlus.dylib
+            build/HomePlusLaunch.storyboardc
