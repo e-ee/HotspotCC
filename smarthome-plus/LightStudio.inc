@@ -326,10 +326,11 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 @end
 @interface HPModeCard : UIButton
 @property(nonatomic,strong) CAGradientLayer *palette;
+@property(nonatomic,strong) UILabel *caption;
 @property(nonatomic,strong) NSString *recipeID;
 @end
 @implementation HPModeCard
-- (void)layoutSubviews{[super layoutSubviews];self.palette.frame=self.bounds;}
+- (void)layoutSubviews{[super layoutSubviews];self.palette.frame=self.bounds;self.caption.frame=CGRectInset(self.bounds,9,8);[self bringSubviewToFront:self.caption];}
 @end
 
 @interface HPStudioScrollView:UIScrollView @end
@@ -385,7 +386,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     HPModeCard *button=[[HPModeCard alloc]initWithFrame:CGRectZero];NSMutableArray *colors=[NSMutableArray new];
     for(int n=0;n<3;n++){HPColor sample=HPStudioTarget(mode,journey,0,45,n*.5,.35,.8,1,0);[colors addObject:(id)[UIColor colorWithHue:sample.hue saturation:sample.saturation brightness:.22+.05*n alpha:1].CGColor];}
     button.palette=[CAGradientLayer layer];button.palette.colors=colors;button.palette.startPoint=CGPointMake(0,0);button.palette.endPoint=CGPointMake(1,1);[button.layer insertSublayer:button.palette atIndex:0];button.layer.cornerRadius=17;button.layer.masksToBounds=YES;button.layer.borderWidth=.5;button.layer.borderColor=[UIColor colorWithWhite:1 alpha:.13].CGColor;[button.heightAnchor constraintEqualToConstant:96].active=YES;
-    NSMutableAttributedString *title=[[NSMutableAttributedString alloc]initWithString:[NSString stringWithFormat:@"%@\n%@",name,detail]attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,NSFontAttributeName:[UIFont systemFontOfSize:12]}];[title addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]range:NSMakeRange(0,name.length)];[button setAttributedTitle:title forState:UIControlStateNormal];button.titleLabel.numberOfLines=3;button.titleLabel.textAlignment=NSTextAlignmentCenter;button.contentEdgeInsets=UIEdgeInsetsMake(8,9,8,9);return button;
+    NSMutableAttributedString *title=[[NSMutableAttributedString alloc]initWithString:[NSString stringWithFormat:@"%@\n%@",name,detail]attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,NSFontAttributeName:[UIFont systemFontOfSize:12]}];[title addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]range:NSMakeRange(0,name.length)];button.caption=[UILabel new];button.caption.attributedText=title;button.caption.numberOfLines=3;button.caption.textAlignment=NSTextAlignmentCenter;button.caption.userInteractionEnabled=NO;[button addSubview:button.caption];button.accessibilityLabel=[NSString stringWithFormat:@"%@, %@",name,detail];return button;
 }
 - (void)buildGallery{
     for(UIView *view in [self.gallery.arrangedSubviews copy]){[self.gallery removeArrangedSubview:view];[view removeFromSuperview];}
