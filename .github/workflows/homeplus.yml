@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -24,6 +27,8 @@ jobs:
           ./build/test-studio-presets
           cc -std=c11 -O2 -Wall -Wextra -Werror smarthome-plus/test_effects.c -lm -o build/test-effects
           ./build/test-effects
+          clang -fobjc-arc -fblocks smarthome-plus/HomeArchive.m smarthome-plus/test_enrollment.m -framework Foundation -o build/test-enrollment
+          ./build/test-enrollment
       - name: Verify saved scenes with real Realm 10.11
         run: |
           curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 https://github.com/realm/realm-swift/releases/download/v10.11.0/Carthage.xcframework.zip --output build/realm-sdk.zip
