@@ -62,7 +62,17 @@ def verify(binary):
             uc.reg_write(register, struct.unpack('<I', struct.pack('<f', value))[0])
         uc.emu_start(0x1002e4070, stop, count=2000)
         assert captures[-1] == dict(target=0x234, lightness=lightness, hue=hue, saturation=saturation)
-    print(json.dumps({'native_app_color_contract': 'degrees / percent', 'actual_native_calls': captures, 'passed': True}))
+    # Execute the original scene enum's raw-value initializer and getter.
+    # Its fifth case (HSL colour) is persisted as 8, not its ordinal 4.
+    raw, tag, output = stack+0x200, stack+0x208, stack+0x210
+    uc.mem_write(raw, struct.pack('<q', 8))
+    uc.reg_write(UC_ARM64_REG_X0, raw);uc.reg_write(UC_ARM64_REG_X8, tag)
+    uc.reg_write(UC_ARM64_REG_LR, stop);uc.emu_start(0x10012d448, stop, count=100)
+    assert uc.mem_read(tag,1)==b'\x04'
+    uc.reg_write(UC_ARM64_REG_X20, tag);uc.reg_write(UC_ARM64_REG_X8, output)
+    uc.reg_write(UC_ARM64_REG_LR, stop);uc.emu_start(0x10012d478, stop, count=100)
+    assert struct.unpack('<q',uc.mem_read(output,8))[0]==8
+    print(json.dumps({'native_app_color_contract': 'degrees / percent', 'actual_native_calls': captures, 'native_scene_hsl_device_type':8, 'passed': True}))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser();parser.add_argument('executable');verify(parser.parse_args().executable)
