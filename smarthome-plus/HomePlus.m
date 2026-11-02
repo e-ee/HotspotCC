@@ -242,15 +242,23 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     NSURL *url=urls.firstObject;if(!url)return;
     NSNumber *size;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
-    if(size.unsignedLongLongValue>5*1024*1024){HPAlert(self,@"Could not import",@"This scene file is too large.");return;}
+    // Defer alerts until the system picker has actually finished dismissing.
+    if(size.unsignedLongLongValue>5*1024*1024){
+        [controller dismissViewControllerAnimated:YES completion:^{HPAlert(self,@"Could not import",@"This scene file is too large.");}];return;
+    }
     NSError *error;NSData *data=[NSData dataWithContentsOfURL:url options:0 error:&error];
     id raw=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]:nil;
     NSDictionary *document=[HPSceneTransfer validatedDocument:raw meshUUID:HPMeshUUID() error:&error];
-    if(!document){HPAlert(self,@"Could not import",error.localizedDescription);return;}
+    if(!document){
+        NSString *message=error.localizedDescription;
+        [controller dismissViewControllerAnimated:YES completion:^{HPAlert(self,@"Could not import",message);}];return;
+    }
     UIAlertController *confirmation=[UIAlertController alertControllerWithTitle:@"Import scenes?" message:[NSString stringWithFormat:@"Import %lu scenes into this device. Matching scene IDs will be replaced. Other scenes and light pairings stay as they are.",(unsigned long)[document[@"routines"] count]] preferredStyle:UIAlertControllerStyleAlert];
     [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [confirmation addAction:[UIAlertAction actionWithTitle:@"Import" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[self importScenes:document[@"routines"]];}]];
-    [self presentViewController:confirmation animated:YES completion:nil];
+    if(self.presentedViewController==controller)
+        [controller dismissViewControllerAnimated:YES completion:^{[self presentViewController:confirmation animated:YES completion:nil];}];
+    else dispatch_async(dispatch_get_main_queue(),^{[self presentViewController:confirmation animated:YES completion:nil];});
 }
 - (void)importScenes:(NSArray *)scenes {
     id realm=nil;
