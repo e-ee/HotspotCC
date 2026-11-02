@@ -32,6 +32,15 @@ Read timeouts explicitly cancel their own message handle. Cache values use raw
 The vendor's degree/percentage field units were verified in the supplied native
 executable; upstream normalized mesh examples are not this app's contract.
 
+Version 3.5.1 distinguishes deliberate control changes from ambient evolution.
+A selected mode or brightness/depth value is sent on each bulb's next scheduled
+visit, using the same explicit four-second native fade. Subsequent automatic
+motion retains the slow adjacent-target limiter. The earlier limiter could take
+nearly four minutes to move from Aurora to Embers; its delay was inappropriate
+for deliberate controls. This does not change the radio pacing or vendor units.
+The motion slider changes phase rate from 0.2x to 3.0x; colour depth can now reach
+100% saturation instead of multiplying an already muted palette.
+
 ## Manufacturer downloads
 
 The firmware server remains reachable, independently of the discontinued cloud
