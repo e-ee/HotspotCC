@@ -195,7 +195,8 @@ def build(config_zip, module, ldid):
                 subprocess.run([str(ldid),'-S'+str(entitlement_path) if path==binary else '-S',str(path)],check=True)
         verify_signatures(binary);verify_signatures(app/'Frameworks/HomePlus.dylib')
         assert verify_ios14_deployment(app)>=18
-        out=output/f'SYLVANIA_Plus_Device_{index}_iOS14plus.ipa'
+        destination=output/f'SYLVANIA_Plus_Device_{index}_iOS14plus.ipa'
+        out=destination.with_suffix('.ipa.pending')
         with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(staging.rglob('*')):
                 if path.is_file():archive.write(path,path.relative_to(staging))
@@ -205,6 +206,8 @@ def build(config_zip, module, ldid):
             assert verify['Preferences']['currenProvisionerUUID_key']==identity['uuid']
             assert archive.read(app_path+'SmartHome Prd')[GATE:GATE+4]==NOP
             assert verify['Documents']['default.realm']==config.read('Documents/default.realm')
+        out.replace(destination)
+        out=destination
         report.append({'filename':out.name,'bytes':out.stat().st_size,'sha256':hashlib.sha256(out.read_bytes()).hexdigest(),
                        'profile':identity['name'],'controller_address':f"{identity['address']:04X}"})
     (output/'SHA256.json').write_text(json.dumps(report,indent=2)+'\n')
