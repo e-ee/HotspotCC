@@ -14,6 +14,14 @@ static NSUInteger PendingReads,CancelledReads;
 static NSMutableArray *MarkerWrites;
 static NSUInteger ExplicitFadedWrites,AmbientWrites;
 static uint16_t FailReadTarget;
+static NSString *TestWait;
+static void HPTestFailure(const char *condition,const char *file,int line) __attribute__((noreturn));
+static void HPTestFailure(const char *condition,const char *file,int line){
+    NSDictionary *failure=@{@"condition":@(condition),@"file":@(file),@"line":@(line),@"wait":TestWait?:@"",@"writes":@(Writes.count),@"reads":@(Reads.count),@"pendingReads":@(PendingReads),@"markers":MarkerWrites?:@[],@"firstLamp":LampValues[@0x20]?:@{}};
+    NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"failure-report.json"];[[NSJSONSerialization dataWithJSONObject:failure options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES];abort();
+}
+#undef assert
+#define assert(condition) ((condition)?(void)0:HPTestFailure(#condition,__FILE__,__LINE__))
 @interface HPMockLamp:NSObject
 @property(nonatomic) uint16_t address;
 @property(nonatomic,strong) NSString *name,*UUID;
@@ -183,11 +191,17 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
 static id Shared(NSString *name){return ((id(*)(id,SEL))objc_msgSend)(NSClassFromString(name),NSSelectorFromString(@"shared"));}
 static void Later(double seconds,dispatch_block_t block){dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(seconds*NSEC_PER_SEC)),dispatch_get_main_queue(),block);}
 static void WaitUntil(double deadline,NSString *name,BOOL(^predicate)(void),dispatch_block_t completion){
+    TestWait=name;
     if(predicate()){completion();return;}
     if(NSProcessInfo.processInfo.systemUptime>=deadline){NSLog(@"Timed out waiting for %@: markers %lu, pending reads %lu, last marker %@",name,(unsigned long)MarkerWrites.count,(unsigned long)PendingReads,MarkerWrites.lastObject);assert(predicate());return;}
     Later(.1,^{WaitUntil(deadline,name,predicate,completion);});
 }
 static void Until(double seconds,NSString *name,BOOL(^predicate)(void),dispatch_block_t completion){WaitUntil(NSProcessInfo.processInfo.systemUptime+seconds,name,predicate,completion);}
+static void RealScreen(dispatch_block_t completion){
+    NSString *documents=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;
+    assert([[@"ready"dataUsingEncoding:NSUTF8StringEncoding]writeToFile:[documents stringByAppendingPathComponent:@"ActualStudio.request"]atomically:YES]);
+    Until(30,@"operating-system screen capture",^BOOL{return [NSFileManager.defaultManager fileExistsAtPath:[documents stringByAppendingPathComponent:@"ActualStudio.done"]];},completion);
+}
 static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer *renderer=[[UIGraphicsImageRenderer alloc]initWithBounds:window.bounds];UIImage *image=[renderer imageWithActions:^(UIGraphicsImageRendererContext *context){NSArray *windows=[UIApplication.sharedApplication.windows sortedArrayUsingComparator:^NSComparisonResult(UIWindow *a,UIWindow *b){return a.windowLevel<b.windowLevel?NSOrderedAscending:NSOrderedDescending;}];for(UIWindow *w in windows)if(!w.hidden)[w drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];}];NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:name];assert([UIImagePNGRepresentation(image)writeToFile:path atomically:YES]);}
 static void AssertVisibleCardText(UIViewController *studio){
     // Metadata alone missed labels that disappeared after a round trip through
@@ -257,7 +271,7 @@ static void AssertVisibleCardText(UIViewController *studio){
     Until(4,@"Prism selection",^BOOL{return [[engine valueForKey:@"retargets"]count]==0;},^{NSDictionary *before=[LampValues copy];UIButton *shuffle=[self.studio valueForKey:@"shuffleButton"];UISegmentedControl *category=[self.studio valueForKey:@"category"];assert(shuffle.superview==category.superview&&CGRectGetMaxY(shuffle.frame)<CGRectGetMinY(category.frame));uint32_t seed=[[engine valueForKey:@"variation"]unsignedIntValue];[shuffle sendActionsForControlEvents:UIControlEventTouchUpInside];assert([[engine valueForKey:@"variation"]unsignedIntValue]!=seed&&[[engine valueForKey:@"lastMode"]intValue]==5);
         Until(4,@"shuffled colours",^BOOL{return [[engine valueForKey:@"retargets"]count]==0;},^{double change=0;for(NSNumber *key in LampValues)change+=abs([LampValues[key][@"hue"]intValue]-[before[key][@"hue"]intValue]);assert(change>50);AssertVisibleCardText(self.studio);SaveScreen(self.window,@"ShuffleColours.png");[engine stop];NSDictionary *held=[LampValues copy];double phase=[[engine valueForKey:@"phase"]doubleValue];[shuffle sendActionsForControlEvents:UIControlEventTouchUpInside];
             Until(4,@"shuffled paused look",^BOOL{return ![[engine valueForKey:@"adjusting"]boolValue];},^{assert([[engine valueForKey:@"mode"]intValue]==-1&&[[engine valueForKey:@"phase"]doubleValue]==phase);for(NSNumber *key in LampValues){assert(abs([LampValues[key][@"light"]intValue]-[held[key][@"light"]intValue])<=1&&abs([LampValues[key][@"sat"]intValue]-[held[key][@"sat"]intValue])<=1);}NSDictionary *recipe=[engine recipeNamed:@"Shuffled Prism"];assert([HPStudioPresets validatedRecipe:recipe error:nil]&&[recipe[@"variation"]unsignedIntValue]==[[engine valueForKey:@"variation"]unsignedIntValue]);[engine restoreColours];
-                Until(4,@"original palette restored",^BOOL{return ![[engine valueForKey:@"adjusting"]boolValue];},^{assert([[engine valueForKey:@"variation"]unsignedIntValue]==0);completion();});
+                Until(4,@"original palette restored",^BOOL{return ![[engine valueForKey:@"adjusting"]boolValue];},^{assert([[engine valueForKey:@"variation"]unsignedIntValue]==0);RealScreen(completion);});
             });
         });
     });
