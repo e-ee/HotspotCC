@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import "SceneCapture.h"
 #include <assert.h>
+#include <math.h>
 static NSMutableArray *Writes,*Reads,*BrightnessWrites;
 static NSMutableDictionary *LampValues,*LastTargets;
 static BOOL QueueBusy;
