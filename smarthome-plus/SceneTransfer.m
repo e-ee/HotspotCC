@@ -1,5 +1,6 @@
 #import "SceneTransfer.h"
 #import <math.h>
+#include <stdint.h>
 
 static BOOL HPString(id value, NSUInteger limit) {
     return [value isKindOfClass:NSString.class] && [value length] > 0 && [value length] <= limit;
@@ -15,6 +16,14 @@ static NSDictionary *HPReject(NSError **error, NSString *message) {
     return nil;
 }
 @implementation HPSceneTransfer
++ (NSArray *)orderedRecords:(NSArray *)records identifiers:(NSArray *)identifiers key:(NSString *)key {
+    NSMutableDictionary *rank=[NSMutableDictionary new];
+    for(NSUInteger n=0;n<identifiers.count;n++)if([identifiers[n] isKindOfClass:NSString.class]&&!rank[identifiers[n]])rank[identifiers[n]]=@(n);
+    return [records sortedArrayWithOptions:NSSortStable usingComparator:^NSComparisonResult(id a,id b){
+        NSNumber *ar=rank[a[key]],*br=rank[b[key]];
+        if(ar&&br)return [ar compare:br];if(ar)return NSOrderedAscending;if(br)return NSOrderedDescending;return NSOrderedSame;
+    }];
+}
 + (NSDictionary *)validatedDocument:(id)document meshUUID:(NSString *)meshUUID error:(NSError **)error {
     if (![document isKindOfClass:NSDictionary.class] ||
         ![document[@"format"] isEqual:@"sylvania-plus-scenes"] ||
@@ -27,7 +36,9 @@ static NSDictionary *HPReject(NSError **error, NSString *message) {
     NSMutableArray *clean = [NSMutableArray new];
     for (id scene in routines) {
         if (![scene isKindOfClass:NSDictionary.class] || !HPString(scene[@"uuid"],128) ||
-            !HPString(scene[@"routineName"],256) || !HPInteger(scene[@"color"],0,65535) ||
+            // Native routine card colours are packed 32-bit ARGB, not mesh HSL.
+            // Older saves can represent the same bits as a signed Int32.
+            !HPString(scene[@"routineName"],256) || !HPInteger(scene[@"color"],INT32_MIN,UINT32_MAX) ||
             ![scene[@"routineList"] isKindOfClass:NSArray.class]) return HPReject(error, @"A scene has invalid fields.");
         if ([identifiers containsObject:scene[@"uuid"]]) return HPReject(error, @"The file contains duplicate scene identifiers.");
         [identifiers addObject:scene[@"uuid"]];
