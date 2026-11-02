@@ -80,6 +80,11 @@ static CGFloat HPMenuHeight(id self,SEL selector,id table,NSIndexPath *path){
     if(path.section==section&&path.row==row)return 0;
     return ((CGFloat(*)(id,SEL,id,id))HPMenuHeightOriginal)(self,selector,table,path);
 }
+static BOOL HPHiddenMenuSection(id object,NSInteger section){return section==HPStoredInteger(object,"HELP_AND_SUPPORT",NSIntegerMin)||section==HPStoredInteger(object,"LEGAL_SECTION",NSIntegerMin);}
+static IMP HPMenuRowsOriginal,HPMenuHeaderOriginal,HPMenuHeaderHeightOriginal;
+static NSInteger HPMenuRows(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return 0;return ((NSInteger(*)(id,SEL,id,NSInteger))HPMenuRowsOriginal)(self,selector,table,section);}
+static id HPMenuHeader(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return nil;return ((id(*)(id,SEL,id,NSInteger))HPMenuHeaderOriginal)(self,selector,table,section);}
+static CGFloat HPMenuHeaderHeight(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return .01;return ((CGFloat(*)(id,SEL,id,NSInteger))HPMenuHeaderHeightOriginal)(self,selector,table,section);}
 static void HPNoExperience(id self,SEL selector,id sender){(void)self;(void)selector;(void)sender;}
 static IMP HPManualHSLOriginal,HPManualCTLOriginal,HPManualOnOffOriginal,HPManualBrightnessOriginal;
 static void HPManualStop(void){if(NSThread.isMainThread)[HPLightEngine.shared stop];else dispatch_async(dispatch_get_main_queue(),^{[HPLightEngine.shared stop];});}
@@ -87,12 +92,6 @@ static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callba
 static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);}
 static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualStop();return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
 static id HPManualBrightness(id self,SEL selector,id target,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,id))HPManualBrightnessOriginal)(self,selector,target,l,callback);}
-static id HPDefaultFadeHSL(id cls,SEL selector,uint16_t target,uint16_t light,uint16_t hue,uint16_t saturation,NSInteger retries,NSInteger responses,BOOL ack,id success,id result){
-    // The vendor's convenience method hard-codes a zero-duration transition.
-    // Omitting its optional transition lets the bulb use its configured default.
-    SEL full=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:transitionTime:delay:retryCount:responseMaxCount:ack:successCallback:resultCallback:");
-    return ((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(cls,full,target,light,hue,saturation,nil,0,retries,responses,ack,success,result);
-}
 static void HPHook(Class cls,NSString *name,IMP replacement,IMP *original){
     Method method=class_getInstanceMethod(cls,NSSelectorFromString(name));if(method){IMP old=method_setImplementation(method,replacement);if(original)*original=old;}
 }
@@ -104,14 +103,16 @@ static void HPInstallEnhancements(void){
     Class profile=NSClassFromString(@"_TtC13SmartHome_Prd26ReMenuProfileTableViewCell");
     HPHook(profile,@"awakeFromNib",(IMP)HPProfileAwake,&HPProfileAwakeOriginal);
     HPHook(profile,@"backButtonAction:",(IMP)HPNoExperience,NULL);
-    HPHook(NSClassFromString(@"_TtC13SmartHome_Prd20ReMenuViewController"),@"tableView:heightForRowAtIndexPath:",(IMP)HPMenuHeight,&HPMenuHeightOriginal);
+    Class menu=NSClassFromString(@"_TtC13SmartHome_Prd20ReMenuViewController");
+    HPHook(menu,@"tableView:heightForRowAtIndexPath:",(IMP)HPMenuHeight,&HPMenuHeightOriginal);
+    HPHook(menu,@"tableView:numberOfRowsInSection:",(IMP)HPMenuRows,&HPMenuRowsOriginal);
+    HPHook(menu,@"tableView:viewForHeaderInSection:",(IMP)HPMenuHeader,&HPMenuHeaderOriginal);
+    HPHook(menu,@"tableView:heightForHeaderInSection:",(IMP)HPMenuHeaderHeight,&HPMenuHeaderHeightOriginal);
     Class api=NSClassFromString(@"DeviceControlApi");
     HPHook(api,@"setHSL:color:sat:lightness:onCompletion:",(IMP)HPManualHSL,&HPManualHSLOriginal);
     HPHook(api,@"setCTL:lightness:temp:onCompletion:",(IMP)HPManualCTL,&HPManualCTLOriginal);
     HPHook(api,@"setOnOff:state:onCompletion:",(IMP)HPManualOnOff,&HPManualOnOffOriginal);
     HPHook(api,@"setBrightness:level:onCompletion:",(IMP)HPManualBrightness,&HPManualBrightnessOriginal);
-    Method hsl=class_getClassMethod(NSClassFromString(@"SDKLibCommand"),NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:retryCount:responseMaxCount:ack:successCallback:resultCallback:"));
-    if(hsl)method_setImplementation(hsl,(IMP)HPDefaultFadeHSL);
     [NSNotificationCenter.defaultCenter addObserverForName:@"HP.OrderChanged" object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         UICollectionView *collection=HPGet(HPHomeController,@"collectionView");
         if(!collection)return;
