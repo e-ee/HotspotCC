@@ -162,12 +162,15 @@ def build(config_zip, module, ldid):
         shutil.copy2(module,app/'Frameworks/HomePlus.dylib')
         launch=ROOT/'HomePlusLaunch.storyboardc'
         assert launch.is_dir(),'Compiled dark launch screen is required'
-        shutil.copytree(launch,app/'HomePlusLaunch.storyboardc',dirs_exist_ok=True)
+        shutil.copytree(launch,app/'HomePlusBlankLaunch360.storyboardc',dirs_exist_ok=True)
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
-                    CFBundleVersion='3510',CFBundleShortVersionString='3.5.1',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
+                    CFBundleVersion='3600',CFBundleShortVersionString='3.6.0',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
-        info['UILaunchStoryboardName']='HomePlusLaunch'
+        for key in list(info):
+            if key.startswith('UILaunch'):info.pop(key)
+        info['UILaunchStoryboardName']='HomePlusBlankLaunch360'
+        info['UILaunchStoryboardName~ipad']='HomePlusBlankLaunch360'
         info.pop('CFBundleURLTypes',None)
         info['UTExportedTypeDeclarations']=[{'UTTypeIdentifier':'com.ledvance.smart.plus.home','UTTypeDescription':'SYLVANIA Plus Home',
             'UTTypeConformsTo':['public.data'],'UTTypeTagSpecification':{'public.filename-extension':['sylhome','sylbackup'],'public.mime-type':'application/x-sylvania-home'}}]
