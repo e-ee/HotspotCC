@@ -137,7 +137,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
     self.button.frame = CGRectMake(window.bounds.size.width-78,window.bounds.size.height-window.safeAreaInsets.bottom-104,64,40);
     self.button.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleTopMargin;
     UIViewController *top=HPTop();
-    self.button.hidden=[top isKindOfClass:HPPanel.class]||[top isKindOfClass:HPStudio.class]||[top isKindOfClass:HPPathEditor.class];
+    self.button.hidden=[top isKindOfClass:HPPanel.class]||[top isKindOfClass:HPStudio.class]||[top isKindOfClass:HPPathEditor.class]||[top isKindOfClass:HPBulbSettings.class];
     [window bringSubviewToFront:self.button];
 }
 - (void)show {
