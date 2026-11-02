@@ -70,6 +70,24 @@ static BOOL QueueBusy;
 - (id)setBrightness:(id)target level:(int)level onCompletion:(id)callback{return nil;}
 @end
 
+// Mimic the original menu's ABI and its hard-coded light-theme views.
+@interface _TtC13SmartHome_Prd20ReMenuViewController:UIViewController {
+@public NSInteger HELP_AND_SUPPORT,LEGAL_SECTION;
+}
+@property(nonatomic,strong) UILabel *fixtureLabel;
+- (NSInteger)tableView:(id)table numberOfRowsInSection:(NSInteger)section;
+- (id)tableView:(id)table viewForHeaderInSection:(NSInteger)section;
+- (CGFloat)tableView:(id)table heightForHeaderInSection:(NSInteger)section;
+@end
+@implementation _TtC13SmartHome_Prd20ReMenuViewController
+- (instancetype)init{self=[super init];if(self){HELP_AND_SUPPORT=3;LEGAL_SECTION=4;}return self;}
+- (void)viewDidLoad{[super viewDidLoad];self.view.backgroundColor=UIColor.whiteColor;self.fixtureLabel=[[UILabel alloc]initWithFrame:CGRectMake(24,160,300,80)];self.fixtureLabel.text=@"Your home, after dark";self.fixtureLabel.textColor=UIColor.blackColor;self.fixtureLabel.font=[UIFont systemFontOfSize:24];[self.view addSubview:self.fixtureLabel];}
+- (NSInteger)tableView:(id)table numberOfRowsInSection:(NSInteger)section{return 2;}
+- (id)tableView:(id)table viewForHeaderInSection:(NSInteger)section{return [UIView new];}
+- (CGFloat)tableView:(id)table heightForHeaderInSection:(NSInteger)section{return 44;}
+@end
+static void SaveScreen(UIWindow *window,NSString *name){UIGraphicsImageRenderer *renderer=[[UIGraphicsImageRenderer alloc]initWithBounds:window.bounds];UIImage *image=[renderer imageWithActions:^(UIGraphicsImageRendererContext *context){[window drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];}];NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:name];assert([UIImagePNGRepresentation(image)writeToFile:path atomically:YES]);}
+
 @interface HPSmokeDelegate:UIResponder<UIApplicationDelegate>
 @property(nonatomic,strong) UIWindow *window;
 @end
@@ -93,10 +111,30 @@ static BOOL QueueBusy;
                 NSUInteger stopped=Writes.count;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,400*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
                     assert(Writes.count==stopped);
-                    NSDictionary *report=@{@"passed":@YES,@"targets":@(targets.count),@"writes":@(Writes.count),@"differentHues":@(hues.count),@"backpressure":@YES,@"manualControlStopsEffect":@YES};
+                    SaveScreen(self.window,@"LightStudio.png");
+                    _TtC13SmartHome_Prd20ReMenuViewController *menu=[_TtC13SmartHome_Prd20ReMenuViewController new];
+                    assert([menu tableView:nil numberOfRowsInSection:0]==2);
+                    assert([menu tableView:nil numberOfRowsInSection:3]==0&&[menu tableView:nil numberOfRowsInSection:4]==0);
+                    assert([menu tableView:nil viewForHeaderInSection:3]==nil&&[menu tableView:nil heightForHeaderInSection:4]<1);
+                    self.window.rootViewController=menu;
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,250*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
+                        assert(self.window.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark);
+                        CGFloat r,g,b,a;[menu.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.2&&g<.2&&b<.2);
+                        [[menu.fixtureLabel.textColor resolvedColorWithTraitCollection:menu.traitCollection]getRed:&r green:&g blue:&b alpha:&a];assert(r>.8&&g>.8&&b>.8);
+                        SaveScreen(self.window,@"LegacyDark.png");
+                        UITableViewController *panel=[[NSClassFromString(@"HPPanel")alloc]initWithStyle:UITableViewStyleInsetGrouped];self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:panel];
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,250*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
+                            assert([panel.tableView.dataSource tableView:panel.tableView numberOfRowsInSection:2]==2);
+                            UITableViewCell *export=[panel.tableView.dataSource tableView:panel.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:2]];
+                            UITableViewCell *import=[panel.tableView.dataSource tableView:panel.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:2]];
+                            assert([export.textLabel.text isEqual:@"Export Home"]&&[import.textLabel.text isEqual:@"Import Home"]);
+                            SaveScreen(self.window,@"HomeDark.png");
+                    NSDictionary *report=@{@"passed":@YES,@"targets":@(targets.count),@"writes":@(Writes.count),@"differentHues":@(hues.count),@"backpressure":@YES,@"manualControlStopsEffect":@YES,@"legacyDarkTheme":@YES,@"retiredMenuEntriesHidden":@YES,@"homeTransferButtons":@YES,@"vendorDegreePercentUnits":@YES};
                     NSData *data=[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];
                     NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];
                     assert([data writeToFile:path atomically:YES]);
+                        });
+                    });
                 });
             });
         });
