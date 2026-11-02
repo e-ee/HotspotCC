@@ -61,10 +61,14 @@ jobs:
           done
           cp "$CONTAINER/Documents/smoke-report.json" build/smoke-report.json
           cat build/smoke-report.json
-          xcrun simctl io "$DEVICE" screenshot build/LightStudio.png
+          cp "$CONTAINER/Documents/LightStudio.png" build/LightStudio.png
+          cp "$CONTAINER/Documents/LegacyDark.png" build/LegacyDark.png
+          cp "$CONTAINER/Documents/HomeDark.png" build/HomeDark.png
       - uses: actions/upload-artifact@v4
         with:
           name: Studio-UI-Smoke
           path: |
             build/smoke-report.json
             build/LightStudio.png
+            build/LegacyDark.png
+            build/HomeDark.png
