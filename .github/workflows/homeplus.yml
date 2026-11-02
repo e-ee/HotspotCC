@@ -2,7 +2,7 @@ name: SYLVANIA Plus
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', '.github/workflows/homeplus.yml']
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -19,6 +19,8 @@ jobs:
           mkdir -p build
           clang -fobjc-arc -fblocks smarthome-plus/SceneTransfer.m smarthome-plus/test_scene_transfer.m -framework Foundation -o build/test-scene-transfer
           ./build/test-scene-transfer
+          cc -std=c11 -O2 -Wall -Wextra -Werror smarthome-plus/test_effects.c -lm -o build/test-effects
+          ./build/test-effects
       - name: Compile iOS 15 add-on
         run: |
           xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
