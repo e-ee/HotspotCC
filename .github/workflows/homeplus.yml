@@ -14,16 +14,18 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Test scene transfer boundaries and validation
+      - name: Test Home transfer, ordering and colour contracts
         run: |
           mkdir -p build
+          clang -fobjc-arc -fblocks smarthome-plus/HomeArchive.m smarthome-plus/test_home_archive.m -framework Foundation -o build/test-home-archive
+          ./build/test-home-archive
           clang -fobjc-arc -fblocks smarthome-plus/SceneTransfer.m smarthome-plus/test_scene_transfer.m -framework Foundation -o build/test-scene-transfer
           ./build/test-scene-transfer
           cc -std=c11 -O2 -Wall -Wextra -Werror smarthome-plus/test_effects.c -lm -o build/test-effects
           ./build/test-effects
       - name: Compile iOS 15 add-on
         run: |
-          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -lsqlite3 -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
           codesign --force --sign - build/HomePlus.dylib
           file build/HomePlus.dylib
       - uses: actions/upload-artifact@v4
@@ -33,10 +35,10 @@ jobs:
       - name: Exercise UIKit and the fourteen-lamp sender
         run: |
           mkdir -p build/StudioSmoke.app
-          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios15.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -Wno-deprecated-declarations -Wno-incompatible-pointer-types
+          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios15.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
           python3 - <<'PY'
           import plistlib,pathlib
-          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'15.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True}
+          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'15.0','UIDeviceFamily':[1,2],'UILaunchScreen':{},'LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
           pathlib.Path('build/StudioSmoke.app/Info.plist').write_bytes(plistlib.dumps(info))
           PY
           codesign --force --sign - build/StudioSmoke.app
