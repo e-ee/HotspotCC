@@ -98,6 +98,28 @@ def verify_signatures(path):
     assert checked,str(path)
     return checked
 
+def verify_ios14_deployment(app):
+    checked=0
+    for path in app.rglob('*'):
+        if not path.is_file():continue
+        b=path.read_bytes()
+        if b[:4]!=bytes.fromhex('cffaedfe'):continue
+        offset=32;found=False
+        for _ in range(struct.unpack_from('<I',b,16)[0]):
+            command,size=struct.unpack_from('<II',b,offset)
+            if command==0x32:
+                platform,minimum=struct.unpack_from('<II',b,offset+8)
+                assert platform==2 and minimum<=0x0e0000,(path.name,hex(minimum))
+                found=True
+            elif command==0x25:
+                minimum=struct.unpack_from('<I',b,offset+8)[0]
+                assert minimum<=0x0e0000,(path.name,hex(minimum))
+                found=True
+            offset+=size
+        assert found,path.name
+        checked+=1
+    return checked
+
 def build(config_zip, module, ldid):
     config = zipfile.ZipFile(config_zip)
     original_ipa = config.read('Documents/decrypted-app.ipa')
@@ -143,7 +165,7 @@ def build(config_zip, module, ldid):
         shutil.copytree(launch,app/'HomePlusLaunch.storyboardc',dirs_exist_ok=True)
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
-                    CFBundleVersion='3300',CFBundleShortVersionString='3.3.0',UIUserInterfaceStyle='Dark',
+                    CFBundleVersion='3400',CFBundleShortVersionString='3.4.0',MinimumOSVersion='14.0',UIUserInterfaceStyle='Dark',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
         info['UILaunchStoryboardName']='HomePlusLaunch'
         info.pop('CFBundleURLTypes',None)
@@ -169,7 +191,8 @@ def build(config_zip, module, ldid):
                 path.chmod(0o755)
                 subprocess.run([str(ldid),'-S'+str(entitlement_path) if path==binary else '-S',str(path)],check=True)
         verify_signatures(binary);verify_signatures(app/'Frameworks/HomePlus.dylib')
-        out=output/f'SYLVANIA_Plus_Device_{index}_iOS15.ipa'
+        assert verify_ios14_deployment(app)>=18
+        out=output/f'SYLVANIA_Plus_Device_{index}_iOS14plus.ipa'
         with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(staging.rglob('*')):
                 if path.is_file():archive.write(path,path.relative_to(staging))
