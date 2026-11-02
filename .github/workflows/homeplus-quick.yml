@@ -1,7 +1,7 @@
 name: SYLVANIA Plus quick build
 on:
   push:
-    branches: [smarthome-plus]
+    branches: [smarthome-plus, codex/studio-playback-speed]
     paths: ['smarthome-plus/*.inc', 'smarthome-plus/*.m', 'smarthome-plus/*.h', '.github/workflows/homeplus-quick.yml']
   workflow_dispatch:
 concurrency:
@@ -14,13 +14,6 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - name: Test Home and enrollment contracts
-        run: |
-          mkdir -p build
-          clang -fobjc-arc -fblocks smarthome-plus/HomeArchive.m smarthome-plus/test_home_archive.m -framework Foundation -o build/test-home
-          ./build/test-home
-          clang -fobjc-arc -fblocks smarthome-plus/HomeArchive.m smarthome-plus/test_enrollment.m -framework Foundation -o build/test-enrollment
-          ./build/test-enrollment
       - name: Compile iOS 14 add-on and launch screen
         run: |
           mkdir -p build

@@ -2,6 +2,7 @@
 #import "EffectPatterns.h"
 @implementation HPStudioPresets
 + (NSDictionary *)validatedRecipe:(NSDictionary *)recipe error:(NSError **)error {
+    NSMutableDictionary *result=nil;
     if(error)*error=nil;
     if(![recipe isKindOfClass:NSDictionary.class])goto invalid;
     for(NSString *key in @[@"id",@"name",@"scope"]){id value=recipe[key];if(![value isKindOfClass:NSString.class]||![value length]||[value length]>100)goto invalid;}
@@ -15,7 +16,10 @@
     if([recipe[@"brightness"]doubleValue]<.0799||[recipe[@"brightness"]doubleValue]>1||[recipe[@"motion"]doubleValue]<.1499||[recipe[@"motion"]doubleValue]>1||[recipe[@"depth"]doubleValue]<.25||[recipe[@"depth"]doubleValue]>1)goto invalid;
     if([recipe[@"variation"]doubleValue]<0||[recipe[@"variation"]doubleValue]>UINT32_MAX||[recipe[@"variation"]doubleValue]!=[recipe[@"variation"]unsignedIntValue])goto invalid;
     for(NSString *key in @[@"phase",@"journeyElapsed"])if([recipe[key]doubleValue]<0||[recipe[key]doubleValue]>1e9)goto invalid;
-    return [recipe dictionaryWithValuesForKeys:@[@"id",@"name",@"scope",@"mode",@"journey",@"brightness",@"motion",@"depth",@"variation",@"phase",@"journeyElapsed"]];
+    if(recipe[@"playbackSpeed"]&&(![recipe[@"playbackSpeed"]isKindOfClass:NSNumber.class]||!isfinite([recipe[@"playbackSpeed"]doubleValue])||[recipe[@"playbackSpeed"]doubleValue]<.25||[recipe[@"playbackSpeed"]doubleValue]>10))goto invalid;
+    result=[[recipe dictionaryWithValuesForKeys:@[@"id",@"name",@"scope",@"mode",@"journey",@"brightness",@"motion",@"depth",@"variation",@"phase",@"journeyElapsed"]]mutableCopy];
+    if(recipe[@"playbackSpeed"])result[@"playbackSpeed"]=recipe[@"playbackSpeed"];
+    return result;
 
 invalid:
     if(error)*error=[NSError errorWithDomain:@"HP.StudioPresets" code:1 userInfo:@{NSLocalizedDescriptionKey:@"This moving mood has invalid settings."}];

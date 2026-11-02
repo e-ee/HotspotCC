@@ -57,11 +57,26 @@ int main(void){
     assert(HPHeldDepth(.4,.5,1)==1&&HPHeldDepth(.4,.5,.25)==0&&fabs(HPHeldDepth(.4,.5,.5)-.4)<.000001);
     for(int n=0;n<20;n++){double position=n/20.,phase=n*17.;HPColor original=HPPattern(0,phase,position,.6,1);assert(fabs(original.hue-(.36+.42*HPWave(position*.8-phase/180.)))<.000001);assert(fabs(original.saturation-(.72+.24*HPWave(position-phase/240.)))<.000001);}
     double green=0;for(int n=0;n<100;n++){HPColor a=HPPattern2D(24,0,n/99.,.65,.6,1);if(a.hue*360>=108&&a.hue*360<=145&&a.saturation>.8)green++;}assert(green>20);
-    assert(fabs(HPMotionRate(.15)-.2)<.000001&&fabs(HPMotionRate(1)-10)<.000001&&HPMotionRate(.9)>HPMotionRate(.5));
+    assert(fabs(HPMotionRate(.15)-.2)<.000001&&fabs(HPMotionRate(1)-40)<.000001&&HPMotionRate(.9)>HPMotionRate(.5));
     HPColor prism=HPStudioTarget(5,-1,0,100,.3,.7,.6,1,0);double recolour=0;for(int seed=1;seed<30;seed++){HPColor shuffled=HPStudioTarget(5,-1,0,100,.3,.7,.6,1,seed);recolour+=fabs(shuffled.hue-prism.hue);assert(shuffled.lightness>=.27&&shuffled.lightness<=.34);}assert(recolour>1);
     HPWireColor blue=HPVendorColor((HPColor){240.f/360.f,.8f,.6f});assert(blue.hue==240&&blue.saturation==80&&blue.lightness==60);
     HPWireColor vendor=HPVendorColor(HPStatusColor(240,80,60));assert(vendor.hue==240&&vendor.saturation==80&&vendor.lightness==60);
     HPWireColor normalized=HPVendorColor(HPStatusColor(43690,52428,39321));assert(normalized.hue==240&&normalized.saturation==80&&normalized.lightness==60);
     assert(HPSmoothTransitionSteps(14)==40&&HPSmoothTransitionSteps(40)==60);
+    assert(HPPlaybackRate(NAN)==1&&HPPlaybackRate(-1)==.25&&HPPlaybackRate(100)==10);
+    assert(HPPlaybackTransitionSteps(14,1)==40&&HPPlaybackTransitionSteps(14,10)==4&&HPPlaybackTransitionSteps(14,.25)==(0x40|16));
+    HPColor old={.1,.2,.3},target={.9,.8,.7};
+    HPColor normal=HPPlaybackDrift(old,target,1,1),fast=HPPlaybackDrift(old,target,1,10),legacy=HPDrift(old,target,1),bounded=HPPlaybackDrift(old,target,500,10);
+    assert(normal.hue==legacy.hue&&normal.saturation==legacy.saturation&&normal.lightness==legacy.lightness);
+    assert(fast.hue-old.hue>9*(normal.hue-old.hue));
+    assert(fabs(bounded.hue-old.hue)<=20./360.+.000001);
+    // Every mood and journey must reach the same target in one tenth the wall time at 10x.
+    for(int journey=-1;journey<HP_JOURNEY_COUNT;journey++)for(int mode=0;mode<HP_MODE_COUNT;mode++){
+        double time=317.25;
+        HPColor a=HPStudioTarget(mode,journey,time,time*HPMotionRate(.5),.3,.7,.6,.8,0);
+        double accelerated=time/10*HPPlaybackRate(10);
+        HPColor b=HPStudioTarget(mode,journey,accelerated,accelerated*HPMotionRate(.5),.3,.7,.6,.8,0);
+        assert(fabs(a.hue-b.hue)<.000001&&fabs(a.lightness-b.lightness)<.000001);
+    }
     puts("Thirty-two moods and six seamless journeys: 2D spatial fields, adjacent-light continuity, continuous motion, limited contrast, bounded hardware steps, no restart/catch-up jumps, vendor/normalized status conversion and four-second fades passed.");
 }

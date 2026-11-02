@@ -12,5 +12,8 @@ int main(void){@autoreleasepool{
     for(NSUInteger n=0;n<badKeys.count;n++){NSMutableDictionary *bad=[recipe mutableCopy];bad[badKeys[n]]=badValues[n];assert(![HPStudioPresets validatedRecipe:bad error:nil]);}
     assert(([HPStudioPresets validRecipes:@[recipe,recipe,@{},@"bad"]].count==1));
     assert([HPStudioPresets validRecipes:@"bad"].count==0);
+    NSMutableDictionary *fast=[recipe mutableCopy];fast[@"playbackSpeed"]=@10;
+    assert([[HPStudioPresets validatedRecipe:fast error:nil]isEqual:fast]);
+    for(id speed in @[@0,@11,@(NAN),@"fast",NSNull.null]){NSMutableDictionary *bad=[recipe mutableCopy];bad[@"playbackSpeed"]=speed;assert(![HPStudioPresets validatedRecipe:bad error:nil]);}
     puts("Moving moods: round-trip fidelity, independent identity, malformed settings, finite values and duplicate protection passed.");
 }}

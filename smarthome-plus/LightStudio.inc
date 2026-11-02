@@ -46,7 +46,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 @property(nonatomic,strong) id assertion;
 @property(nonatomic) NSInteger mode,lastMode,cursor,journey;
 @property(nonatomic) NSUInteger generation;
-@property(nonatomic) float brightness,speed,depth;
+@property(nonatomic) float brightness,speed,depth,playbackSpeed;
 @property(nonatomic) uint32_t variation;
 @property(nonatomic) double lastSent,phase,lastTick,lastConnectAttempt,settleUntil,journeyElapsed;
 @property(nonatomic) BOOL oldIdle,backgroundReady,connecting,needsRead,adjusting;
@@ -61,6 +61,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget;
 - (void)changeBrightness:(float)value;
 - (void)changeMotion:(float)value;
+- (void)changePlaybackSpeed:(float)value;
 
 - (void)changeDepth:(float)value;
 - (void)requestRetarget;
@@ -80,6 +81,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;
     engine.brightness=[prefs objectForKey:@"HP.StudioBrightness"]?HPClamp([prefs floatForKey:@"HP.StudioBrightness"],.08,1):.6;
     engine.speed=[prefs objectForKey:@"HP.StudioMotion"]?HPClamp([prefs floatForKey:@"HP.StudioMotion"],.15,1):.5;
+    engine.playbackSpeed=[prefs objectForKey:@"HP.StudioPlaybackSpeed"]?HPPlaybackRate([prefs doubleForKey:@"HP.StudioPlaybackSpeed"]):1;
     engine.depth=[prefs objectForKey:@"HP.StudioDepth"]?HPClamp([prefs floatForKey:@"HP.StudioDepth"],.25,1):1;
     engine.scope=@"All lights";engine.status=@"Choose a slow drift";
 });return engine;}
@@ -95,15 +97,15 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (NSString *)moodName{return self.journey>=0?HPJourneyNames()[self.journey]:HPThemeNames()[self.lastMode];}
 - (HPColor)targetForLight:(NSDictionary *)light{return HPStudioTarget((int)self.lastMode,(int)self.journey,self.journeyElapsed,self.phase,[light[@"x"]doubleValue],[light[@"y"]doubleValue],self.brightness,self.depth,self.variation);}
 - (NSDictionary *)recipeNamed:(NSString *)name{
-    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed)};
+    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"playbackSpeed":@(self.playbackSpeed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed)};
 }
 - (BOOL)applyRecipe:(NSDictionary *)recipe error:(NSError **)error{
     NSDictionary *valid=[HPStudioPresets validatedRecipe:recipe error:error];if(!valid)return NO;
     if(HPIdentifying){if(error)*error=HPReadError(@"Wait for the identification pulse to finish.");return NO;}
     BOOL found=[valid[@"scope"]isEqual:@"All lights"];for(NSDictionary *group in HPMesh()[@"groups"])if([group[@"name"]isEqual:valid[@"scope"]])found=YES;
     if(!found){if(error)*error=HPReadError(@"The room saved in this mood is not in this Home.");return NO;}
-    [self stop];self.scope=valid[@"scope"];self.brightness=[valid[@"brightness"]floatValue];self.speed=[valid[@"motion"]floatValue];self.depth=[valid[@"depth"]floatValue];self.variation=[valid[@"variation"]unsignedIntValue];self.phase=[valid[@"phase"]doubleValue];self.journeyElapsed=[valid[@"journeyElapsed"]doubleValue];
-    NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;[prefs setFloat:self.brightness forKey:@"HP.StudioBrightness"];[prefs setFloat:self.speed forKey:@"HP.StudioMotion"];[prefs setFloat:self.depth forKey:@"HP.StudioDepth"];
+    [self stop];self.scope=valid[@"scope"];self.brightness=[valid[@"brightness"]floatValue];self.speed=[valid[@"motion"]floatValue];self.playbackSpeed=valid[@"playbackSpeed"]?[valid[@"playbackSpeed"]floatValue]:1;self.depth=[valid[@"depth"]floatValue];self.variation=[valid[@"variation"]unsignedIntValue];self.phase=[valid[@"phase"]doubleValue];self.journeyElapsed=[valid[@"journeyElapsed"]doubleValue];
+    NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;[prefs setFloat:self.brightness forKey:@"HP.StudioBrightness"];[prefs setFloat:self.speed forKey:@"HP.StudioMotion"];[prefs setFloat:self.playbackSpeed forKey:@"HP.StudioPlaybackSpeed"];[prefs setFloat:self.depth forKey:@"HP.StudioDepth"];
     [self activate:[valid[@"mode"]integerValue] journey:[valid[@"journey"]integerValue] reset:NO retarget:YES];
     if(self.mode<0){if(error)*error=HPReadError(self.status);return NO;}return YES;
 }
@@ -165,6 +167,12 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(!isfinite(value))return;self.speed=HPClamp(value,.15,1);[NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];
     self.status=self.mode>=0?@"Motion updated":@"Motion set · tap Resume to see it";
 }
+- (void)changePlaybackSpeed:(float)value{
+    if(!isfinite(value))return;
+    self.playbackSpeed=HPPlaybackRate(value);
+    [NSUserDefaults.standardUserDefaults setFloat:self.playbackSpeed forKey:@"HP.StudioPlaybackSpeed"];
+    self.status=self.mode>=0?@"Playback speed updated":@"Speed set · tap Resume to see it";
+}
 - (void)applyColourVariation:(uint32_t)variation{
     if(![self prepareHeldAdjustment])return;self.variation=variation;
     if(self.adjusting)for(NSDictionary *light in self.lights){HPBulbMotion *held=self.heldTargets[light[@"id"]];if(!held)continue;HPColor c=held.color;c.hue=[self targetForLight:light].hue;held.color=c;}
@@ -198,7 +206,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
         }return;
     }
     if(self.needsRead){self.generation++;[self.states removeAllObjects];[self.sent removeAllObjects];[HPCommandColours removeAllObjects];self.needsRead=NO;self.status=@"Resuming from the light controls";elapsed=0;}
-    if(self.mode>=0){self.phase+=elapsed*HPMotionRate(self.speed);self.journeyElapsed+=elapsed;}
+    if(self.mode>=0){double played=elapsed*HPPlaybackRate(self.playbackSpeed);self.phase+=played*HPMotionRate(self.speed);self.journeyElapsed+=played;}
     id peripheral=HPGet(HPGet(NSClassFromString(@"SigBearer"),@"share"),@"getCurrentPeripheral");SEL ready=NSSelectorFromString(@"canSendWriteWithoutResponse");
     if([peripheral respondsToSelector:ready]&&!((BOOL(*)(id,SEL))objc_msgSend)(peripheral,ready))return;
     if(HPTransportBusy())return;
@@ -217,19 +225,19 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     // A user's choice must reach the sender on the next visit to this bulb,
     // rather than spending minutes behind the 1-degree/sec ambient limiter.
     // The explicit native fade below provides the physical interpolation.
-    BOOL requested=[self.retargets containsObject:key];state.color=requested?target:HPDrift(state.color,target,now-state.updatedAt);state.updatedAt=now;
+    BOOL requested=[self.retargets containsObject:key];state.color=requested?target:HPPlaybackDrift(state.color,target,now-state.updatedAt,self.adjusting?1:self.playbackSpeed);state.updatedAt=now;
     HPWireColor wire=HPVendorColor(state.color);NSArray *previous=self.sent[key];
     if(previous&&[previous[0]unsignedShortValue]==wire.lightness&&[previous[1]unsignedShortValue]==wire.hue&&[previous[2]unsignedShortValue]==wire.saturation){[self completeRetarget:key];return;}
-    uint8_t steps=HPSmoothTransitionSteps((unsigned)self.lights.count);
+    uint8_t steps=(requested||self.adjusting)?HPSmoothTransitionSteps((unsigned)self.lights.count):HPPlaybackTransitionSteps((unsigned)self.lights.count,self.playbackSpeed);
     id transition=((id(*)(id,SEL))objc_msgSend)(NSClassFromString(@"SigTransitionTime"),@selector(alloc));
     transition=((id(*)(id,SEL,uint8_t))objc_msgSend)(transition,NSSelectorFromString(@"initWithRawValue:"),steps);
     SEL set=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:transitionTime:delay:retryCount:responseMaxCount:ack:successCallback:resultCallback:");Class sdk=NSClassFromString(@"SDKLibCommand");
     @try{
         if(![sdk respondsToSelector:set]){[self stop];self.status=@"The colour backend is unavailable";return;}
         ((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,set,[light[@"address"]unsignedShortValue],wire.lightness,wire.hue,wire.saturation,transition,0,0,0,NO,nil,nil);
-        self.sent[key]=@[@(wire.lightness),@(wire.hue),@(wire.saturation)];HPRememberColour(light,wire);self.lastSent=now;self.settleUntil=now+steps*.1;
+        self.sent[key]=@[@(wire.lightness),@(wire.hue),@(wire.saturation)];HPRememberColour(light,wire);self.lastSent=now;self.settleUntil=now+(steps&0x3f)*((steps>>6)==1?1:.1);
         BOOL heldUpdate=self.adjusting;[self completeRetarget:key];
-        if(!heldUpdate)self.status=[NSString stringWithFormat:@"%@ · slow drift · %lu lights",[self moodName],(unsigned long)self.lights.count];
+        if(!heldUpdate)self.status=[NSString stringWithFormat:@"%@ · %.2g× speed · %lu lights",[self moodName],self.playbackSpeed,(unsigned long)self.lights.count];
     }@catch(NSException *exception){[self stop];self.status=@"Could not send the lighting effect";}
 }
 @end
@@ -367,8 +375,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 @property(nonatomic,strong) HPStudioPreview *preview;
 @property(nonatomic,strong) NSTimer *previewTimer;
 @property(nonatomic,strong) UIButton *scopeButton,*pause,*save,*shuffleButton;
-@property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider;
-@property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel;
+@property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider,*speedSlider;
+@property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel,*speedLabel;
 @property(nonatomic,strong) UISegmentedControl *category;
 @property(nonatomic,strong) UIStackView *gallery;
 @property(nonatomic,strong) HPSceneReadback *captureReader;
@@ -384,8 +392,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:title forState:UIControlStateNormal];[button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];button.titleLabel.font=[UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];button.backgroundColor=filled?[UIColor colorWithRed:.30 green:.24 blue:.44 alpha:1]:[UIColor colorWithRed:.11 green:.13 blue:.18 alpha:1];button.layer.cornerRadius=13;[button.heightAnchor constraintEqualToConstant:44].active=YES;[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];return button;
 }
 - (UISlider *)slider:(NSString *)title minimum:(float)minimum value:(float)value action:(SEL)action row:(UIStackView *)row{
-    UIStackView *column=[UIStackView new];column.axis=UILayoutConstraintAxisVertical;column.spacing=3;UILabel *label=[self text:title size:12];label.font=[UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];label.adjustsFontSizeToFitWidth=YES;label.minimumScaleFactor=.75;label.numberOfLines=1;[column addArrangedSubview:label];if([title isEqual:@"Brightness"])self.brightnessLabel=label;else if([title isEqual:@"Motion"])self.motionLabel=label;else self.depthLabel=label;
-    UISlider *slider=[UISlider new];slider.minimumValue=minimum;slider.maximumValue=1;slider.value=value;slider.accessibilityLabel=title;slider.continuous=YES;slider.exclusiveTouch=YES;slider.minimumTrackTintColor=[UIColor colorWithRed:.67 green:.61 blue:.84 alpha:1];[slider addTarget:self action:action forControlEvents:UIControlEventValueChanged];[column addArrangedSubview:slider];[row addArrangedSubview:column];return slider;
+    UIStackView *column=[UIStackView new];column.axis=UILayoutConstraintAxisVertical;column.spacing=3;UILabel *label=[self text:title size:12];label.font=[UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];label.adjustsFontSizeToFitWidth=YES;label.minimumScaleFactor=.75;label.numberOfLines=1;[column addArrangedSubview:label];if([title isEqual:@"Brightness"])self.brightnessLabel=label;else if([title isEqual:@"Motion"])self.motionLabel=label;else if([title isEqual:@"Speed"])self.speedLabel=label;else self.depthLabel=label;
+    UISlider *slider=[UISlider new];slider.minimumValue=minimum;slider.maximumValue=[title isEqual:@"Speed"]?10:1;slider.value=value;slider.accessibilityLabel=title;slider.continuous=YES;slider.exclusiveTouch=YES;slider.minimumTrackTintColor=[UIColor colorWithRed:.67 green:.61 blue:.84 alpha:1];[slider addTarget:self action:action forControlEvents:UIControlEventValueChanged];[column addArrangedSubview:slider];[row addArrangedSubview:column];return slider;
 }
 - (void)viewDidLoad {
     [super viewDidLoad];self.title=@"Light Studio";self.view.backgroundColor=[UIColor colorWithRed:.035 green:.045 blue:.07 alpha:1];self.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;
@@ -399,6 +407,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     self.preview=[HPStudioPreview new];self.preview.backgroundColor=[UIColor colorWithRed:.06 green:.075 blue:.10 alpha:1];self.preview.layer.cornerRadius=17;self.preview.clipsToBounds=YES;self.preview.accessibilityLabel=@"Room colour preview";self.preview.accessibilityHint=@"Approximate colours in your mapped positions. Opens the apartment map.";[self.preview addTarget:self action:@selector(mapLights)forControlEvents:UIControlEventTouchUpInside];[self.preview.heightAnchor constraintEqualToConstant:94].active=YES;[stack addArrangedSubview:self.preview];
     UIStackView *sliders=[UIStackView new];sliders.axis=UILayoutConstraintAxisHorizontal;sliders.spacing=14;sliders.distribution=UIStackViewDistributionFillEqually;
     self.brightnessSlider=[self slider:@"Brightness" minimum:.08 value:HPLightEngine.shared.brightness action:@selector(brightness:)row:sliders];self.motionSlider=[self slider:@"Motion" minimum:.15 value:HPLightEngine.shared.speed action:@selector(speed:)row:sliders];self.depthSlider=[self slider:@"Colour depth" minimum:.25 value:HPLightEngine.shared.depth action:@selector(depth:)row:sliders];[stack addArrangedSubview:sliders];
+    UIStackView *playback=[UIStackView new];playback.axis=UILayoutConstraintAxisHorizontal;
+    self.speedSlider=[self slider:@"Speed" minimum:.25 value:HPLightEngine.shared.playbackSpeed action:@selector(playbackSpeed:)row:playback];self.speedSlider.accessibilityIdentifier=@"HP.PlaybackSpeed";self.speedSlider.accessibilityHint=@"Speed up ribbons, orbits and journey progression. One times is normal playback.";[stack addArrangedSubview:playback];
     UIStackView *actions=[UIStackView new];actions.axis=UILayoutConstraintAxisHorizontal;actions.spacing=10;actions.distribution=UIStackViewDistributionFillEqually;
     self.pause=[self button:@"Resume" action:@selector(toggle)filled:YES];self.save=[self button:@"Save as scene"action:@selector(saveScene)filled:NO];[actions addArrangedSubview:self.pause];[actions addArrangedSubview:self.save];[stack addArrangedSubview:actions];
     self.status=[self text:@""size:12];self.status.textColor=[UIColor colorWithWhite:.64 alpha:1];[self.status.heightAnchor constraintGreaterThanOrEqualToConstant:30].active=YES;[stack addArrangedSubview:self.status];
@@ -420,20 +430,20 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
         UIStackView *pair=[UIStackView new];pair.axis=UILayoutConstraintAxisHorizontal;pair.spacing=11;pair.distribution=UIStackViewDistributionFillEqually;
         for(int col=0;col<2;col++){int mode=[HPThemeOrder()[row*2+col]intValue];HPModeCard *card=[self card:HPThemeNames()[mode]detail:HPThemeDetails()[mode]mode:mode journey:-1];card.tag=mode;card.accessibilityIdentifier=[@"HP.Mood."stringByAppendingString:HPThemeNames()[mode]];[card addTarget:self action:@selector(selectTheme:)forControlEvents:UIControlEventTouchUpInside];[pair addArrangedSubview:card];}[self.gallery addArrangedSubview:pair];
     }}else if(category==1){
-        UILabel *hint=[self text:@"Related palettes unfold over half an hour, with two-minute dissolves. Journeys repeat gently."size:12];hint.textColor=[UIColor colorWithWhite:.62 alpha:1];[self.gallery addArrangedSubview:hint];
+        UILabel *hint=[self text:@"At 1× Speed, palettes unfold over half an hour. Increase Speed for faster movement and shorter journeys."size:12];hint.textColor=[UIColor colorWithWhite:.62 alpha:1];[self.gallery addArrangedSubview:hint];
         for(int n=0;n<HP_JOURNEY_COUNT;n++){HPModeCard *card=[self card:HPJourneyNames()[n]detail:HPJourneyDetails()[n]mode:0 journey:n];card.tag=n;card.accessibilityIdentifier=[@"HP.Journey."stringByAppendingString:HPJourneyNames()[n]];[card addTarget:self action:@selector(selectJourney:)forControlEvents:UIControlEventTouchUpInside];[self.gallery addArrangedSubview:card];}
     }else{
         NSArray *recipes=HPSavedMoods();UILabel *hint=[self text:recipes.count?@"Tap to play. Touch and hold a mood to delete it.":@"Find a look you love. Use More, then Save moving mood to keep its colours, motion and starting point."size:13];hint.textColor=[UIColor colorWithWhite:.65 alpha:1];[self.gallery addArrangedSubview:hint];
         for(NSDictionary *recipe in recipes){NSString *detail=[NSString stringWithFormat:@"%@ · %@",[recipe[@"journey"]integerValue]>=0?HPJourneyNames()[[recipe[@"journey"]integerValue]]:HPThemeNames()[[recipe[@"mode"]integerValue]],recipe[@"scope"]];HPModeCard *card=[self card:recipe[@"name"]detail:detail mode:[recipe[@"mode"]intValue]journey:[recipe[@"journey"]intValue]];card.recipeID=recipe[@"id"];[card addTarget:self action:@selector(playSaved:)forControlEvents:UIControlEventTouchUpInside];[card addGestureRecognizer:[[UILongPressGestureRecognizer alloc]initWithTarget:self action:@selector(holdSaved:)]];[self.gallery addArrangedSubview:card];}
     }
 }
-- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;}
+- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.speedSlider.value=HPLightEngine.shared.playbackSpeed;self.depthSlider.value=HPLightEngine.shared.depth;}
 - (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
     HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.status;[self.scopeButton setTitle:engine.scope forState:UIControlStateNormal];[self.pause setTitle:engine.mode>=0?@"Pause":@"Resume"forState:UIControlStateNormal];self.pause.enabled=!self.captureReader&&!HPIdentifying;self.navigationItem.rightBarButtonItem.enabled=!self.captureReader&&!HPIdentifying;self.save.enabled=engine.mode<0&&!engine.adjusting&&engine.lights.count>0&&!self.captureReader&&!HPIdentifying;self.save.alpha=self.save.enabled?1:.4;
-    BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.shuffleButton.enabled=enabled&&engine.lights.count>0;
-    self.brightnessLabel.text=[NSString stringWithFormat:@"Brightness %.0f%%",engine.brightness*100];self.motionLabel.text=[NSString stringWithFormat:@"Motion %.1f×",HPMotionRate(engine.speed)];self.depthLabel.text=[NSString stringWithFormat:@"Colour depth %.0f%%",engine.depth*100];
+    BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.speedSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.shuffleButton.enabled=enabled&&engine.lights.count>0;
+    self.speedLabel.text=[NSString stringWithFormat:@"Speed %.2g×",engine.playbackSpeed];self.speedSlider.accessibilityValue=[NSString stringWithFormat:@"%.2g times",engine.playbackSpeed];self.brightnessLabel.text=[NSString stringWithFormat:@"Brightness %.0f%%",engine.brightness*100];self.motionLabel.text=[NSString stringWithFormat:@"Motion %.1f×",HPMotionRate(engine.speed)];self.depthLabel.text=[NSString stringWithFormat:@"Colour depth %.0f%%",engine.depth*100];
     // Do not assign slider.value on the refresh timer; the user's thumb owns it.
     for(UIView *row in self.gallery.arrangedSubviews){NSArray *cards=[row isKindOfClass:UIStackView.class]?[(UIStackView *)row arrangedSubviews]:@[row];for(UIView *view in cards)if([view isKindOfClass:HPModeCard.class]){HPModeCard *card=(id)view;BOOL selected=self.category.selectedSegmentIndex==0?engine.journey<0&&card.tag==engine.lastMode:self.category.selectedSegmentIndex==1&&card.tag==engine.journey;card.layer.borderWidth=selected?2:.5;card.layer.borderColor=[UIColor colorWithWhite:1 alpha:selected?.68:.13].CGColor;card.accessibilityTraits=UIAccessibilityTraitButton|(selected?UIAccessibilityTraitSelected:0);}}
     [self.preview setNeedsDisplay];
@@ -442,12 +452,13 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)selectJourney:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared startJourney:button.tag];[self refresh];}
 - (void)brightness:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeBrightness:slider.value];[self refresh];}
 - (void)speed:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeMotion:slider.value];[self refresh];}
+- (void)playbackSpeed:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changePlaybackSpeed:slider.value];[self refresh];}
 - (void)depth:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeDepth:slider.value];[self refresh];}
 - (void)shuffleColours{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared shuffleColours];[self refresh];}
 - (void)stop{[HPLightEngine.shared stop];[self refresh];}
 - (void)toggle{if(HPLightEngine.shared.mode>=0)[self stop];else[HPLightEngine.shared resume];[self refresh];}
 - (void)more{
-    UIAlertController *sheet=[UIAlertController alertControllerWithTitle:@"Make this mood yours" message:@"Your changes fade in over a few seconds. Brightness and Colour depth also shape a paused look. Motion changes travel speed when running."preferredStyle:UIAlertControllerStyleActionSheet];
+    UIAlertController *sheet=[UIAlertController alertControllerWithTitle:@"Make this mood yours" message:@"Your changes fade in over a few seconds. Brightness and Colour depth also shape a paused look. Speed controls the whole playback, including ribbons, orbits and journey timing. Motion shapes the pattern's movement rate within that playback."preferredStyle:UIAlertControllerStyleActionSheet];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Save moving mood"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[self promptSaveMood];}]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Restore original colours"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[HPLightEngine.shared restoreColours];[self refresh];}]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Map lights"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[self mapLights];}]];
@@ -457,7 +468,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     NSDictionary *recipe=[HPStudioPresets validatedRecipe:[HPLightEngine.shared recipeNamed:name]error:error];if(!recipe)return NO;NSMutableArray *recipes=[HPSavedMoods()mutableCopy];[recipes addObject:recipe];HPStoreMoods(recipes);HPLightEngine.shared.status=[NSString stringWithFormat:@"Saved moving mood: %@",recipe[@"name"]];[self buildGallery];[self refresh];return YES;
 }
 - (void)promptSaveMood{
-    UIAlertController *prompt=[UIAlertController alertControllerWithTitle:@"Save moving mood"message:@"Keep this palette, its variation, room, brightness and motion. It will keep moving when you play it."preferredStyle:UIAlertControllerStyleAlert];[prompt addTextFieldWithConfigurationHandler:^(UITextField *field){field.text=[HPLightEngine.shared moodName];field.placeholder=@"Mood name";field.keyboardAppearance=UIKeyboardAppearanceDark;}];[prompt addAction:[UIAlertAction actionWithTitle:@"Cancel"style:UIAlertActionStyleCancel handler:nil]];
+    UIAlertController *prompt=[UIAlertController alertControllerWithTitle:@"Save moving mood"message:@"Keep this palette, its variation, room, brightness, motion and speed. It will keep moving when you play it."preferredStyle:UIAlertControllerStyleAlert];[prompt addTextFieldWithConfigurationHandler:^(UITextField *field){field.text=[HPLightEngine.shared moodName];field.placeholder=@"Mood name";field.keyboardAppearance=UIKeyboardAppearanceDark;}];[prompt addAction:[UIAlertAction actionWithTitle:@"Cancel"style:UIAlertActionStyleCancel handler:nil]];
     [prompt addAction:[UIAlertAction actionWithTitle:@"Save mood"style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){NSError *error=nil;if(![self saveMovingMoodNamed:prompt.textFields.firstObject.text error:&error])HPAlert(self,@"Could not save mood",error.localizedDescription);else{self.category.selectedSegmentIndex=2;[self buildGallery];}}]];[self presentViewController:prompt animated:YES completion:nil];
 }
 - (void)playSaved:(HPModeCard *)card{if(self.captureReader)return;for(NSDictionary *recipe in HPSavedMoods())if([recipe[@"id"]isEqual:card.recipeID]){NSError *error=nil;if(![HPLightEngine.shared applyRecipe:recipe error:&error])HPAlert(self,@"Could not play mood",error.localizedDescription);[self reloadPreview];[self syncSliders];[self refresh];break;}}

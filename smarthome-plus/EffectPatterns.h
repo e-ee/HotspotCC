@@ -7,8 +7,9 @@
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
-// A curved control preserves gentle lower settings and reaches the requested 10x.
-static inline double HPMotionRate(double value){double x=HPClamp((isfinite(value)?value:.5)-.15,0,.85)/.85;return .2+9.8*x*x*x;}
+// A curved control preserves gentle lower settings and reaches the requested 40x.
+static inline double HPMotionRate(double value){double x=HPClamp((isfinite(value)?value:.5)-.15,0,.85)/.85;return .2+39.8*x*x*x;}
+static inline double HPPlaybackRate(double value){return HPClamp(isfinite(value)?value:1,.25,10);}
 static inline double HPWrap(double x){return x-floor(x);}
 static inline double HPWave(double x){return .5+.5*sin(x*6.283185307179586);}
 // Two broad, overlapping fields keep neighbouring lights related while avoiding
@@ -154,5 +155,15 @@ static inline HPColor HPDrift(HPColor old,HPColor target,double elapsed){
     double dt=isfinite(elapsed)?HPClamp(elapsed,0,2):0;
     return (HPColor){(float)HPDriftComponent(old.hue,target.hue,dt,1./360.),(float)HPDriftComponent(old.saturation,target.saturation,dt,.012),(float)HPDriftComponent(old.lightness,target.lightness,dt,.008)};
 }
+// Bound real elapsed time before scaling: congestion must not fast-forward the room.
+static inline HPColor HPPlaybackDrift(HPColor old,HPColor target,double elapsed,double speed){
+    double dt=(isfinite(elapsed)?HPClamp(elapsed,0,2):0)*HPPlaybackRate(speed);
+    return (HPColor){(float)HPDriftComponent(old.hue,target.hue,dt,1./360.),(float)HPDriftComponent(old.saturation,target.saturation,dt,.012),(float)HPDriftComponent(old.lightness,target.lightness,dt,.008)};
+}
 static inline uint8_t HPSmoothTransitionSteps(unsigned count){return (uint8_t)HPClamp(ceil(count*2.2),40,60);}
+// Mesh transition time: 0.1-second resolution up to 6.2s, then 1-second resolution.
+static inline uint8_t HPPlaybackTransitionSteps(unsigned count,double speed){
+    double tenths=ceil(HPSmoothTransitionSteps(count)/HPPlaybackRate(speed));
+    return tenths<=62?(uint8_t)fmax(1,tenths):(uint8_t)(0x40|(unsigned)ceil(tenths/10));
+}
 #endif

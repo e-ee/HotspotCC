@@ -96,10 +96,10 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
     NSDictionary *v=LampValues[@(target)];assert(v);HPMockStatus *status=[HPMockStatus new];status.HSLHue=[v[@"hue"]unsignedShortValue];status.HSLSaturation=[v[@"sat"]unsignedShortValue];status.HSLLightness=[v[@"light"]unsignedShortValue];success(target,0x7e00,status);result(YES,nil);return nil;
 }
 + (id)lightHSLSetWithDestination:(uint16_t)target HSLLight:(uint16_t)light HSLHue:(uint16_t)hue HSLSaturation:(uint16_t)saturation transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
-    InitLamps();assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil);assert(hue<=360&&saturation<=100&&light<=100);assert(([transition raw]>=40&&[transition raw]<=60)||[transition raw]==10);
+    InitLamps();assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil);assert(hue<=360&&saturation<=100&&light<=100);assert(([transition raw]>=1&&[transition raw]<=62)||(([transition raw]>>6)==1&&([transition raw]&0x3f)<=24));
     NSDictionary *previous=LastTargets[@(target)];assert(previous);
     id engine=((id(*)(id,SEL))objc_msgSend)(NSClassFromString(@"HPLightEngine"),NSSelectorFromString(@"shared"));NSString *key=[NSString stringWithFormat:@"mock-lamp-%d",target-0x20];BOOL requested=[[engine valueForKey:@"retargets"]containsObject:key];
-    if([transition raw]!=10){if(requested){assert([transition raw]>=40);ExplicitFadedWrites++;}else{assert(abs([previous[@"hue"]intValue]-hue)<=3&&abs([previous[@"sat"]intValue]-saturation)<=3&&abs([previous[@"light"]intValue]-light)<=2);AmbientWrites++;}}else[MarkerWrites addObject:@{@"target":@(target),@"hue":@(hue),@"sat":@(saturation),@"light":@(light)}];
+    if([transition raw]!=10){if(requested){assert([transition raw]>=40);ExplicitFadedWrites++;}else{double rate=HPPlaybackRate([[engine valueForKey:@"playbackSpeed"]doubleValue]);assert(abs([previous[@"hue"]intValue]-hue)<=ceil(2*rate)+1&&abs([previous[@"sat"]intValue]-saturation)<=ceil(2.4*rate)+1&&abs([previous[@"light"]intValue]-light)<=ceil(1.6*rate)+1);AmbientWrites++;}}else[MarkerWrites addObject:@{@"target":@(target),@"hue":@(hue),@"sat":@(saturation),@"light":@(light)}];
     NSDictionary *value=@{@"hue":@(hue),@"sat":@(saturation),@"light":@(light)};LampValues[@(target)]=value;LastTargets[@(target)]=value;
     [Writes addObject:@{@"target":@(target),@"light":@(light),@"hue":@(hue),@"sat":@(saturation),@"transition":@([transition raw])}];return nil;
 }
@@ -223,6 +223,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)checkControls:(dispatch_block_t)completion;
 - (void)checkStorage;
 - (void)checkShuffle:(dispatch_block_t)completion;
+- (void)checkPlaybackSpeed:(dispatch_block_t)completion;
 - (void)checkMap:(UINavigationController *)navigation;
 - (void)checkDeletion:(UINavigationController *)navigation;
 - (void)finishReport;
@@ -233,7 +234,7 @@ static void AssertVisibleCardText(UIViewController *studio){
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
     Later(1,^{id engine=Shared(@"HPLightEngine");DropReads=YES;QueueBusy=YES;[engine start:0];assert(Reads.count==0&&Writes.count==0);
         Later(.4,^{assert(Writes.count==0&&Reads.count==0);QueueBusy=NO;
-            Later(5.2,^{NSMutableSet *targets=[NSMutableSet new];for(NSDictionary *write in Writes)[targets addObject:write[@"target"]];assert(targets.count==14&&Reads.count==0);DropReads=NO;assert(AmbientWrites>0);SaveScreen(self.window,@"AuroraGreen.png");[self checkControls:^{[self checkShuffle:^{[self checkStorage];}];}];});
+            Later(5.2,^{NSMutableSet *targets=[NSMutableSet new];for(NSDictionary *write in Writes)[targets addObject:write[@"target"]];assert(targets.count==14&&Reads.count==0);DropReads=NO;assert(AmbientWrites>0);SaveScreen(self.window,@"AuroraGreen.png");[self checkControls:^{[self checkPlaybackSpeed:^{[self checkShuffle:^{[self checkStorage];}];}];}];});
         });
     });return YES;
 }
@@ -267,6 +268,28 @@ static void AssertVisibleCardText(UIViewController *studio){
         });
     });
 }
+- (void)checkPlaybackSpeed:(dispatch_block_t)completion{
+    id engine=Shared(@"HPLightEngine");UISlider *slider=[self.studio valueForKey:@"speedSlider"];UIScrollView *scroll=(id)self.studio.view.subviews.firstObject;
+    assert(slider&&slider.minimumValue==.25&&slider.maximumValue==10&&slider.value==1&&! [scroll touchesShouldCancelInContentView:slider]);
+    [scroll setContentOffset:CGPointZero animated:NO];[self.window layoutIfNeeded];assert(slider.bounds.size.width>200&&slider.bounds.size.height>=28);
+    CGPoint point=[slider convertPoint:CGPointMake(CGRectGetMidX(slider.bounds),CGRectGetMidY(slider.bounds))toView:self.window];UIView *hit=[self.window hitTest:point withEvent:nil];assert(hit==slider||[hit isDescendantOfView:slider]);
+    [engine startJourney:0];
+    Until(4,@"journey initial targets",^BOOL{return [[engine valueForKey:@"retargets"]count]==0;},^{
+        [[engine valueForKey:@"timer"]invalidate];QueueBusy=YES;
+        [engine setValue:@100 forKey:@"phase"];[engine setValue:@359 forKey:@"journeyElapsed"];
+        slider.value=10;[slider sendActionsForControlEvents:UIControlEventValueChanged];assert([[engine valueForKey:@"phase"]doubleValue]==100&&[[engine valueForKey:@"journeyElapsed"]doubleValue]==359);
+        NSUInteger writes=Writes.count;
+        [engine setValue:@(NSProcessInfo.processInfo.systemUptime-.2) forKey:@"lastTick"];[engine tick];
+        assert(Writes.count==writes&&[[engine valueForKey:@"journeyElapsed"]doubleValue]>360.8&&[[engine valueForKey:@"phase"]doubleValue]>100+1.8*HPMotionRate([[engine valueForKey:@"speed"]doubleValue]));
+        id state=[[engine valueForKey:@"states"]objectForKey:@"mock-lamp-0"];assert(state);[state setValue:@(NSProcessInfo.processInfo.systemUptime-2)forKey:@"updatedAt"];
+        // The actual sender must now use a shorter fade, not just speed the preview clock.
+        [engine setValue:@0 forKey:@"cursor"];[engine setValue:@10000 forKey:@"phase"];QueueBusy=NO;[engine tick];assert(Writes.count==writes+1&&[Writes.lastObject[@"transition"]intValue]==4);
+        assert(fabs([NSUserDefaults.standardUserDefaults doubleForKey:@"HP.StudioPlaybackSpeed"]-10)<.001);
+        Later(.3,^{assert(slider.value==10);SaveScreen(self.window,@"PlaybackSpeed.png");[engine stop];double frozen=[[engine valueForKey:@"phase"]doubleValue];slider.value=2;[slider sendActionsForControlEvents:UIControlEventValueChanged];[engine tick];assert([[engine valueForKey:@"phase"]doubleValue]==frozen&&[[engine valueForKey:@"mode"]intValue]==-1);
+            slider.value=1;[slider sendActionsForControlEvents:UIControlEventValueChanged];[engine resume];completion();
+        });
+    });
+}
 - (void)checkShuffle:(dispatch_block_t)completion{
     id engine=Shared(@"HPLightEngine");UIButton *prism=nil;UIStackView *gallery=[self.studio valueForKey:@"gallery"];for(UIStackView *row in gallery.arrangedSubviews)for(UIButton *card in row.arrangedSubviews)if(card.tag==5)prism=card;assert(prism);[prism sendActionsForControlEvents:UIControlEventTouchUpInside];
     Until(4,@"Prism selection",^BOOL{return [[engine valueForKey:@"retargets"]count]==0;},^{NSDictionary *before=[LampValues copy];UIButton *shuffle=[self.studio valueForKey:@"shuffleButton"];UISegmentedControl *category=[self.studio valueForKey:@"category"];assert(shuffle.superview==category.superview&&CGRectGetMaxY(shuffle.frame)<CGRectGetMinY(category.frame));uint32_t seed=[[engine valueForKey:@"variation"]unsignedIntValue];[shuffle sendActionsForControlEvents:UIControlEventTouchUpInside];assert([[engine valueForKey:@"variation"]unsignedIntValue]!=seed&&[[engine valueForKey:@"lastMode"]intValue]==5);
@@ -291,9 +314,9 @@ static void AssertVisibleCardText(UIViewController *studio){
     });
 }
 - (void)checkMovingMoods{
-    id engine=Shared(@"HPLightEngine");[engine setValue:@.42 forKey:@"brightness"];[engine setValue:@.25 forKey:@"speed"];[engine setValue:@.55 forKey:@"depth"];[engine setValue:@874 forKey:@"variation"];[engine startJourney:0];[engine setValue:@152.5 forKey:@"phase"];[engine setValue:@301.5 forKey:@"journeyElapsed"];[engine stop];
+    id engine=Shared(@"HPLightEngine");[engine setValue:@.42 forKey:@"brightness"];[engine setValue:@.25 forKey:@"speed"];[engine setValue:@.55 forKey:@"depth"];[engine setValue:@2.5 forKey:@"playbackSpeed"];[engine setValue:@874 forKey:@"variation"];[engine startJourney:0];[engine setValue:@152.5 forKey:@"phase"];[engine setValue:@301.5 forKey:@"journeyElapsed"];[engine stop];
     NSError *error=nil;assert([self.studio saveMovingMoodNamed:@"Northern quiet"error:&error]&&!error);NSDictionary *homes=[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"];NSArray *recipes=homes.allValues.firstObject;assert(recipes.count==1);NSDictionary *saved=recipes[0];assert([saved[@"journey"]intValue]==0&&[saved[@"variation"]intValue]==874&&[saved[@"phase"]doubleValue]==152.5);
-    [engine setValue:@0 forKey:@"phase"];assert([engine applyRecipe:saved error:&error]&&!error);assert(fabs([[engine valueForKey:@"phase"]doubleValue]-152.5)<.02&&fabs([[engine valueForKey:@"depth"]floatValue]-.55)<.001);[engine stop];double phase=[[engine valueForKey:@"phase"]doubleValue];[engine resume];assert(fabs([[engine valueForKey:@"phase"]doubleValue]-phase)<.02);
+    [engine setValue:@0 forKey:@"phase"];[engine setValue:@1 forKey:@"playbackSpeed"];assert([engine applyRecipe:saved error:&error]&&!error);assert(fabs([[engine valueForKey:@"phase"]doubleValue]-152.5)<.02&&fabs([[engine valueForKey:@"depth"]floatValue]-.55)<.001);assert(fabs([[engine valueForKey:@"playbackSpeed"]doubleValue]-2.5)<.001);[engine setValue:@1 forKey:@"playbackSpeed"];[engine stop];double phase=[[engine valueForKey:@"phase"]doubleValue];[engine resume];assert(fabs([[engine valueForKey:@"phase"]doubleValue]-phase)<.02);
     // Reconnect must use the changed native lamp cache, not stale sent targets.
     Disconnected=YES;[engine tick];NSUInteger writes=Writes.count;NSDictionary *v=@{@"hue":@111,@"sat":@44,@"light":@31};LampValues[@0x20]=v;LastTargets[@0x20]=v;[engine setValue:@0 forKey:@"cursor"];Disconnected=NO;[engine tick];assert(Writes.count==writes+1&&[Writes.lastObject[@"hue"]intValue]==111);[engine stop];
     UISegmentedControl *category=[self.studio valueForKey:@"category"];category.selectedSegmentIndex=1;[self.studio buildGallery];UIScrollView *scroll=(id)self.studio.view.subviews.firstObject;[scroll setContentOffset:CGPointZero animated:NO];SaveScreen(self.window,@"Journeys.png");
@@ -349,7 +372,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)finishReport{
     [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"HP.JoinPending"];UITableViewController *setup=[[NSClassFromString(@"HPPanel")alloc]initWithStyle:UITableViewStyleInsetGrouped];[setup loadViewIfNeeded];assert([setup.title isEqual:@"Add this device"]&&setup.navigationItem.rightBarButtonItem==nil&&[setup.tableView.dataSource numberOfSectionsInTableView:setup.tableView]==1&&[setup.tableView.dataSource tableView:setup.tableView numberOfRowsInSection:0]==2);assert(!HPShouldShowSetup(setup)&&!HPShouldShowSetup([[UIActivityViewController alloc]initWithActivityItems:@[@"request"]applicationActivities:nil])&&HPShouldShowSetup([_TtC13SmartHome_Prd20ReHomeViewController new]));[NSUserDefaults.standardUserDefaults removeObjectForKey:@"HP.JoinPending"];
 
-    NSDictionary *report=@{@"passed":@YES,@"targets":@14,@"moods":@32,@"journeys":@6,@"writes":@(Writes.count),@"explicitFadedWrites":@(ExplicitFadedWrites),@"ambientBoundedWrites":@(AmbientWrites),@"allModeCardsSwitchWhileRunning":@YES,@"modeChangeReachesAllBulbsWithinOneRound":@YES,@"brightnessAndDepthRespondWhileRunningAndPaused":@YES,@"motionSliderChangesPhaseRate":@YES,@"sliderThumbSurvivesRefresh":@YES,@"galleryCaptionsSurviveScrollingAndRepeatedSelection":@YES,@"renderedGalleryTextPresentAfterScrolling":@YES,@"legacyThemeDoesNotRepaintStudioControls":@YES,@"sliderDragDoesNotScrollOrCancel":@YES,@"cardAndCaptionDragsCancelForVerticalScrolling":@YES,@"motionSliderMaximum10x":@YES,@"shuffleRecoloursPrismAndPreservesPausedLevels":@YES,@"shuffledRecipeRemembersVariation":@YES,@"originalPaletteCanBeRestored":@YES,@"reads":@(Reads.count),@"backpressure":@YES,@"manualControlStopsEffect":@YES,@"boundedSmallSteps":@YES,@"fourSecondFades":@YES,@"actualReadbackSceneSaved":@YES,@"failedReadLeavesScenesIntact":@YES,@"floatingButtonsWhiteAndPersistent":@YES,@"dragPositionRemembered":@YES,@"touchesPassThrough":@YES,@"darkConnectionBadge":@YES,@"lateBlackTextAndMenuAssignmentsGuarded":@YES,@"networkAnalyseRemoved":@YES,@"logoRemoved":@YES,@"launchStoryboardContainsNoTextOrImages":@YES,@"directStudioShortcut":@YES,@"apartmentMapPositionRemembered":@YES,@"gridTapMarksOnlyOneBulbAndRestoresColour":@YES,@"nextLightWorksWithoutColourReplies":@YES,@"studioStartsWithoutColourReplies":@YES,@"timedOutReadCancelsOnlyItsOwnHandle":@YES,@"journeyAndMovingMoodRoundTrip":@YES,@"pauseResumeKeepsPhase":@YES,@"reconnectUsesChangedNativeCache":@YES,@"sceneDeletionAfterNamedConfirmation":@YES};
+    NSDictionary *report=@{@"passed":@YES,@"targets":@14,@"moods":@32,@"journeys":@6,@"writes":@(Writes.count),@"explicitFadedWrites":@(ExplicitFadedWrites),@"ambientBoundedWrites":@(AmbientWrites),@"allModeCardsSwitchWhileRunning":@YES,@"modeChangeReachesAllBulbsWithinOneRound":@YES,@"brightnessAndDepthRespondWhileRunningAndPaused":@YES,@"motionSliderChangesPhaseRate":@YES,@"sliderThumbSurvivesRefresh":@YES,@"galleryCaptionsSurviveScrollingAndRepeatedSelection":@YES,@"renderedGalleryTextPresentAfterScrolling":@YES,@"legacyThemeDoesNotRepaintStudioControls":@YES,@"sliderDragDoesNotScrollOrCancel":@YES,@"cardAndCaptionDragsCancelForVerticalScrolling":@YES,@"motionSliderMaximum40x":@YES,@"playbackSpeedChangesJourneyClockAndSenderFade":@YES,@"playbackSpeedPersistsAndRoundTrips":@YES,@"playbackSpeedDoesNotRestartOrUnpause":@YES,@"shuffleRecoloursPrismAndPreservesPausedLevels":@YES,@"shuffledRecipeRemembersVariation":@YES,@"originalPaletteCanBeRestored":@YES,@"reads":@(Reads.count),@"backpressure":@YES,@"manualControlStopsEffect":@YES,@"boundedSmallSteps":@YES,@"fourSecondFades":@YES,@"actualReadbackSceneSaved":@YES,@"failedReadLeavesScenesIntact":@YES,@"floatingButtonsWhiteAndPersistent":@YES,@"dragPositionRemembered":@YES,@"touchesPassThrough":@YES,@"darkConnectionBadge":@YES,@"lateBlackTextAndMenuAssignmentsGuarded":@YES,@"networkAnalyseRemoved":@YES,@"logoRemoved":@YES,@"launchStoryboardContainsNoTextOrImages":@YES,@"directStudioShortcut":@YES,@"apartmentMapPositionRemembered":@YES,@"gridTapMarksOnlyOneBulbAndRestoresColour":@YES,@"nextLightWorksWithoutColourReplies":@YES,@"studioStartsWithoutColourReplies":@YES,@"timedOutReadCancelsOnlyItsOwnHandle":@YES,@"journeyAndMovingMoodRoundTrip":@YES,@"pauseResumeKeepsPhase":@YES,@"reconnectUsesChangedNativeCache":@YES,@"sceneDeletionAfterNamedConfirmation":@YES};
     NSData *data=[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([data writeToFile:path atomically:YES]);
 }
 @end
