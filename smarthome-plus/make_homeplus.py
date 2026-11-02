@@ -140,11 +140,11 @@ def build(config_zip, module, ldid):
         shutil.copy2(module,app/'Frameworks/HomePlus.dylib')
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
-                    CFBundleVersion='3200',CFBundleShortVersionString='3.2.0',
+                    CFBundleVersion='3300',CFBundleShortVersionString='3.3.0',UIUserInterfaceStyle='Dark',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
         info.pop('CFBundleURLTypes',None)
-        info['UTExportedTypeDeclarations']=[{'UTTypeIdentifier':'com.ledvance.smart.plus.scenes','UTTypeDescription':'SYLVANIA Plus scenes',
-            'UTTypeConformsTo':['public.json'],'UTTypeTagSpecification':{'public.filename-extension':['sylscenes']}}]
+        info['UTExportedTypeDeclarations']=[{'UTTypeIdentifier':'com.ledvance.smart.plus.home','UTTypeDescription':'SYLVANIA Plus Home',
+            'UTTypeConformsTo':['public.data'],'UTTypeTagSpecification':{'public.filename-extension':['sylhome','sylbackup'],'public.mime-type':'application/x-sylvania-home'}}]
         (app/'Info.plist').write_bytes(plistlib.dumps(info,fmt=plistlib.FMT_BINARY))
         private_prefs=copy.deepcopy(prefs)
         private_prefs.update({'mesh.json':json.dumps(mesh,separators=(',',':')).encode(),
