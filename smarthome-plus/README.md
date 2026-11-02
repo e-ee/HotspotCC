@@ -1,4 +1,4 @@
-# SYLVANIA Plus
+# SYLVANIA Plus 3.2 / Light Studio
 
 Local improvements to the user's own SYLVANIA Smart Home 3.0.2 installation:
 
@@ -7,6 +7,10 @@ Local improvements to the user's own SYLVANIA Smart Home 3.0.2 installation:
 - Prepare three independent mesh controller identities for additional devices.
 - Export/import routines using a key-free, network-specific JSON format.
 - Export a recovery archive containing the private local home state.
+- Arrange the native home shortcut strip and a physical lamp travel path.
+- Run eight spatial colour effects with bounded, backpressured SDK writes.
+- Configure default fades and power-cut behaviour through existing bulb models.
+- Hide the retired smart-home-experiences entry and reduce floating-button opacity.
 
 No app binaries, Realm databases, pairing keys, controller UUIDs or private seeds
 are committed here. The local packager reads the user's own `smarthome.zip`,
@@ -36,3 +40,5 @@ startup, native database import/export and radio behaviour need hardware checks.
 
 See the install package's `INSTALL.txt` and `FEATURES_AND_FINDINGS.md` for the
 current deliverable, limitations and grounded feature roadmap.
+
+The native ARGB scene colour regression is fixed. SimulatorSmoke.m runs real UIKit and the actual effect sender against fourteen simulated lamp endpoints, verifies queue backpressure and manual-control cancellation, and captures a UI screenshot. The test fixture is not linked into production. See FIRMWARE_FINDINGS.md for the inspected manufacturer images and supported node models. No firmware is flashed.
