@@ -26,7 +26,7 @@ static NSInteger HPHomeCount(id self,SEL selector,id collection,NSInteger sectio
 static id HPHomeCell(id self,SEL selector,UICollectionView *collection,NSIndexPath *path){
     id cell=((id(*)(id,SEL,id,id))HPCellOriginal)(self,selector,collection,path);
     HPShortcutMap *map=objc_getAssociatedObject(collection,&HPShortcutMapKey);
-    if(path.item>=map.indexes.count||!map)return cell;
+    if(!map||path.item<0||(NSUInteger)path.item>=map.indexes.count)return cell;
     UILabel *label=HPGet(cell,@"nameLabel");NSDictionary *natural=map.natural[path.item];
     // Fail back to the native order if the app's live cache has not caught up.
     if(![label.text isEqual:natural[@"routineName"]]){
@@ -42,7 +42,7 @@ static id HPHomeCell(id self,SEL selector,UICollectionView *collection,NSIndexPa
 }
 static void HPHomeTap(id self,SEL selector,UICollectionView *collection,NSIndexPath *path){
     [HPLightEngine.shared stop];HPShortcutMap *map=objc_getAssociatedObject(collection,&HPShortcutMapKey);
-    if(map&&path.item<map.indexes.count)path=[NSIndexPath indexPathForItem:[map.indexes[path.item]integerValue] inSection:path.section];
+    if(map&&path.item>=0&&(NSUInteger)path.item<map.indexes.count)path=[NSIndexPath indexPathForItem:[map.indexes[path.item]integerValue] inSection:path.section];
     ((void(*)(id,SEL,id,id))HPTapOriginal)(self,selector,collection,path);
 }
 @interface HPManager (Ordering)
