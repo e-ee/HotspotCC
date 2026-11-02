@@ -8,7 +8,54 @@ static NSUInteger HPAddress(NSString *s){return HPHex(s,4)?strtoul(s.UTF8String,
 static NSDictionary *HPDecodeMesh(NSDictionary *prefs){id data=prefs[@"mesh.json"];return [data isKindOfClass:NSData.class]?[NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil]:nil;}
 static BOOL HPWritePlist(id value,NSString *path,NSError **error){NSData *data=[NSPropertyListSerialization dataWithPropertyList:value format:NSPropertyListBinaryFormat_v1_0 options:0 error:error];return data&&[data writeToFile:path options:NSDataWritingAtomic error:error];}
 
+static NSString *HPNewID(void){unsigned char bytes[16];arc4random_buf(bytes,16);NSMutableString *s=[NSMutableString new];for(int i=0;i<16;i++)[s appendFormat:@"%02X",bytes[i]];return s;}
+
 @implementation HPHomeArchive
++ (NSDictionary *)isolatedPreferences:(NSDictionary *)seed {
+    NSMutableDictionary *p=[seed mutableCopy];NSMutableDictionary *mesh=[HPDecodeMesh(seed)mutableCopy];
+    NSString *uuid=HPNewID();NSMutableDictionary *node=[mesh[@"nodes"][0]mutableCopy];node[@"UUID"]=uuid;node[@"deviceKey"]=HPNewID();node[@"unicastAddress"]=@"7E00";node[@"name"]=@"Unenrolled controller";
+    NSMutableDictionary *controller=[mesh[@"provisioners"][0]mutableCopy];controller[@"UUID"]=uuid;controller[@"allocatedUnicastRange"]=@[@{@"lowAddress":@"7E00",@"highAddress":@"7EFF"}];
+    mesh[@"meshUUID"]=HPNewID();mesh[@"nodes"]=@[node];mesh[@"provisioners"]=@[controller];mesh[@"groups"]=@[];mesh[@"ivIndex"]=@0;
+    for(NSString *key in @[@"netKeys",@"appKeys"]){NSMutableArray *keys=[NSMutableArray new];for(NSDictionary *old in mesh[key]){NSMutableDictionary *entry=[old mutableCopy];entry[@"key"]=HPNewID();[entry removeObjectForKey:@"oldKey"];[keys addObject:entry];}mesh[key]=keys;}
+    p[@"mesh.json"]=[NSJSONSerialization dataWithJSONObject:mesh options:0 error:nil];p[@"currenProvisionerUUID_key"]=uuid;p[@"uniqueID"]=uuid;p[@"currenProvisionerSno_key"]=@0;p[@"currentMeshProvisionAddress_key"]=@{uuid:@0x7e01};p[@"HP.JoinPending"]=@YES;p[@"HP.JoinUUID"]=uuid;p[@"HP.JoinKey"]=node[@"deviceKey"];p[@"HP.Profile"]=@"Awaiting invitation";
+    [p removeObjectForKey:@"kUUIDOfConnectedDevices"];[p removeObjectForKey:@"scanList_key"];return p;
+}
++ (NSDictionary *)requestForPreferences:(NSDictionary *)p {
+    if(![p[@"HP.JoinPending"]boolValue]||!HPHex(p[@"HP.JoinUUID"],32)||!HPHex(p[@"HP.JoinKey"],32))return nil;
+    return @{@"format":@"sylvania-plus-device-request",@"version":@1,@"UUID":p[@"HP.JoinUUID"],@"deviceKey":p[@"HP.JoinKey"]};
+}
++ (NSDictionary *)invitationForDocument:(NSDictionary *)raw request:(NSDictionary *)request reservations:(NSDictionary *)ledger error:(NSError **)error {
+    NSDictionary *valid=[self validatedDocument:raw error:error];if(!valid)return nil;
+    if(![request isKindOfClass:NSDictionary.class]||![request[@"format"]isEqual:@"sylvania-plus-device-request"]||![request[@"version"]isEqual:@1]||!HPHex(request[@"UUID"],32)||!HPHex(request[@"deviceKey"],32))return HPHomeFail(error,@"Choose a setup request from the new device.");
+    if(![valid[@"Preferences"][@"HP.EnrollmentAuthority"]isEqual:valid[@"Preferences"][@"currenProvisionerUUID_key"]])return HPHomeFail(error,@"Only the main controller can allocate invitations.");
+    NSMutableDictionary *mesh=[HPDecodeMesh(valid[@"Preferences"])mutableCopy];NSMutableArray *nodes=[mesh[@"nodes"]mutableCopy],*controllers=[mesh[@"provisioners"]mutableCopy];
+    NSMutableDictionary *all=[ledger mutableCopy]?:[NSMutableDictionary new];
+    for(NSString *uid in all){NSDictionary *entry=all[uid];BOOL found=NO;for(NSDictionary *node in nodes)if([node[@"UUID"]isEqual:uid]){if(![node[@"deviceKey"]isEqual:entry[@"node"][@"deviceKey"]]||![node[@"unicastAddress"]isEqual:entry[@"node"][@"unicastAddress"]])return HPHomeFail(error,@"A saved controller reservation conflicts with this Home.");found=YES;}
+        if(!found){[nodes addObject:entry[@"node"]];[controllers addObject:entry[@"controller"]];}}
+    NSString *uid=request[@"UUID"];NSDictionary *entry=all[uid];
+    if(entry){if(![entry[@"node"][@"deviceKey"]isEqual:request[@"deviceKey"]])return HPHomeFail(error,@"This request conflicts with an existing reservation.");}
+    else {
+        for(NSDictionary *node in nodes)if([node[@"UUID"]isEqual:uid])return HPHomeFail(error,@"This device already has a controller address. Use its original invitation or create a new setup request after reinstalling.");
+        NSMutableIndexSet *used=[NSMutableIndexSet new],*groups=[NSMutableIndexSet new],*scenes=[NSMutableIndexSet new];
+        for(NSDictionary *node in nodes){NSUInteger start=HPAddress(node[@"unicastAddress"]);[used addIndexesInRange:NSMakeRange(start,[node[@"elements"]count])];}
+        for(NSDictionary *c in controllers){for(NSDictionary *r in c[@"allocatedUnicastRange"]){NSUInteger lo=HPAddress(r[@"lowAddress"]),hi=HPAddress(r[@"highAddress"]);if(hi>=lo)[used addIndexesInRange:NSMakeRange(lo,hi-lo+1)];}for(NSDictionary *r in c[@"allocatedGroupRange"]){NSUInteger lo=HPAddress(r[@"lowAddress"]),hi=HPAddress(r[@"highAddress"]);if(hi>=lo)[groups addIndexesInRange:NSMakeRange(lo,hi-lo+1)];}for(NSDictionary *r in c[@"allocatedSceneRange"]){NSUInteger lo=HPAddress(r[@"firstScene"]),hi=HPAddress(r[@"lastScene"]);if(hi>=lo)[scenes addIndexesInRange:NSMakeRange(lo,hi-lo+1)];}}
+        for(NSDictionary *g in mesh[@"groups"]){id a=g[@"address"];if([a isKindOfClass:NSString.class])[groups addIndex:HPAddress(a)];}
+        NSUInteger address=0,group=0,scene=0;for(NSUInteger n=0x7b00;n>=0x100;n-=16)if(![used intersectsIndexesInRange:NSMakeRange(n,16)]){address=n;break;}
+        for(NSUInteger n=0xc000;n<0xff00;n+=16)if(![groups intersectsIndexesInRange:NSMakeRange(n,16)]){group=n;break;}
+        for(NSUInteger n=0x100;n<0xfff0;n+=16)if(![scenes intersectsIndexesInRange:NSMakeRange(n,16)]){scene=n;break;}
+        if(!address||!group||!scene)return HPHomeFail(error,@"This mesh has no free controller allocation ranges.");
+        NSMutableDictionary *node=[nodes[0]mutableCopy];node[@"UUID"]=uid;node[@"deviceKey"]=request[@"deviceKey"];node[@"unicastAddress"]=[NSString stringWithFormat:@"%04lX",(unsigned long)address];node[@"name"]=@"SYLVANIA Plus controller";
+        if([node[@"elements"]count]>16)return HPHomeFail(error,@"The controller template needs a larger allocation.");
+        NSDictionary *controller=@{@"UUID":uid,@"provisionerName":@"SYLVANIA Plus controller",@"allocatedUnicastRange":@[@{@"lowAddress":node[@"unicastAddress"],@"highAddress":[NSString stringWithFormat:@"%04lX",(unsigned long)address+15]}],@"allocatedGroupRange":@[@{@"lowAddress":[NSString stringWithFormat:@"%04lX",(unsigned long)group],@"highAddress":[NSString stringWithFormat:@"%04lX",(unsigned long)group+15]}],@"allocatedSceneRange":@[@{@"firstScene":[NSString stringWithFormat:@"%04lX",(unsigned long)scene],@"lastScene":[NSString stringWithFormat:@"%04lX",(unsigned long)scene+15]}]};
+        entry=@{@"node":node,@"controller":controller};all[uid]=entry;[nodes addObject:node];[controllers addObject:controller];
+    }
+    mesh[@"nodes"]=nodes;mesh[@"provisioners"]=controllers;NSMutableDictionary *prefs=[valid[@"Preferences"]mutableCopy];prefs[@"mesh.json"]=[NSJSONSerialization dataWithJSONObject:mesh options:0 error:error];
+    NSMutableDictionary *files=[valid[@"Documents"]mutableCopy];for(NSString *path in files.allKeys)if([path hasPrefix:@"Network/"]){NSDictionary *old=[NSJSONSerialization JSONObjectWithData:files[path]options:0 error:nil];if([old[@"meshUUID"]isEqual:mesh[@"meshUUID"]])files[path]=prefs[@"mesh.json"];}
+    NSMutableDictionary *d=[valid mutableCopy];d[@"Preferences"]=prefs;d[@"Documents"]=files;d[@"EnrollmentRecipient"]=uid;
+    NSData *encoded=[self encodeDocument:d error:error];NSDictionary *invite=encoded?[self readData:encoded error:error]:nil;
+    return invite?@{@"document":invite,@"reservations":all}:nil;
+}
+
 + (BOOL)isHomePath:(NSString *)path{
     if(![path isKindOfClass:NSString.class]||[path hasPrefix:@"/"]||[path.pathComponents containsObject:@".."]||[path.pathComponents containsObject:@"."])return NO;
     if([@[@"default.realm",@"UserModel.sqlite",@"AppStatusAssistant.archiver",@"networkCompareList.archiver"]containsObject:path])return YES;
@@ -47,6 +94,16 @@ static BOOL HPWritePlist(id value,NSString *path,NSError **error){NSData *data=[
 }
 + (NSDictionary *)preparedDocument:(NSDictionary *)document receivingPreferences:(NSDictionary *)current error:(NSError **)error{
     NSDictionary *valid=[self validatedDocument:document error:error];if(!valid)return nil;
+    if([current[@"HP.JoinPending"]boolValue]){
+        NSString *uid=current[@"HP.JoinUUID"];NSDictionary *network=HPDecodeMesh(valid[@"Preferences"]);NSDictionary *target=nil;
+        for(NSDictionary *node in network[@"nodes"])if([node[@"UUID"]isEqual:uid])target=node;
+        if(![valid[@"EnrollmentRecipient"]isEqual:uid]||![target[@"deviceKey"]isEqual:current[@"HP.JoinKey"]]||![valid[@"Preferences"][@"HP.EnrollmentAuthority"]isEqual:current[@"HP.EnrollmentAuthority"]])return HPHomeFail(error,@"This invitation belongs to another installation. Share this device's setup request with your main controller first.");
+        NSMutableDictionary *receiver=[current mutableCopy];receiver[@"mesh.json"]=valid[@"Preferences"][@"mesh.json"];receiver[@"currenProvisionerUUID_key"]=uid;receiver[@"currenProvisionerSno_key"]=@0;receiver[@"currentMeshProvisionAddress_key"]=@{uid:@(HPAddress(target[@"unicastAddress"])+[target[@"elements"]count])};receiver[@"HP.JoinPending"]=@NO;receiver[@"HP.Profile"]=@"This device";
+        NSMutableDictionary *clean=[valid mutableCopy];[clean removeObjectForKey:@"EnrollmentRecipient"];
+        NSDictionary *prepared=[self preparedDocument:clean receivingPreferences:receiver error:error];if(!prepared)return nil;
+        NSMutableDictionary *result=[prepared mutableCopy],*p=[prepared[@"Preferences"]mutableCopy];p[@"HP.JoinPending"]=@NO;[p removeObjectForKey:@"HP.JoinUUID"];[p removeObjectForKey:@"HP.JoinKey"];result[@"Preferences"]=p;return result;
+    }
+    if(valid[@"EnrollmentRecipient"])return HPHomeFail(error,@"An invitation can only be imported by the new installation that requested it. Use Export Home for existing controllers.");
     NSMutableDictionary *mesh=[HPDecodeMesh(valid[@"Preferences"])mutableCopy];NSDictionary *own=HPDecodeMesh(current);
     NSString *uuid=current[@"currenProvisionerUUID_key"];NSDictionary *ownNode,*ownController;
     for(NSDictionary *n in own[@"nodes"])if([n[@"UUID"]isEqual:uuid])ownNode=n;
@@ -54,8 +111,8 @@ static BOOL HPWritePlist(id value,NSString *path,NSError **error){NSData *data=[
     if(!ownNode||!ownController)return HPHomeFail(error,@"This device's controller identity is unavailable. Open your existing Home first.");
     // Never take the sending phone's identity or sequence number.
     NSUInteger start=HPAddress(ownNode[@"unicastAddress"]),count=[ownNode[@"elements"]count];
-    for(NSDictionary *n in mesh[@"nodes"]){if([n[@"UUID"]isEqual:uuid])continue;NSUInteger other=HPAddress(n[@"unicastAddress"]),end=other+[n[@"elements"]count];if(other<start+count&&end>start)return HPHomeFail(error,@"This Home uses this device's controller address. Use a different numbered Device build.");}
-    for(NSDictionary *p in mesh[@"provisioners"]){if([p[@"UUID"]isEqual:uuid])continue;for(NSDictionary *r in p[@"allocatedUnicastRange"])for(NSDictionary *mine in ownController[@"allocatedUnicastRange"])if(HPAddress(r[@"lowAddress"])<=HPAddress(mine[@"highAddress"])&&HPAddress(r[@"highAddress"])>=HPAddress(mine[@"lowAddress"]))return HPHomeFail(error,@"This Home reserves this controller's address range. Use a different numbered Device build.");}
+    for(NSDictionary *n in mesh[@"nodes"]){if([n[@"UUID"]isEqual:uuid])continue;NSUInteger other=HPAddress(n[@"unicastAddress"]),end=other+[n[@"elements"]count];if(other<start+count&&end>start)return HPHomeFail(error,@"This Home uses this device's controller address. Create an invitation for this installation from the main controller.");}
+    for(NSDictionary *p in mesh[@"provisioners"]){if([p[@"UUID"]isEqual:uuid])continue;for(NSDictionary *r in p[@"allocatedUnicastRange"])for(NSDictionary *mine in ownController[@"allocatedUnicastRange"])if(HPAddress(r[@"lowAddress"])<=HPAddress(mine[@"highAddress"])&&HPAddress(r[@"highAddress"])>=HPAddress(mine[@"lowAddress"]))return HPHomeFail(error,@"This Home reserves this controller's address range. Create an invitation for this installation from the main controller.");}
     NSMutableArray *nodes=[NSMutableArray new],*controllers=[NSMutableArray new];
     for(NSDictionary *n in mesh[@"nodes"])if(![n[@"UUID"]isEqual:uuid])[nodes addObject:n];[nodes addObject:ownNode];
     for(NSDictionary *p in mesh[@"provisioners"])if(![p[@"UUID"]isEqual:uuid])[controllers addObject:p];[controllers addObject:ownController];
@@ -67,6 +124,7 @@ static BOOL HPWritePlist(id value,NSString *path,NSError **error){NSData *data=[
     if(counter<0||counter>=0xffff00)return HPHomeFail(error,@"This controller needs a mesh sequence refresh before a Home can be imported.");
     prefs[@"currenProvisionerUUID_key"]=uuid;prefs[@"currenProvisionerSno_key"]=@(counter+256);
     prefs[@"uniqueID"]=current[@"uniqueID"]?:uuid;prefs[@"HP.Profile"]=current[@"HP.Profile"]?:@"This device";prefs[@"HP.Seeded"]=@YES;
+    prefs[@"HP.JoinPending"]=@NO;if(current[@"HP.EnrollmentAuthority"])prefs[@"HP.EnrollmentAuthority"]=current[@"HP.EnrollmentAuthority"];
     // Floating controls belong to this screen/device, rather than the Home.
     for(NSString *localKey in @[@"HP.Float.PLUS",@"HP.Float.STUDIO"]){[prefs removeObjectForKey:localKey];if(current[localKey])prefs[localKey]=current[localKey];}
     NSMutableDictionary *addresses=[prefs[@"currentMeshProvisionAddress_key"]isKindOfClass:NSDictionary.class]?[prefs[@"currentMeshProvisionAddress_key"]mutableCopy]:[NSMutableDictionary new];
