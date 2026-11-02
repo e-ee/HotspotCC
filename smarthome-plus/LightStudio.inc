@@ -53,7 +53,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)start:(NSInteger)mode {
     if(mode<0||mode>=8)return;
     [self stop];[self reloadLights];if(!self.lights.count){self.status=@"No colour lights in this room";return;}
-    self.mode=mode;self.began=NSProcessInfo.processInfo.systemUptime;self.lastTick=self.began;self.phase=0;self.cursor=0;self.lastSent=0;self.sent=[NSMutableDictionary new];
+    self.mode=mode;self.began=NSProcessInfo.processInfo.systemUptime;self.lastTick=self.began;self.phase=0;self.connecting=NO;self.cursor=0;self.lastSent=0;self.sent=[NSMutableDictionary new];
     self.oldIdle=UIApplication.sharedApplication.idleTimerDisabled;UIApplication.sharedApplication.idleTimerDisabled=YES;
     // A scoped assertion keeps effects alive when supported by this TrollStore environment.
     dlopen("/System/Library/PrivateFrameworks/AssertionServices.framework/AssertionServices",RTLD_NOW);
@@ -218,7 +218,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     [super viewDidLoad];self.title=@"Light Studio";self.view.backgroundColor=[UIColor colorWithRed:.035 green:.045 blue:.07 alpha:1];
     UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=18;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
-    [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:22],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-30],[stack.leadingAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.leadingAnchor constant:22],[stack.trailingAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.trailingAnchor constant:-22]]];
+    [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:22],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-30],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:22],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-22],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-44]]];
     [stack addArrangedSubview:[self text:@"Let the apartment move." size:28]];
     UILabel *subtitle=[self text:@"Choose a mood. Colour travels through your lights." size:14];subtitle.textColor=[UIColor colorWithWhite:.65 alpha:1];[stack addArrangedSubview:subtitle];
     self.preview=[HPStudioPreview new];self.preview.backgroundColor=UIColor.clearColor;[self.preview.heightAnchor constraintEqualToConstant:90].active=YES;[stack addArrangedSubview:self.preview];
