@@ -1,29 +1,31 @@
-# SYLVANIA Plus 3.2.0
+# SYLVANIA Plus 3.3.0
 
-The original controls, unlimited routine patch and separate controller profiles
-are retained. New work fixes native ARGB scene sharing, removes the retired
-smart-home-experiences shortcut, reduces PLUS opacity and adds shortcut ordering.
+This update focuses on working colour motion, a full Home transfer and dark mode.
 
-Light Studio provides eight moving colour patterns with room targeting, an
-editable lamp path, brightness and motion control. The controls use the bulbs'
-existing HSL transition model. A direct fade command allows local interpolation
-without a separate packet for every animation frame. Ordinary controls pause
-this controller's effect timer. Separate controllers should not run effects
-simultaneously because they would send competing target states.
+The original vendor colour path forwards hue degrees and saturation/brightness
+percent directly to the low-level HSL command. Studio previously sent normalized
+16-bit fields, which exceeded these bulbs' expected range. Its encoder now
+matches the actual original ARM64 implementation. Blue, green and magenta inputs
+were replayed through that original code to verify the contract.
 
-Additional native-model settings cover default fades and power-cut behaviour.
-The HSL convenience method is adjusted to honour the configured bulb default
-instead of always overriding it with an explicit zero-duration transition.
+Home export uses Realm's write-copy operation and SQLite's backup API. It keeps
+all existing scene values intact, including legacy sentinels which the former
+JSON scene validator rejected. Export Home and Import Home replace the old
+scene-sharing options. Import validates the copied Realm, stages the Home and
+applies it on restart. Each receiving device preserves its own controller identity
+and monotonic packet counter. A restore journal handles interrupted replacement.
 
-The share bug was an incorrect UInt16 range check on the routine-card colour.
-The native renderer splits that value into four ARGB bytes, so the export format
-now accepts unsigned 32-bit colours and their signed Int32 representation.
+Dark mode includes the original app's hard-coded white backgrounds and black
+text, Plus's panels, a dark launch screen, and preserved scene colour chips.
+The retired help/support/legal sections are hidden from the old menu.
 
-Tests cover 0/9/10/11/100/1000 routine files, packed 32-bit colours, wrong-home
-and invalid records, stable custom ordering with newly added items, bounded
-spatial and temporal output for every effect, and an actual UIKit/sender run
-with fourteen simulated lamps. Physical radio and firmware-setting behaviour
-have not been measured in this environment.
+Eight spatial moods remain available: Aurora, Comet, Ocean, Embers, Neon, Prism,
+Breathe and Velvet. They generate colour motion without a microphone. They are
+not audio beat analysis or screen capture. Bluetooth updates are paced and lamps
+interpolate targets; the simulator does not prove physical lamp response.
 
-See INSTALL.txt for update steps, and FIRMWARE_FINDINGS.md for manufacturer
-catalog/image inspection and the capabilities of the saved bulb network.
+Firmware findings from the earlier release remain in FIRMWARE_FINDINGS.md. This
+update uses supported existing light models and does not flash any firmware.
+
+Install the matching numbered IPA over the existing Plus app in TrollStore.
+Do not uninstall first. Your current saved scenes and pairing state are retained.
