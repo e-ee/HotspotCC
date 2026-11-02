@@ -320,9 +320,9 @@ static void AssertVisibleCardText(UIViewController *studio){
         assert([overlay hitTest:CGPointMake(20,500)withEvent:nil]==nil);
         SaveScreen(self.window,@"LegacyDark.png");
         [plus sendActionsForControlEvents:UIControlEventTouchUpInside];
-        Later(.5,^{UINavigationController *nav=(id)home.presentedViewController;assert([nav isKindOfClass:UINavigationController.class]);UITableViewController *panel=(id)nav.topViewController;assert([panel isKindOfClass:NSClassFromString(@"HPPanel")]);assert(!plus.hidden&&!studio.hidden);
+        Until(8,@"Plus panel presentation",^BOOL{UIViewController *presented=home.presentedViewController;return [presented isKindOfClass:UINavigationController.class]&&[[(UINavigationController *)presented topViewController]isKindOfClass:NSClassFromString(@"HPPanel")]&&!presented.isBeingPresented&&!presented.transitionCoordinator;},^{UINavigationController *nav=(id)home.presentedViewController;assert([nav isKindOfClass:UINavigationController.class]);UITableViewController *panel=(id)nav.topViewController;assert([panel isKindOfClass:NSClassFromString(@"HPPanel")]);assert(!plus.hidden&&!studio.hidden);
             assert([panel.tableView.dataSource tableView:panel.tableView numberOfRowsInSection:2]==2);UITableViewCell *cell=[panel.tableView.dataSource tableView:panel.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:2]];assert([cell.textLabel.text isEqual:@"Import Home"]);SaveScreen(self.window,@"HomeDark.png");
-            [studio sendActionsForControlEvents:UIControlEventTouchUpInside];Later(.4,^{assert([nav.topViewController isKindOfClass:NSClassFromString(@"HPStudio")]);[self checkMap:nav];});
+            [studio sendActionsForControlEvents:UIControlEventTouchUpInside];Until(8,@"Studio shortcut navigation",^BOOL{return [nav.topViewController isKindOfClass:NSClassFromString(@"HPStudio")]&&!nav.transitionCoordinator;},^{[self checkMap:nav];});
         });
     });
 }
