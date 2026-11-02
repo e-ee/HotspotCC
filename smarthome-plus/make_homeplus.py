@@ -140,7 +140,7 @@ def build(config_zip, module, ldid):
         shutil.copy2(module,app/'Frameworks/HomePlus.dylib')
         info=plistlib.loads((app/'Info.plist').read_bytes())
         info.update(CFBundleIdentifier=BUNDLE_ID,CFBundleDisplayName='SYLVANIA Plus',CFBundleName='SYLVANIA Plus',
-                    CFBundleVersion='3101',CFBundleShortVersionString='3.1.1',
+                    CFBundleVersion='3200',CFBundleShortVersionString='3.2.0',
                     FirebaseAnalyticsCollectionEnabled=False,FirebaseCrashlyticsCollectionEnabled=False)
         info.pop('CFBundleURLTypes',None)
         info['UTExportedTypeDeclarations']=[{'UTTypeIdentifier':'com.ledvance.smart.plus.scenes','UTTypeDescription':'SYLVANIA Plus scenes',
@@ -156,7 +156,8 @@ def build(config_zip, module, ldid):
         # Separate container and application identity preserve the installed original app.
         entitlements={'application-identifier':'4657EYLGTH.'+BUNDLE_ID,
             'com.apple.developer.team-identifier':'4657EYLGTH','com.apple.developer.homekit':True,
-            'com.apple.private.security.container-required':BUNDLE_ID}
+            'com.apple.private.security.container-required':BUNDLE_ID,
+            'com.apple.multitasking.unlimitedassertions':True,'com.apple.runningboard.assertions':True}
         entitlement_path=ROOT/'homeplus-entitlements.plist';entitlement_path.write_bytes(plistlib.dumps(entitlements))
         for path in app.rglob('*'):
             if not path.is_file():continue
