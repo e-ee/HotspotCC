@@ -2,12 +2,13 @@
 #define HP_EFFECT_PATTERNS_H
 #include <math.h>
 #include <stdint.h>
-#define HP_MODE_COUNT 24
-#define HP_JOURNEY_COUNT 3
+#define HP_MODE_COUNT 32
+#define HP_JOURNEY_COUNT 6
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
-static inline double HPMotionRate(double value){double x=HPClamp((isfinite(value)?value:.5)-.15,0,.85)/.85;return .2+2.8*x*x;}
+// A curved control preserves gentle lower settings and reaches the requested 10x.
+static inline double HPMotionRate(double value){double x=HPClamp((isfinite(value)?value:.5)-.15,0,.85)/.85;return .2+9.8*x*x*x;}
 static inline double HPWrap(double x){return x-floor(x);}
 static inline double HPWave(double x){return .5+.5*sin(x*6.283185307179586);}
 // Two broad, overlapping fields keep neighbouring lights related while avoiding
@@ -29,15 +30,29 @@ static inline HPColor HPNaturalField(int mode,double seconds,double x,double y,d
     }
     return (HPColor){(float)h,(float)s,(float)((.50+.035*(.55*a+.45*b))*brightness)};
 }
+static inline HPColor HPNewField(int mode,double seconds,double x,double y,double brightness,double speed){
+    double t=seconds*speed,a=HPWave(.62*x+.18*y-t/240.),b=HPWave(-.24*x+.66*y+t/310.),mix=.6*a+.4*b,h=.5,s=.7,l=.51;
+    switch(mode){
+        case 24:h=.29+.20*pow(mix,1.5);s=.80+.12*b;l=.49+.05*a;break;
+        case 25:{double flow=HPWave(y*.82+.10*sin(x*5-t/160.)-t/220.);h=.46+.20*flow;s=.55+.2*b;l=.49+.045*flow;break;}
+        case 26:{double petals=HPWave(.47*x-.31*y+t/280.)*.7+.3*b;h=.77+.17*petals;s=.36+.24*a;l=.50+.04*b;break;}
+        case 27:h=.025+.10*HPWave(.54*x+.42*y-t/260.);s=.63+.15*b;l=.49+.05*a;break;
+        case 28:{double cloud=.55*a+.25*b+.20*HPWave(.9*x-.8*y+t/390.);h=.58+.30*cloud;s=.52+.2*a;l=.48+.06*cloud;break;}
+        case 29:h=.37+.22*(.45*a+.55*b);s=.40+.24*a;l=.50+.035*b;break;
+        case 30:{double cx=.5+.3*sin(t/170.),cy=.5+.3*cos(t/210.),glow=exp(-6*((x-cx)*(x-cx)+(y-cy)*(y-cy)));double warmth=.55*glow+.45*a;h=.055+.06*warmth;s=.52+.14*b;l=.49+.05*warmth;break;}
+        default:{double angle=t/310.,u=(x-.5)*cos(angle)+(y-.5)*sin(angle),v=(y-.5)*cos(angle)-(x-.5)*sin(angle);double petals=.5+.5*cos(u*5)*cos(v*5);h=.07+.79*petals;s=.60+.12*a;l=.50+.04*b;break;}
+    }return (HPColor){h,s,l*brightness};
+}
 // Smooth periodic palettes: no on/off pulses, sharp heads or hue wrap.
 static inline HPColor HPPattern(int mode,double seconds,double position,double brightness,double speed){
     seconds=isfinite(seconds)?seconds:0;position=isfinite(position)?HPWrap(position):0;
     brightness=isfinite(brightness)?HPClamp(brightness,.04,1):.6;
     speed=isfinite(speed)?HPClamp(speed,.15,1):.5;
+    if(mode>=24)return HPNewField(mode,seconds,position,.5,brightness,speed);
     if(mode>=16)return HPNaturalField(mode,seconds,position,.5,brightness,speed);
     double t=seconds*speed,h=.6,s=.5,l=.52;
     switch(mode){
-        case 0:{double ribbon=HPWave(position*.90-t/180.+.20);h=.31+.43*pow(ribbon,1.6);s=.82+.10*(1-ribbon);l=.49+.055*HPWave(position-t/160.);break;}
+        case 0:{double ribbon=HPWave(position*.8-t/180.);h=.36+.42*ribbon;s=.72+.24*HPWave(position-t/240.);l=.49+.055*HPWave(position-t/160.);break;}
         case 1:{double head=HPWave(position-t/90.);head=head*head;h=.52+.12*(1-head);s=.48+.10*(1-head);l=.47+.09*head;break;}
         case 2:{double swell=HPWave(position*.8-t/200.);h=.49+.105*swell;s=.46+.08*HPWave(position+t/210.);l=.49+.045*swell;break;}
         case 3:{double glow=.5+.32*sin(t*.035+position*5)+.18*sin(t*.019+position*9);h=.055+.03*glow;s=.52+.07*glow;l=.49+.045*glow;break;}
@@ -59,6 +74,7 @@ static inline HPColor HPPattern(int mode,double seconds,double position,double b
 static inline HPColor HPPattern2D(int mode,double seconds,double x,double y,double brightness,double speed){
     x=isfinite(x)?HPClamp(x,0,1):.5;y=isfinite(y)?HPClamp(y,0,1):.5;
     seconds=isfinite(seconds)?seconds:0;brightness=isfinite(brightness)?HPClamp(brightness,.04,1):.6;speed=isfinite(speed)?HPClamp(speed,.15,1):.5;
+    if(mode>=24)return HPNewField(mode,seconds,x,y,brightness,speed);
     if(mode>=16)return HPNaturalField(mode,seconds,x,y,brightness,speed);
     double position=.65*x+.35*y;
     if(mode==2||mode==13||mode==14)position=.18*x+.82*y;
@@ -101,8 +117,8 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
     }
     HPColor result;
     if(journey>=0&&journey<HP_JOURNEY_COUNT){
-        static const int chapters[HP_JOURNEY_COUNT][6]={{0,23,18,19,20,0},{21,17,2,11,9,23},{14,8,3,6,10,14}};
-        static const int counts[HP_JOURNEY_COUNT]={5,6,5};
+        static const int chapters[HP_JOURNEY_COUNT][6]={{0,23,18,19,20,0},{21,17,2,11,9,23},{14,8,3,6,10,14},{16,24,29,21,25,16},{26,18,28,7,20,9},{14,27,8,6,30,3}};
+        static const int counts[HP_JOURNEY_COUNT]={5,6,5,5,6,6};
         double time=isfinite(journeySeconds)?fmax(0,journeySeconds):0;
         time=fmod(time,counts[journey]*360.);
         int chapter=(int)(time/360.);double mix=HPClamp((fmod(time,360.)-240.)/120.,0,1);mix=mix*mix*(3-2*mix);
@@ -110,6 +126,14 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
         HPColor b=HPPattern2D(chapters[journey][(chapter+1)%counts[journey]],phase,x,y,brightness,1);
         result=(HPColor){a.hue+(b.hue-a.hue)*mix,a.saturation+(b.saturation-a.saturation)*mix,a.lightness+(b.lightness-a.lightness)*mix};
     }else result=HPPattern2D(mode,phase,x,y,brightness,1);
+    if(variation){
+        unsigned style=(variation>>3)%4;
+        if(mode==5||mode==31||style>=2){
+            static const double ranges[8][2]={{.04,.94},{.34,.75},{.04,.16},{.72,.94},{.43,.65},{.16,.52},{.04,.32},{.55,.81}};
+            unsigned palette=(variation/31)%8;double pigment=HPWave(result.hue*1.6+(variation%251)/251.);
+            result.hue=ranges[palette][0]+(ranges[palette][1]-ranges[palette][0])*pigment;
+        }else if(style==1)result.hue=1-result.hue;
+    }
     result.saturation=HPColourDepth(result.saturation,depth);
     return result;
 }
