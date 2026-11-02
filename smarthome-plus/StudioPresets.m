@@ -16,6 +16,7 @@
     if([recipe[@"variation"]doubleValue]<0||[recipe[@"variation"]doubleValue]>UINT32_MAX||[recipe[@"variation"]doubleValue]!=[recipe[@"variation"]unsignedIntValue])goto invalid;
     for(NSString *key in @[@"phase",@"journeyElapsed"])if([recipe[key]doubleValue]<0||[recipe[key]doubleValue]>1e9)goto invalid;
     return [recipe dictionaryWithValuesForKeys:@[@"id",@"name",@"scope",@"mode",@"journey",@"brightness",@"motion",@"depth",@"variation",@"phase",@"journeyElapsed"]];
+
 invalid:
     if(error)*error=[NSError errorWithDomain:@"HP.StudioPresets" code:1 userInfo:@{NSLocalizedDescriptionKey:@"This moving mood has invalid settings."}];
     return nil;
