@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -87,12 +90,17 @@ jobs:
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl install "$DEVICE" build/StudioSmoke.app
-          xcrun simctl launch "$DEVICE" local.homeplus.studiosmoke
           CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
+          xcrun simctl launch --stdout="$CONTAINER/Documents/Smoke.stdout" --stderr="$CONTAINER/Documents/Smoke.stderr" "$DEVICE" local.homeplus.studiosmoke
           for attempt in $(seq 1 60); do
             if test -f "$CONTAINER/Documents/smoke-report.json"; then break; fi
             sleep 1
           done
+          if ! test -f "$CONTAINER/Documents/smoke-report.json"; then
+            cat "$CONTAINER/Documents/Smoke.stdout" "$CONTAINER/Documents/Smoke.stderr" || true
+            xcrun simctl spawn "$DEVICE" log show --last 3m --style compact --predicate 'process == "StudioSmoke"' | tail -120 || true
+            exit 1
+          fi
           cp "$CONTAINER/Documents/smoke-report.json" build/smoke-report.json
           cat build/smoke-report.json
           cp "$CONTAINER/Documents/LightStudio.png" build/LightStudio.png
