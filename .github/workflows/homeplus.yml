@@ -1,5 +1,8 @@
 name: SYLVANIA Plus
 on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
