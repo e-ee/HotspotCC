@@ -1,6 +1,6 @@
 typedef void(^HPReadCompletion)(NSDictionary *reading,NSError *error);
 static BOOL HPIdentifying;
-static UIBackgroundTaskIdentifier HPIdentifyTask=UIBackgroundTaskInvalid;
+static UIBackgroundTaskIdentifier HPIdentifyTask;
 static NSError *HPReadError(NSString *text){return [NSError errorWithDomain:@"LightReadback" code:1 userInfo:@{NSLocalizedDescriptionKey:text}];}
 static BOOL HPTransportOpen(void){id bearer=HPGet(NSClassFromString(@"SigBearer"),@"share");SEL selector=NSSelectorFromString(@"isOpen");return [bearer respondsToSelector:selector]&&((BOOL(*)(id,SEL))objc_msgSend)(bearer,selector);}
 static BOOL HPTransportBusy(void){return [HPGet(HPGet(NSClassFromString(@"SigMeshLib"),@"share"),@"commands")count]>0;}
