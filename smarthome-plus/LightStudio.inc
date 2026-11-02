@@ -216,6 +216,10 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 }
 - (void)viewDidLoad {
     [super viewDidLoad];self.title=@"Light Studio";self.view.backgroundColor=[UIColor colorWithRed:.035 green:.045 blue:.07 alpha:1];
+    self.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;
+    UINavigationBarAppearance *appearance=[UINavigationBarAppearance new];[appearance configureWithOpaqueBackground];appearance.backgroundColor=self.view.backgroundColor;appearance.titleTextAttributes=@{NSForegroundColorAttributeName:UIColor.whiteColor};
+    self.navigationItem.standardAppearance=appearance;self.navigationItem.scrollEdgeAppearance=appearance;self.navigationItem.compactAppearance=appearance;
+    self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc]initWithTitle:@"Pause" style:UIBarButtonItemStylePlain target:self action:@selector(stop)];self.navigationItem.rightBarButtonItem.tintColor=[UIColor colorWithRed:.76 green:.67 blue:.98 alpha:1];
     UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=18;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:22],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-30],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:22],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-22],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-44]]];
@@ -251,6 +255,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)refresh {
     HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.status;[self.scopeButton setTitle:[@"Room: " stringByAppendingString:engine.scope] forState:UIControlStateNormal];
     [self.pause setTitle:engine.mode>=0?@"Pause lighting":@"Choose a mood above" forState:UIControlStateNormal];self.pause.enabled=engine.mode>=0;
+    self.navigationItem.rightBarButtonItem.enabled=engine.mode>=0;
     self.preview.mode=MAX(0,engine.mode);self.preview.seconds=engine.mode>=0?engine.phase:0;self.preview.brightness=engine.brightness;self.preview.speed=1;[self.preview setNeedsDisplay];
 }
 - (void)selectTheme:(UIButton *)button{[HPLightEngine.shared start:button.tag];[self refresh];}
