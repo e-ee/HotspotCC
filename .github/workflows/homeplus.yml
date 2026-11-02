@@ -2,7 +2,7 @@ name: SYLVANIA Plus
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', '.github/workflows/homeplus.yml']
+    paths: ['smarthome-plus/*.m', 'smarthome-plus/*.h', 'smarthome-plus/*.inc', 'smarthome-plus/*.c', 'smarthome-plus/*.storyboard', '.github/workflows/homeplus.yml']
   workflow_dispatch:
 concurrency:
   group: smarthome-plus
@@ -28,10 +28,13 @@ jobs:
           xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -lsqlite3 -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
           codesign --force --sign - build/HomePlus.dylib
           file build/HomePlus.dylib
+          xcrun ibtool --compile build/HomePlusLaunch.storyboardc smarthome-plus/HomePlusLaunch.storyboard --minimum-deployment-target 15.0 --target-device iphone --target-device ipad
       - uses: actions/upload-artifact@v4
         with:
           name: HomePlus-arm64
-          path: build/HomePlus.dylib
+          path: |
+            build/HomePlus.dylib
+            build/HomePlusLaunch.storyboardc
       - name: Exercise UIKit and the fourteen-lamp sender
         run: |
           mkdir -p build/StudioSmoke.app
