@@ -135,7 +135,7 @@ static void InitLamps(void){if(LampValues)return;WhiteReads=[NSMutableArray new]
 + (id)lightHSLGetWithDestination:(uint16_t)target retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses successCallback:(void(^)(uint16_t,uint16_t,id))success resultCallback:(void(^)(BOOL,NSError *))result{
     InitLamps();assert(retries==0&&responses==1);[Reads addObject:@(target)];if(DropReads||target==SilentReadTarget){PendingReads++;return [HPMockReadHandle new];}
     if(target==FailReadTarget){result(NO,[NSError errorWithDomain:@"mock" code:1 userInfo:@{NSLocalizedDescriptionKey:@"A test light did not respond"}]);return nil;}
-    NSDictionary *v=LampValues[@(target)];assert(v);HPMockStatus *status=[HPMockStatus new];status.HSLHue=[v[@"hue"]unsignedShortValue];status.HSLSaturation=[v[@"sat"]unsignedShortValue];status.HSLLightness=[v[@"light"]unsignedShortValue];success(target,0x7e00,status);if(DisconnectAfterRead)Disconnected=YES;result(YES,nil);return nil;
+    NSDictionary *v=LampValues[@(target)];assert(v);HPMockStatus *status=[HPMockStatus new];status.HSLHue=[v[@"hue"]unsignedShortValue];status.HSLSaturation=[v[@"sat"]unsignedShortValue];status.HSLLightness=[v[@"light"]unsignedShortValue]/(HalfStatusLevels?2:1);success(target,0x7e00,status);if(DisconnectAfterRead)Disconnected=YES;result(YES,nil);return nil;
 }
 + (id)lightHSLSetWithDestination:(uint16_t)target HSLLight:(uint16_t)light HSLHue:(uint16_t)hue HSLSaturation:(uint16_t)saturation transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
     InitLamps();assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil);assert(hue<=360&&saturation<=100&&light<=100);assert(([transition raw]>=40&&[transition raw]<=60)||[transition raw]==10);
@@ -294,7 +294,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options{
     UIViewController *launch=[[UIStoryboard storyboardWithName:@"HomePlusBlankLaunch360"bundle:NSBundle.mainBundle]instantiateInitialViewController];[launch loadViewIfNeeded];assert(launch.view.subviews.count==0);CGFloat r,g,b,a;[launch.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.1&&g<.1&&b<.1);
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
-    if([NSProcessInfo.processInfo.arguments containsObject:@"--static-recall"]){Later(1,^{[self checkStaticRecall];});return YES;}
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--static-recall"]){Later(1,^{[self checkExactSenderCapture];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--white-capture"]){Later(1,^{[self checkWhiteCapture];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--choreography"]){Later(1,^{[self checkChoreography];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--capture-only"]){Later(1,^{[self checkReachableCapture];});return YES;}
@@ -343,6 +343,15 @@ static void AssertVisibleCardText(UIViewController *studio){
             });
         });
     });
+}
+- (void)checkExactSenderCapture{
+ id e=Shared(@"HPLightEngine");[e start:0];for(int i=0;i<14;i++)[e tick];[e stop];[e setValue:@0 forKey:@"settleUntil"];
+ NSDictionary *before=[LampValues copy];HalfStatusLevels=YES;
+ [self.studio capturePausedSceneWithName:@"Exact sender level"completion:^(NSError *error){
+  assert(!error);NSArray *saved=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(saved.count==14);
+  for(int i=0;i<14;i++){assert([saved[i][@"lightness"]intValue]==[before[@(0x20+i)][@"light"]intValue]);}
+  HalfStatusLevels=NO;[self checkStaticRecall];
+ }];
 }
 - (void)checkStaticRecall{
  id e=Shared(@"HPLightEngine");[e start:0];for(int i=0;i<14;i++)[e tick];[e stop];[e setValue:@0 forKey:@"settleUntil"];

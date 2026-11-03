@@ -63,6 +63,14 @@ static void HPReadWhiteTemperature(NSDictionary *light,NSDictionary *colour,HPRe
 // contributes only white temperature; it must not replace the bound HSL level.
 static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
  HPReadColour(light,^(NSDictionary *colour,NSError *error){
+  // Readback remains the reachability gate. For a colour we sent ourselves,
+  // retain the sender's level when the live hue/saturation confirm that look.
+  // The vendor's HSL status level is not a round-trip command value: the user's
+  // identical-colour captures show 30/31 becoming 15 on the next capture.
+  NSDictionary *sent=HPCommandColours[light[@"id"]];
+  if(colour&&!HPUsesWhiteChannel(light)&&sent&&abs([sent[@"hue"]intValue]-[colour[@"hue"]intValue])<=2&&abs([sent[@"sat"]intValue]-[colour[@"sat"]intValue])<=2){
+   NSMutableDictionary *exact=[colour mutableCopy];exact[@"light"]=sent[@"light"];colour=exact;
+  }
   if(!colour||!HPUsesWhiteChannel(light)){completion(colour,error);return;}
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{HPReadWhiteTemperature(light,colour,completion);});
  });
