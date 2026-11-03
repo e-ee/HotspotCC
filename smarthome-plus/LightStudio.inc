@@ -105,7 +105,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     engine.speed=[prefs objectForKey:@"HP.StudioMotion"]?HPClamp([prefs floatForKey:@"HP.StudioMotion"],.15,1):.5;
     engine.depth=[prefs objectForKey:@"HP.StudioDepth"]?HPClamp([prefs floatForKey:@"HP.StudioDepth"],.25,1):1;
     engine.playbackRate=[prefs objectForKey:@"HP.PlaybackRate"]?HPClamp([prefs doubleForKey:@"HP.PlaybackRate"],.1,10):1;
-    engine.waveAngle=[prefs doubleForKey:@"HP.WaveAngle"];engine.waveReverse=[prefs boolForKey:@"HP.WaveReverse"];engine.rippleAge=100;
+    engine.waveAngle=[prefs doubleForKey:@"HP.WaveAngle"];engine.waveReverse=[prefs boolForKey:@"HP.WaveReverse"];engine.rippleAge=100;engine.rippleOrigin=CGPointMake(.5,.5);engine.rippleInward=[prefs boolForKey:@"HP.RippleInward"];
     engine.scope=@"All lights";engine.status=@"Choose a slow drift";
 });return engine;}
 - (void)reloadLights {
@@ -121,7 +121,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (HPColor)targetForLight:(NSDictionary *)light{return [self creativeTarget:light];}
 
 - (NSDictionary *)recipeNamed:(NSString *)name{
-    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed),@"creativeBrightness":@(self.creativeBrightness?:self.brightness),@"creativeDepth":@(self.creativeDepth?:self.depth),@"angle":@(self.waveAngle),@"reverse":@(self.waveReverse),@"playbackRate":@(self.playbackRate),@"creativeKind":@((self.creativeKind==2||self.creativeKind==3)?1:self.creativeKind),@"anchorLook":self.anchorLook?:@{},@"painted":(self.creativeKind==2||self.creativeKind==3)?[self snapshotLook]:(self.painted?:@{}),@"exploreVariant":@(self.exploreVariant)};
+    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed),@"creativeBrightness":@((self.creativeKind==2||self.creativeKind==3)?self.brightness:(self.creativeBrightness?:self.brightness)),@"creativeDepth":@((self.creativeKind==2||self.creativeKind==3)?self.depth:(self.creativeDepth?:self.depth)),@"angle":@(self.waveAngle),@"reverse":@(self.waveReverse),@"playbackRate":@(self.playbackRate),@"creativeKind":@((self.creativeKind==2||self.creativeKind==3)?1:self.creativeKind),@"anchorLook":self.anchorLook?:@{},@"painted":(self.creativeKind==2||self.creativeKind==3)?[self snapshotLook]:(self.painted?:@{}),@"exploreVariant":@(self.exploreVariant)};
 }
 - (BOOL)applyRecipe:(NSDictionary *)recipe error:(NSError **)error{
     NSDictionary *valid=[HPStudioPresets validatedRecipe:recipe error:error];if(!valid)return NO;
@@ -244,7 +244,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     // A user's choice must reach the sender on the next visit to this bulb,
     // rather than spending minutes behind the 1-degree/sec ambient limiter.
     // The explicit native fade below provides the physical interpolation.
-    BOOL requested=[self.retargets containsObject:key];state.color=requested?target:HPDrift(state.color,target,now-state.updatedAt);state.updatedAt=now;
+    BOOL requested=[self.retargets containsObject:key];state.color=requested?target:HPChoreographyDrift(state.color,target,now-state.updatedAt);state.updatedAt=now;
     HPWireColor wire=HPVendorColor(state.color);NSArray *previous=self.sent[key];
     if(previous&&[previous[0]unsignedShortValue]==wire.lightness&&[previous[1]unsignedShortValue]==wire.hue&&[previous[2]unsignedShortValue]==wire.saturation){[self completeRetarget:key];return;}
     uint8_t steps=HPSmoothTransitionSteps((unsigned)self.lights.count);
@@ -441,7 +441,7 @@ static UIViewController *HPCreateStudioTools(void);
 - (void)reloadPreview{[HPLightEngine.shared reloadLights];self.preview.lights=[HPLightEngine.shared.lights copy];}
 - (HPModeCard *)card:(NSString *)name detail:(NSString *)detail mode:(int)mode journey:(int)journey{
     HPModeCard *button=[[HPModeCard alloc]initWithFrame:CGRectZero];NSMutableArray *colors=[NSMutableArray new];
-    for(int n=0;n<3;n++){HPColor sample=HPStudioTarget(mode,journey,0,45,n*.5,.35,.8,1,0);[colors addObject:(id)[UIColor colorWithHue:sample.hue saturation:sample.saturation brightness:.22+.05*n alpha:1].CGColor];}
+    for(int n=0;n<3;n++){HPColor sample=mode==32?HPLivingAurora(45,n*.5,.35,.8,1):HPStudioTarget(mode==33?30:mode,journey,0,45,n*.5,.35,.8,1,0);[colors addObject:(id)[UIColor colorWithHue:sample.hue saturation:sample.saturation brightness:.22+.05*n alpha:1].CGColor];}
     button.palette.colors=colors;button.palette.startPoint=CGPointMake(0,0);button.palette.endPoint=CGPointMake(1,1);button.layer.cornerRadius=17;button.layer.masksToBounds=YES;button.layer.borderWidth=.5;button.layer.borderColor=[UIColor colorWithWhite:1 alpha:.13].CGColor;[button.heightAnchor constraintEqualToConstant:96].active=YES;
     NSMutableAttributedString *title=[[NSMutableAttributedString alloc]initWithString:[NSString stringWithFormat:@"%@\n%@",name,detail]attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,NSFontAttributeName:[UIFont systemFontOfSize:12]}];[title addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]range:NSMakeRange(0,name.length)];button.caption=[UILabel new];button.caption.attributedText=title;button.caption.numberOfLines=3;button.caption.textAlignment=NSTextAlignmentCenter;button.caption.userInteractionEnabled=NO;button.caption.isAccessibilityElement=NO;[button addSubview:button.caption];button.opaque=NO;button.isAccessibilityElement=YES;button.accessibilityTraits=UIAccessibilityTraitButton;button.accessibilityLabel=[NSString stringWithFormat:@"%@, %@",name,detail];return button;
 }
