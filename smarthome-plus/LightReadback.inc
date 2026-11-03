@@ -68,7 +68,7 @@ static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
   // The vendor's HSL status level is not a round-trip command value: the user's
   // identical-colour captures show 30/31 becoming 15 on the next capture.
   NSDictionary *sent=HPCommandColours[light[@"id"]];
-  if(colour&&!HPUsesWhiteChannel(light)&&sent&&abs([sent[@"hue"]intValue]-[colour[@"hue"]intValue])<=2&&abs([sent[@"sat"]intValue]-[colour[@"sat"]intValue])<=2){
+  if(colour&&!HPUsesWhiteChannel(light)&&sent&&[colour[@"light"]intValue]>0&&abs(2*[colour[@"light"]intValue]-[sent[@"light"]intValue])<=2&&abs([sent[@"hue"]intValue]-[colour[@"hue"]intValue])<=2&&abs([sent[@"sat"]intValue]-[colour[@"sat"]intValue])<=2){
    NSMutableDictionary *exact=[colour mutableCopy];exact[@"light"]=sent[@"light"];colour=exact;
   }
   if(!colour||!HPUsesWhiteChannel(light)){completion(colour,error);return;}
