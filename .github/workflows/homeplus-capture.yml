@@ -2,7 +2,7 @@ name: SYLVANIA Plus white and colour scene capture
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m', 'smarthome-plus/LightChannel.inc']
+    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m', 'smarthome-plus/LightChannel.inc', 'smarthome-plus/SimulatorSmoke.m']
   workflow_dispatch:
 concurrency:
   group: homeplus-capture
