@@ -1,4 +1,4 @@
-name: SYLVANIA Plus white and colour scene capture
+name: SYLVANIA Plus static shortcut brightness
 on:
   push:
     branches: [smarthome-plus]
@@ -83,7 +83,7 @@ jobs:
           xcrun simctl install "$DEVICE" build/StudioSmoke.app
           CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
           trap 'cp "$CONTAINER/Documents/Smoke.stdout" build/Smoke.stdout 2>/dev/null || true; cp "$CONTAINER/Documents/Smoke.stderr" build/Smoke.stderr 2>/dev/null || true; cp "$CONTAINER/Documents/failure-report.json" build/failure-report.json 2>/dev/null || true' EXIT
-          xcrun simctl launch --stdout="$CONTAINER/Documents/Smoke.stdout" --stderr="$CONTAINER/Documents/Smoke.stderr" "$DEVICE" local.homeplus.studiosmoke --white-capture &
+          xcrun simctl launch --stdout="$CONTAINER/Documents/Smoke.stdout" --stderr="$CONTAINER/Documents/Smoke.stderr" "$DEVICE" local.homeplus.studiosmoke --static-recall &
           for attempt in $(seq 1 240); do
             if test -f "$CONTAINER/Documents/ActualStudio.request" && ! test -f "$CONTAINER/Documents/ActualStudio.done"; then
               xcrun simctl io "$DEVICE" screenshot build/ActualStudio.png
@@ -132,4 +132,5 @@ jobs:
             build/Smoke.stderr
             build/failure-report.json
 # Enrollment presentation covers native pages and excludes system share sheets.
+
 

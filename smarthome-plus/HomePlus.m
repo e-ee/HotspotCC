@@ -342,11 +342,11 @@ __attribute__((constructor)) static void HPInitialize(void) {
         HPIdentifyTask=UIBackgroundTaskInvalid;
         HPBootstrap();
         HPInstallEnhancements();
-        HPInstallChannelTracking();
         HPInstallDarkTheme();
         Method method=class_getInstanceMethod(UIViewController.class,@selector(viewDidAppear:));
         if(method)HPOriginalDidAppear=method_setImplementation(method,(IMP)HPDidAppear);
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){[[HPManager shared]install];}];
     }
 }
+
 

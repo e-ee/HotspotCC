@@ -29,7 +29,9 @@
 extern BOOL HPShouldShowSetup(UIViewController *controller);
 static NSMutableArray *Writes,*Reads,*BrightnessWrites,*WhiteReads;
 static NSMutableDictionary *WhiteValues;
-static BOOL DropWhiteReads;
+static BOOL DropWhiteReads,NativeControlCall;
+static NSUInteger NativeShortcutCalls;
+static BOOL StaticShortcutRecallPassed;
 static NSMutableDictionary *LampValues,*LastTargets;
 static BOOL QueueBusy,DropReads,Disconnected;
 static NSUInteger PendingReads,CancelledReads;
@@ -121,7 +123,7 @@ static void InitLamps(void){if(LampValues)return;WhiteReads=[NSMutableArray new]
  InitLamps();assert(retries==0&&responses==1);[WhiteReads addObject:@(target)];if(DropWhiteReads){PendingReads++;return [HPMockReadHandle new];}NSDictionary *v=WhiteValues[@(target)];assert(v);HPMockWhiteStatus *status=[HPMockWhiteStatus new];status.presentCTLLightness=[v[@"light"]unsignedShortValue];status.presentCTLTemperature=[v[@"temperature"]unsignedShortValue];success(target,0x7e00,status);result(YES,nil);return nil;
 }
 + (id)lightCTLSetWithDestination:(uint16_t)target lightness:(uint16_t)light temperature:(uint16_t)temperature deltaUV:(uint16_t)delta transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
- InitLamps();NSArray *targets=target==0xc123?@[@0x20,@0x24]:@[@(target)];for(NSNumber *address in targets)WhiteValues[address]=@{@"light":@(light),@"temperature":@(temperature)};return nil;
+ InitLamps();NSArray *targets=target==0xc123?@[@0x20,@0x24]:@[@(target)];for(NSNumber *address in targets){WhiteValues[address]=@{@"light":@(light),@"temperature":@(temperature)};NSMutableDictionary *bound=[LampValues[address]mutableCopy];bound[@"light"]=@(light);LampValues[address]=bound;}return nil;
 }
 + (id)lightCTLSetWithDestination:(uint16_t)target lightness:(uint16_t)light temperature:(uint16_t)temperature deltaUV:(uint16_t)delta retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
  return [self lightCTLSetWithDestination:target lightness:light temperature:temperature deltaUV:delta transitionTime:nil delay:0 retryCount:retries responseMaxCount:responses ack:ack successCallback:success resultCallback:result];
@@ -139,7 +141,7 @@ static void InitLamps(void){if(LampValues)return;WhiteReads=[NSMutableArray new]
     InitLamps();assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil);assert(hue<=360&&saturation<=100&&light<=100);assert(([transition raw]>=40&&[transition raw]<=60)||[transition raw]==10);
     NSDictionary *previous=LastTargets[@(target)];assert(previous);
     id engine=((id(*)(id,SEL))objc_msgSend)(NSClassFromString(@"HPLightEngine"),NSSelectorFromString(@"shared"));NSString *key=[NSString stringWithFormat:@"mock-lamp-%d",target-0x20];BOOL requested=[[engine valueForKey:@"retargets"]containsObject:key];
-    if([transition raw]!=10){if(requested){assert([transition raw]>=40);ExplicitFadedWrites++;}else{assert(MIN(abs([previous[@"hue"]intValue]-hue),360-abs([previous[@"hue"]intValue]-hue))<=3&&abs([previous[@"sat"]intValue]-saturation)<=3&&abs([previous[@"light"]intValue]-light)<=2);AmbientWrites++;}}else[MarkerWrites addObject:@{@"target":@(target),@"hue":@(hue),@"sat":@(saturation),@"light":@(light)}];
+    if([transition raw]!=10&&!NativeControlCall){if(requested){assert([transition raw]>=40);ExplicitFadedWrites++;}else{assert(MIN(abs([previous[@"hue"]intValue]-hue),360-abs([previous[@"hue"]intValue]-hue))<=3&&abs([previous[@"sat"]intValue]-saturation)<=3&&abs([previous[@"light"]intValue]-light)<=2);AmbientWrites++;}}else if([transition raw]==10)[MarkerWrites addObject:@{@"target":@(target),@"hue":@(hue),@"sat":@(saturation),@"light":@(light)}];
     NSDictionary *value=@{@"hue":@(hue),@"sat":@(saturation),@"light":@(light)};LampValues[@(target)]=value;LastTargets[@(target)]=value;
     [Writes addObject:@{@"target":@(target),@"light":@(light),@"hue":@(hue),@"sat":@(saturation),@"transition":@([transition raw])}];return nil;
 }
@@ -148,10 +150,15 @@ static void InitLamps(void){if(LampValues)return;WhiteReads=[NSMutableArray new]
 + (instancetype)share;
 - (id)setBrightness:(id)target level:(int)level onCompletion:(id)callback;
 - (id)setCTL:(id)target lightness:(int)level temp:(int)temp onCompletion:(id)callback;
+- (id)setHSL:(id)target color:(int)hue sat:(int)sat lightness:(int)level onCompletion:(id)callback;
 @end
 @implementation DeviceControlApi
+- (id)setHSL:(id)target color:(int)hue sat:(int)sat lightness:(int)level onCompletion:(id)callback{
+ uint16_t address=0x20+[[target componentsSeparatedByString:@" "].lastObject intValue]-1;BOOL old=NativeControlCall;NativeControlCall=YES;
+ id result=[SDKLibCommand lightHSLSetWithDestination:address HSLLight:level HSLHue:hue HSLSaturation:sat transitionTime:[[SigTransitionTime alloc]initWithRawValue:40]delay:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];NativeControlCall=old;return result;
+}
 - (id)setCTL:(id)target lightness:(int)level temp:(int)temp onCompletion:(id)callback{
- return [SDKLibCommand lightCTLSetWithDestination:0x24 lightness:level temperature:temp deltaUV:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];
+ uint16_t address=[target isEqual:@"Kitchen group"]?0xc123:(uint16_t)(0x20+[[target componentsSeparatedByString:@" "].lastObject intValue]-1);return [SDKLibCommand lightCTLSetWithDestination:address lightness:level temperature:temp deltaUV:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];
 }
 + (instancetype)share{static DeviceControlApi *s;static dispatch_once_t once;dispatch_once(&once,^{s=[self new];});return s;}
 - (id)setBrightness:(id)target level:(int)level onCompletion:(id)callback{return nil;}
@@ -194,6 +201,14 @@ static void InitLamps(void){if(LampValues)return;WhiteReads=[NSMutableArray new]
 @property(nonatomic,strong) UIButton *menuButton;
 @end
 @implementation _TtC13SmartHome_Prd20ReHomeViewController
+- (NSInteger)collectionView:(UICollectionView *)view numberOfItemsInSection:(NSInteger)section{return [RLMRealm defaultRealm].scenes.count;}
+- (UICollectionViewCell *)collectionView:(UICollectionView *)view cellForItemAtIndexPath:(NSIndexPath *)path{return [UICollectionViewCell new];}
+- (void)collectionView:(UICollectionView *)view didSelectItemAtIndexPath:(NSIndexPath *)path{
+ NativeShortcutCalls++;NSDictionary *scene=[RLMRealm defaultRealm].scenes[path.item];
+ for(NSDictionary *entry in scene[@"routineList"]){int level=[entry[@"onOff"]boolValue]?[entry[@"lightness"]intValue]:0;
+ if([entry[@"deviceType"]intValue]==7)[[DeviceControlApi share]setCTL:entry[@"deviceName"]lightness:level temp:[entry[@"cct"]intValue]onCompletion:nil];
+ else [[DeviceControlApi share]setHSL:entry[@"deviceName"]color:[entry[@"color"]intValue]sat:[entry[@"saturation"]intValue]lightness:level onCompletion:nil];}
+}
 - (void)viewDidLoad{[super viewDidLoad];self.view.backgroundColor=UIColor.whiteColor;self.badge=[[_TtC13SmartHome_Prd27ReBLENetworkIndicatorButton alloc]initWithFrame:CGRectMake(110,130,145,42)];[self.view addSubview:self.badge];$__lazy_storage_$_logoView=[[UIImageView alloc]initWithFrame:CGRectMake(270,130,70,42)];$__lazy_storage_$_logoView.backgroundColor=UIColor.orangeColor;[self.view addSubview:$__lazy_storage_$_logoView];self.roomLabel=[[UILabel alloc]initWithFrame:CGRectMake(24,210,340,80)];self.roomLabel.text=@"Your home, after dark";self.roomLabel.textColor=UIColor.blackColor;self.roomLabel.font=[UIFont systemFontOfSize:24];[self.view addSubview:self.roomLabel];self.menuButton=[UIButton buttonWithType:UIButtonTypeCustom];[self.menuButton setImage:[[UIImage systemImageNamed:@"line.3.horizontal"]imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal]forState:UIControlStateNormal];self.menuButton.tintColor=UIColor.blackColor;self.navigationItem.leftBarButtonItem=[[UIBarButtonItem alloc]initWithCustomView:self.menuButton];}
 @end
 @interface _TtC13SmartHome_Prd20ReMenuViewController:UIViewController{
@@ -268,6 +283,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)checkStorage;
 - (void)checkReachableCapture;
 - (void)checkWhiteCapture;
+- (void)checkStaticRecall;
 - (void)checkChoreography;
 - (void)checkShuffle:(dispatch_block_t)completion;
 - (void)checkMap:(UINavigationController *)navigation;
@@ -278,6 +294,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options{
     UIViewController *launch=[[UIStoryboard storyboardWithName:@"HomePlusBlankLaunch360"bundle:NSBundle.mainBundle]instantiateInitialViewController];[launch loadViewIfNeeded];assert(launch.view.subviews.count==0);CGFloat r,g,b,a;[launch.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.1&&g<.1&&b<.1);
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--static-recall"]){Later(1,^{[self checkStaticRecall];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--white-capture"]){Later(1,^{[self checkWhiteCapture];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--choreography"]){Later(1,^{[self checkChoreography];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--capture-only"]){Later(1,^{[self checkReachableCapture];});return YES;}
@@ -327,20 +344,40 @@ static void AssertVisibleCardText(UIViewController *studio){
         });
     });
 }
+- (void)checkStaticRecall{
+ id e=Shared(@"HPLightEngine");[e start:0];for(int i=0;i<14;i++)[e tick];[e stop];[e setValue:@0 forKey:@"settleUntil"];
+ // Keep distinct real HSL Get levels, including off and full brightness.
+ for(int i=0;i<14;i++){NSMutableDictionary *v=[LampValues[@(0x20+i)]mutableCopy];v[@"light"]=@(i==0?0:i==13?100:20+i*3);LampValues[@(0x20+i)]=v;LastTargets[@(0x20+i)]=v;}
+ [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:80 temp:4000 onCompletion:nil];
+ WhiteValues[@0x24]=@{@"light":@40,@"temperature":@3500};NSDictionary *before=[LampValues copy];
+ [self.studio capturePausedSceneWithName:@"Static shortcut brightness"completion:^(NSError *error){
+  assert(!error);NSDictionary *scene=[RLMRealm defaultRealm].scenes.lastObject;NSArray *entries=scene[@"routineList"];assert(entries.count==14);
+  for(int i=0;i<14;i++)assert([entries[i][@"lightness"]intValue]==[before[@(0x20+i)][@"light"]intValue]);
+  assert([entries[4][@"deviceType"]intValue]==7&&[entries[4][@"cct"]intValue]==3500&&[entries[4][@"lightness"]intValue]==80);
+  _TtC13SmartHome_Prd20ReHomeViewController *home=[_TtC13SmartHome_Prd20ReHomeViewController new];UICollectionView *row=[[UICollectionView alloc]initWithFrame:CGRectMake(0,0,390,100)collectionViewLayout:[UICollectionViewFlowLayout new]];
+  NSUInteger calls=NativeShortcutCalls;[home collectionView:row didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:[RLMRealm defaultRealm].scenes.count-1 inSection:0]];
+  assert(NativeShortcutCalls==calls+1);
+  for(int i=0;i<14;i++)assert([LampValues[@(0x20+i)][@"light"]intValue]==[before[@(0x20+i)][@"light"]intValue]);
+  assert([WhiteValues[@0x24][@"light"]intValue]==80&&[WhiteValues[@0x24][@"temperature"]intValue]==3500);
+  [home collectionView:row didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];assert(NativeShortcutCalls==calls+2);
+  // Run white/read failure/group switching checks in the same process.
+  StaticShortcutRecallPassed=YES;[self checkWhiteCapture];
+ }];
+}
 - (void)checkWhiteCapture{
  id e=Shared(@"HPLightEngine");[e start:0];for(int i=0;i<14;i++)[e tick];[e stop];[e setValue:@0 forKey:@"settleUntil"];
  // Reproduce the native shortcut: colour registers stay at the old mood while
  // a CTL command switches L5 to the separate white channel.
  NSDictionary *oldHSL=[LampValues[@0x24]copy];
  [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:65 temp:4000 onCompletion:nil];
- assert([LampValues[@0x24]isEqual:oldHSL]&&[WhiteValues[@0x24][@"temperature"]intValue]==4000);
- // The returned live status differs from the requested target: save readback.
- WhiteValues[@0x24]=@{@"light":@42,@"temperature":@3500};NSUInteger beforeHSL=Reads.count;
+ assert([LampValues[@0x24][@"hue"]isEqual:oldHSL[@"hue"]]&&[LampValues[@0x24][@"sat"]isEqual:oldHSL[@"sat"]]&&[WhiteValues[@0x24][@"temperature"]intValue]==4000);
+ // CTL level is deliberately lower than bound HSL level. Use HSL brightness, CTL temperature.
+ WhiteValues[@0x24]=@{@"light":@42,@"temperature":@3500};NSUInteger beforeHSL=Reads.count,beforeWhite=WhiteReads.count;
  [self.studio capturePausedSceneWithName:@"Kitchen shortcut then save"completion:^(NSError *error){
-  assert(!error&&Reads.count==beforeHSL+13&&WhiteReads.count==1);NSArray *entries=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(entries.count==14);NSDictionary *l5=entries[4];assert([l5[@"deviceName"]isEqual:@"Lamp 5"]&&[l5[@"deviceType"]intValue]==7&&[l5[@"cct"]intValue]==3500&&[l5[@"lightness"]intValue]==42&&[l5[@"color"]intValue]==-1&&[l5[@"saturation"]intValue]==-1);
+  assert(!error&&Reads.count==beforeHSL+14&&WhiteReads.count==beforeWhite+1);NSArray *entries=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(entries.count==14);NSDictionary *l5=entries[4];assert([l5[@"deviceName"]isEqual:@"Lamp 5"]&&[l5[@"deviceType"]intValue]==7&&[l5[@"cct"]intValue]==3500&&[l5[@"lightness"]intValue]==65&&[l5[@"color"]intValue]==-1&&[l5[@"saturation"]intValue]==-1);
   for(NSUInteger i=0;i<entries.count;i++)if(i!=4)assert([entries[i][@"deviceType"]intValue]==8);
-  [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:[l5[@"lightness"]intValue]temp:[l5[@"cct"]intValue]onCompletion:nil];assert([WhiteValues[@0x24][@"temperature"]intValue]==3500&&[WhiteValues[@0x24][@"light"]intValue]==42);
-  SigTransitionTime *t=[[SigTransitionTime alloc]initWithRawValue:40];[e setValue:[NSMutableSet setWithObject:@"mock-lamp-4"]forKey:@"retargets"];[SDKLibCommand lightHSLSetWithDestination:0x24 HSLLight:32 HSLHue:290 HSLSaturation:80 transitionTime:t delay:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];NSUInteger whites=WhiteReads.count;
+  [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:[l5[@"lightness"]intValue]temp:[l5[@"cct"]intValue]onCompletion:nil];assert([WhiteValues[@0x24][@"temperature"]intValue]==3500&&[WhiteValues[@0x24][@"light"]intValue]==65);
+  [[DeviceControlApi share]setHSL:@"Lamp 5"color:290 sat:80 lightness:32 onCompletion:nil];NSUInteger whites=WhiteReads.count;
   [self.studio capturePausedSceneWithName:@"L5 back to purple"completion:^(NSError *colour){
    assert(!colour&&WhiteReads.count==whites);NSDictionary *purple=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"][4];assert([purple[@"deviceType"]intValue]==8&&[purple[@"color"]intValue]==290&&[purple[@"cct"]intValue]==-1);
    [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:50 temp:55 onCompletion:nil];DropWhiteReads=YES;NSUInteger cancelled=CancelledReads;
@@ -348,11 +385,11 @@ static void AssertVisibleCardText(UIViewController *studio){
     assert(!partial&&CancelledReads==cancelled+1&&PendingReads==0);NSArray *available=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(available.count==13);for(NSDictionary *a in available)assert(![a[@"deviceName"]isEqual:@"Lamp 5"]);DropWhiteReads=NO;
     // Group writes select CTL only for subscribed nodes. Support hex strings
     // and numeric subscriptions, as both occur in exported mesh documents.
-    NSDictionary *mesh=@{@"nodes":@[@{@"UUID":@"mock-lamp-0",@"elements":@[@{@"models":@[@{@"subscribe":@[@"C123"]}]}]},@{@"UUID":@"mock-lamp-4",@"elements":@[@{@"models":@[@{@"subscribe":@[@49443]}]}]}],@"groups":@[]};[NSUserDefaults.standardUserDefaults setObject:[NSJSONSerialization dataWithJSONObject:mesh options:0 error:nil]forKey:@"mesh.json"];
-    [SDKLibCommand lightCTLSetWithDestination:0xc123 lightness:0 temperature:55 deltaUV:0 transitionTime:t delay:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];
+    NSDictionary *mesh=@{@"nodes":@[@{@"UUID":@"mock-lamp-0",@"elements":@[@{@"models":@[@{@"subscribe":@[@"C123"]}]}]},@{@"UUID":@"mock-lamp-4",@"elements":@[@{@"models":@[@{@"subscribe":@[@49443]}]}]}],@"groups":@[@{@"name":@"Kitchen group",@"address":@"C123"}]};[NSUserDefaults.standardUserDefaults setObject:[NSJSONSerialization dataWithJSONObject:mesh options:0 error:nil]forKey:@"mesh.json"];
+    [[DeviceControlApi share]setCTL:@"Kitchen group"lightness:0 temp:55 onCompletion:nil];
     [self.studio capturePausedSceneWithName:@"Group whites off"completion:^(NSError *group){
      assert(!group);NSArray *saved=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(saved.count==14);for(NSUInteger i=0;i<saved.count;i++){if(i==0||i==4)assert([saved[i][@"deviceType"]intValue]==7&&[saved[i][@"cct"]intValue]==55&&![saved[i][@"onOff"]boolValue]);else assert([saved[i][@"deviceType"]intValue]==8);}
-     NSDictionary *report=@{@"passed":@YES,@"staleHSLRegisterNotSavedForWhiteBulb":@YES,@"nativeShortcutWhiteCapturedAsCTL7":@YES,@"actualReturnedTemperatureAndLevelSaved":@YES,@"whiteSceneReplaysNativeCTL":@YES,@"laterHSLCommandRestoresColourCapture":@YES,@"whiteTimeoutSkipsBulbWithoutStaleFallback":@YES,@"groupSubscriptionsAndWhiteOffState":@YES,@"nativeTemperatureUnitsPreserved":@YES};NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
+     NSDictionary *report=@{@"passed":@YES,@"staleHSLRegisterNotSavedForWhiteBulb":@YES,@"nativeShortcutWhiteCapturedAsCTL7":@YES,@"v400HSLBrightnessWithCTLTemperature":@YES,@"staticShortcutRecallKeepsAll14Levels":@(StaticShortcutRecallPassed),@"whiteSceneReplaysNativeCTL":@YES,@"laterHSLCommandRestoresColourCapture":@YES,@"whiteTimeoutSkipsBulbWithoutStaleFallback":@YES,@"groupSubscriptionsAndWhiteOffState":@YES,@"nativeTemperatureUnitsPreserved":@YES};NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
     }];
    }];
   }];
@@ -489,5 +526,6 @@ static void AssertVisibleCardText(UIViewController *studio){
 @end
 static void HPUnexpectedTestException(NSException *exception){NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"failure-report.json"];[[NSJSONSerialization dataWithJSONObject:@{@"exception":exception.name,@"reason":exception.reason?:@"",@"stack":exception.callStackSymbols}options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES];}
 int main(int argc,char **argv){@autoreleasepool{NSSetUncaughtExceptionHandler(HPUnexpectedTestException);return UIApplicationMain(argc,argv,nil,NSStringFromClass(HPSmokeDelegate.class));}}
+
 
 

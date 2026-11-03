@@ -40,8 +40,7 @@ static void HPReadColour(NSDictionary *light,HPReadCompletion completion){
 }
 // Read the currently selected native white channel, without falling back to an
 // old HSL register when the white query times out.
-static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
- if(!HPUsesWhiteChannel(light)){HPReadColour(light,completion);return;}
+static void HPReadWhiteTemperature(NSDictionary *light,NSDictionary *colour,HPReadCompletion completion){
  if(!HPTransportOpen()){completion(nil,HPReadError(@"Connect to your lights before reading this look."));return;}
  Class sdk=NSClassFromString(@"SDKLibCommand");SEL get=NSSelectorFromString(@"lightCTLGetWithDestination:retryCount:responseMaxCount:successCallback:resultCallback:");
  if(![sdk respondsToSelector:get]){completion(nil,HPReadError(@"The native white reader is unavailable."));return;}
@@ -50,15 +49,23 @@ static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
  @try{
  void(^success)(uint16_t,uint16_t,id)=^(uint16_t source,uint16_t destination,id status){
   if(source!=[light[@"address"]unsignedShortValue])return;
-  SEL level=NSSelectorFromString(@"presentCTLLightness"),temperature=NSSelectorFromString(@"presentCTLTemperature");
-  if(![status respondsToSelector:level]||![status respondsToSelector:temperature]){finish(nil,HPReadError(@"A light returned incomplete white settings."));return;}
-  uint16_t l=((uint16_t(*)(id,SEL))objc_msgSend)(status,level),t=((uint16_t(*)(id,SEL))objc_msgSend)(status,temperature);
-  NSMutableDictionary *reading=[light mutableCopy];reading[@"kind"]=@"ctl";reading[@"cct"]=@(t);reading[@"light"]=@(l>100?lround(l*100./65535.):l);reading[@"hue"]=@0;reading[@"sat"]=@0;finish(reading,nil);
+  SEL temperature=NSSelectorFromString(@"presentCTLTemperature");
+  if(![status respondsToSelector:temperature]){finish(nil,HPReadError(@"A light returned incomplete white settings."));return;}
+  uint16_t t=((uint16_t(*)(id,SEL))objc_msgSend)(status,temperature);
+  NSMutableDictionary *reading=[colour mutableCopy];reading[@"kind"]=@"ctl";reading[@"cct"]=@(t);reading[@"hue"]=@0;reading[@"sat"]=@0;finish(reading,nil);
  };
  void(^result)(BOOL,NSError *)=^(BOOL all,NSError *error){if(error)finish(nil,error);};
  handle=((id(*)(id,SEL,uint16_t,NSInteger,NSInteger,id,id))objc_msgSend)(sdk,get,[light[@"address"]unsignedShortValue],0,1,success,result);
  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,3*NSEC_PER_SEC),dispatch_get_main_queue(),^{finish(nil,HPReadError([NSString stringWithFormat:@"%@ did not return its white settings.",light[@"name"]?:@"A light"]));});
  }@catch(NSException *exception){finish(nil,HPReadError(exception.reason?:@"Could not read the white settings."));}
+}
+// Restore the v4.0.0 HSL brightness path for every bulb. The extra CTL query
+// contributes only white temperature; it must not replace the bound HSL level.
+static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
+ HPReadColour(light,^(NSDictionary *colour,NSError *error){
+  if(!colour||!HPUsesWhiteChannel(light)){completion(colour,error);return;}
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{HPReadWhiteTemperature(light,colour,completion);});
+ });
 }
 @interface HPSceneReadback : NSObject
 @property(nonatomic,strong) NSArray *lights;
@@ -109,7 +116,7 @@ static BOOL HPIdentifyColour(NSDictionary *light,NSDictionary *value){
     if(!HPTransportOpen()||HPTransportBusy())return NO;
     Class sdk=NSClassFromString(@"SDKLibCommand");SEL set=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:transitionTime:delay:retryCount:responseMaxCount:ack:successCallback:resultCallback:");if(![sdk respondsToSelector:set])return NO;
     id transition=((id(*)(id,SEL))objc_msgSend)(NSClassFromString(@"SigTransitionTime"),@selector(alloc));transition=((id(*)(id,SEL,uint8_t))objc_msgSend)(transition,NSSelectorFromString(@"initWithRawValue:"),10);
-    @try{((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,set,[light[@"address"]unsignedShortValue],[value[@"light"]unsignedShortValue],[value[@"hue"]unsignedShortValue],[value[@"sat"]unsignedShortValue],transition,0,0,0,NO,nil,nil);return YES;}@catch(NSException *exception){return NO;}
+    @try{((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,set,[light[@"address"]unsignedShortValue],[value[@"light"]unsignedShortValue],[value[@"hue"]unsignedShortValue],[value[@"sat"]unsignedShortValue],transition,0,0,0,NO,nil,nil);HPRememberChannel([light[@"address"]unsignedShortValue],@"hsl");return YES;}@catch(NSException *exception){return NO;}
 }
 static BOOL HPIdentifyMatches(NSDictionary *a,NSDictionary *b){if(!a||!b)return NO;for(NSString *key in @[@"hue",@"sat",@"light"])if(abs([a[key]intValue]-[b[key]intValue])>2)return NO;return YES;}
 @implementation HPLightIdentifier
@@ -156,4 +163,5 @@ static void HPIdentifyLight(NSDictionary *light,void(^completion)(NSError *)){
         [operation finish:HPReadError(@"Keep the app open while identifying lights. Check the selected light's colour.")];
     }];[operation begin:0];
 }
+
 

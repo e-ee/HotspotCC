@@ -102,8 +102,8 @@ static CGFloat HPMenuHeaderHeight(id self,SEL selector,id table,NSInteger sectio
 static void HPNoExperience(id self,SEL selector,id sender){(void)self;(void)selector;(void)sender;}
 static IMP HPManualHSLOriginal,HPManualCTLOriginal,HPManualOnOffOriginal,HPManualBrightnessOriginal;
 static void HPManualStop(void){dispatch_block_t stop=^{[HPLightEngine.shared stop];[HPCommandColours removeAllObjects];};if(NSThread.isMainThread)stop();else dispatch_async(dispatch_get_main_queue(),stop);}
-static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,int,int,id))HPManualHSLOriginal)(self,selector,target,h,s,l,callback);}
-static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);}
+static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callback){HPManualStop();id result=((id(*)(id,SEL,id,int,int,int,id))HPManualHSLOriginal)(self,selector,target,h,s,l,callback);HPRememberNamedChannel(target,@"hsl");return result;}
+static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualStop();id result=((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);HPRememberNamedChannel(target,@"ctl");return result;}
 static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualStop();return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
 static id HPManualBrightness(id self,SEL selector,id target,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,id))HPManualBrightnessOriginal)(self,selector,target,l,callback);}
 static void HPHook(Class cls,NSString *name,IMP replacement,IMP *original){
@@ -136,3 +136,4 @@ static void HPInstallEnhancements(void){
         objc_setAssociatedObject(collection,&HPShortcutDisableKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);[collection reloadData];
     }];
 }
+

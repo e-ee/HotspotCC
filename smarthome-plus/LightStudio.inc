@@ -254,7 +254,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     @try{
         if(![sdk respondsToSelector:set]){[self stop];self.status=@"The colour backend is unavailable";return;}
         ((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,set,[light[@"address"]unsignedShortValue],wire.lightness,wire.hue,wire.saturation,transition,0,0,0,NO,nil,nil);
-        self.sent[key]=@[@(wire.lightness),@(wire.hue),@(wire.saturation)];HPRememberColour(light,wire);self.lastSent=now;self.settleUntil=now+steps*.1;
+        self.sent[key]=@[@(wire.lightness),@(wire.hue),@(wire.saturation)];HPRememberColour(light,wire);HPRememberChannel([light[@"address"]unsignedShortValue],@"hsl");self.lastSent=now;self.settleUntil=now+steps*.1;
         BOOL heldUpdate=self.adjusting;[self completeRetarget:key];
         if(!heldUpdate)self.status=[NSString stringWithFormat:@"%@ · slow drift · %lu lights",[self moodName],(unsigned long)self.lights.count];
     }@catch(NSException *exception){[self stop];self.status=@"Could not send the lighting effect";}
@@ -555,3 +555,4 @@ static UIViewController *HPCreateStudioTools(void);
 
 
 #import "ChoreographyUI.inc"
+
