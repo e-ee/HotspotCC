@@ -29,7 +29,7 @@
 extern BOOL HPShouldShowSetup(UIViewController *controller);
 static NSMutableArray *Writes,*Reads,*BrightnessWrites,*WhiteReads;
 static NSMutableDictionary *WhiteValues;
-static BOOL DropWhiteReads,NativeControlCall;
+static BOOL HalfStatusLevels,DropWhiteReads,NativeControlCall;
 static NSUInteger NativeShortcutCalls;
 static BOOL StaticShortcutRecallPassed;
 static NSMutableDictionary *LampValues,*LastTargets;
