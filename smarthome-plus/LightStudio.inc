@@ -530,6 +530,7 @@ static UIViewController *HPCreateStudioTools(void);
         if(!error)@try{
             NSDictionary *scene=[HPSceneCapture sceneWithName:trimmed readings:readings error:&error];
             if(scene&&[HPSceneCapture writeScene:scene realm:HPRealm() error:&error]){
+                NSMutableArray *direct=[[NSUserDefaults.standardUserDefaults arrayForKey:@"HP.DirectSceneIDs"]mutableCopy]?:[NSMutableArray new];[direct addObject:scene[@"uuid"]];[NSUserDefaults.standardUserDefaults setObject:direct forKey:@"HP.DirectSceneIDs"];
                 for(NSDictionary *reading in readings){engine.sent[reading[@"id"]]=@[reading[@"light"],reading[@"hue"],reading[@"sat"]];/* A read must not become evidence of a sent command. */}
                 engine.status=readings.count<total?[NSString stringWithFormat:@"Saved %@ · %lu of %lu lights",trimmed,(unsigned long)readings.count,(unsigned long)total]:[NSString stringWithFormat:@"Saved %@ · %lu lights",trimmed,(unsigned long)readings.count];
                 [NSNotificationCenter.defaultCenter postNotificationName:@"HP.OrderChanged" object:nil];

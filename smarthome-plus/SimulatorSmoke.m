@@ -356,7 +356,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)checkStaticRecall{
  id e=Shared(@"HPLightEngine");[e start:0];for(int i=0;i<14;i++)[e tick];[e stop];[e setValue:@0 forKey:@"settleUntil"];
  // Keep distinct real HSL Get levels, including off and full brightness.
- for(int i=0;i<14;i++){NSMutableDictionary *v=[LampValues[@(0x20+i)]mutableCopy];v[@"light"]=@(i==0?0:i==13?100:20+i*3);LampValues[@(0x20+i)]=v;LastTargets[@(0x20+i)]=v;}
+ for(int i=0;i<14;i++){NSMutableDictionary *v=[LampValues[@(0x20+i)]mutableCopy];v[@"light"]=@(i==0?0:i==13?100:20+i*3);[[DeviceControlApi share]setHSL:[NSString stringWithFormat:@"Lamp %d",i+1]color:[v[@"hue"]intValue]sat:[v[@"sat"]intValue]lightness:[v[@"light"]intValue]onCompletion:nil];}
  [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:80 temp:4000 onCompletion:nil];
  WhiteValues[@0x24]=@{@"light":@40,@"temperature":@3500};NSDictionary *before=[LampValues copy];
  [self.studio capturePausedSceneWithName:@"Static shortcut brightness"completion:^(NSError *error){
@@ -365,12 +365,15 @@ static void AssertVisibleCardText(UIViewController *studio){
   assert([entries[4][@"deviceType"]intValue]==7&&[entries[4][@"cct"]intValue]==3500&&[entries[4][@"lightness"]intValue]==80);
   _TtC13SmartHome_Prd20ReHomeViewController *home=[_TtC13SmartHome_Prd20ReHomeViewController new];UICollectionView *row=[[UICollectionView alloc]initWithFrame:CGRectMake(0,0,390,100)collectionViewLayout:[UICollectionViewFlowLayout new]];
   NSUInteger calls=NativeShortcutCalls;[home collectionView:row didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:[RLMRealm defaultRealm].scenes.count-1 inSection:0]];
-  assert(NativeShortcutCalls==calls+1);
-  for(int i=0;i<14;i++)assert([LampValues[@(0x20+i)][@"light"]intValue]==[before[@(0x20+i)][@"light"]intValue]);
-  assert([WhiteValues[@0x24][@"light"]intValue]==80&&[WhiteValues[@0x24][@"temperature"]intValue]==3500);
-  [home collectionView:row didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];assert(NativeShortcutCalls==calls+2);
-  // Run white/read failure/group switching checks in the same process.
-  StaticShortcutRecallPassed=YES;[self checkWhiteCapture];
+  // Studio-marked scenes must bypass native playback entirely. Await the
+  // paced SDK sender, then compare the values at its actual endpoint.
+  assert(NativeShortcutCalls==calls);
+  Later(3.2,^{
+   for(int i=0;i<14;i++)assert([LampValues[@(0x20+i)][@"light"]intValue]==[before[@(0x20+i)][@"light"]intValue]);
+   assert([WhiteValues[@0x24][@"light"]intValue]==80&&[WhiteValues[@0x24][@"temperature"]intValue]==3500);
+   [home collectionView:row didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];assert(NativeShortcutCalls==calls+1);
+   StaticShortcutRecallPassed=YES;[self checkWhiteCapture];
+  });
  }];
 }
 - (void)checkWhiteCapture{
@@ -461,7 +464,7 @@ static void AssertVisibleCardText(UIViewController *studio){
     id engine=Shared(@"HPLightEngine");[[DeviceControlApi share]setBrightness:@"Lamp 1"level:40 onCompletion:nil];NSUInteger stopped=Writes.count;
     Later(.3,^{assert(Writes.count==stopped);[engine start:3];
         Later(2.8,^{[self.studio stop];NSUInteger beforeReads=Reads.count;
-            for(int i=0;i<14;i++){NSDictionary *v=@{@"hue":@(201+i),@"sat":@43,@"light":@22};LampValues[@(0x20+i)]=v;LastTargets[@(0x20+i)]=v;}
+            for(int i=0;i<14;i++){NSDictionary *v=@{@"hue":@(201+i),@"sat":@43,@"light":@22};[[DeviceControlApi share]setHSL:[NSString stringWithFormat:@"Lamp %d",i+1]color:[v[@"hue"]intValue]sat:[v[@"sat"]intValue]lightness:[v[@"light"]intValue]onCompletion:nil];}
             [self.studio capturePausedSceneWithName:@"Aurora Glow"completion:^(NSError *error){assert(!error);RLMRealm *realm=[RLMRealm defaultRealm];assert(realm.scenes.count==12);NSDictionary *scene=realm.scenes.lastObject;NSArray *lights=scene[@"routineList"];assert(lights.count==14&&[scene[@"routineName"]isEqual:@"Aurora Glow"]);
                 for(int i=0;i<14;i++){NSDictionary *lamp=lights[i];assert([lamp[@"deviceType"]intValue]==8&&[lamp[@"color"]intValue]==201+i&&[lamp[@"saturation"]intValue]==43&&[lamp[@"lightness"]intValue]==22);}
                 assert(Reads.count>=beforeReads+14);SaveScreen(self.window,@"LightStudio.png");UIScrollView *scroll=(id)self.studio.view.subviews.firstObject;[scroll setContentOffset:CGPointMake(0,MAX(0,scroll.contentSize.height-scroll.bounds.size.height+scroll.adjustedContentInset.bottom))animated:NO];SaveScreen(self.window,@"PausedScene.png");

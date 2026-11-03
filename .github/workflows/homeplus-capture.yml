@@ -2,7 +2,7 @@ name: SYLVANIA Plus static shortcut brightness
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/HomeEnhancements.inc', 'smarthome-plus/HomePlus.m', 'smarthome-plus/HomeSQLite.h', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m', 'smarthome-plus/LightChannel.inc', 'smarthome-plus/SimulatorSmoke.m']
+    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/DirectScene.inc', 'smarthome-plus/HomeEnhancements.inc', 'smarthome-plus/HomePlus.m', 'smarthome-plus/HomeSQLite.h', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m', 'smarthome-plus/LightChannel.inc', 'smarthome-plus/SimulatorSmoke.m']
   workflow_dispatch:
 concurrency:
   group: homeplus-capture-exact

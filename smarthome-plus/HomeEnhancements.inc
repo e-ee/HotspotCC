@@ -1,3 +1,4 @@
+#import "DirectScene.inc"
 static __weak UIViewController *HPHomeController;
 static char HPShortcutMapKey,HPShortcutDisableKey,HPLongPressKey,HPRemovedLogoKey;
 @interface HPShortcutMap : NSObject
@@ -43,6 +44,7 @@ static id HPHomeCell(id self,SEL selector,UICollectionView *collection,NSIndexPa
 static void HPHomeTap(id self,SEL selector,UICollectionView *collection,NSIndexPath *path){
     [HPLightEngine.shared stop];[HPCommandColours removeAllObjects];HPShortcutMap *map=objc_getAssociatedObject(collection,&HPShortcutMapKey);
     if(map&&path.item>=0&&(NSUInteger)path.item<map.indexes.count)path=[NSIndexPath indexPathForItem:[map.indexes[path.item]integerValue] inSection:path.section];
+    if(HPPlayDirectScene(path.item))return;
     ((void(*)(id,SEL,id,id))HPTapOriginal)(self,selector,collection,path);
 }
 @interface HPManager (Ordering)
@@ -118,6 +120,7 @@ static void HPHook(Class cls,NSString *name,IMP replacement,IMP *original){
     if(method){IMP old=method_getImplementation(method);if(!class_addMethod(cls,selector,replacement,method_getTypeEncoding(method)))method_setImplementation(method,replacement);if(original)*original=old;}
 }
 static void HPInstallEnhancements(void){
+    HPHook(NSClassFromString(@"_TtC13SmartHome_Prd22RoutinesViewController"),@"tableView:didSelectRowAtIndexPath:",(IMP)HPSceneListTap,&HPSceneListTapOriginal);
     Class home=NSClassFromString(@"_TtC13SmartHome_Prd20ReHomeViewController");
     HPHook(home,@"collectionView:numberOfItemsInSection:",(IMP)HPHomeCount,&HPCountOriginal);
     HPHook(home,@"collectionView:cellForItemAtIndexPath:",(IMP)HPHomeCell,&HPCellOriginal);
