@@ -26,7 +26,6 @@
 - (void)touchAt:(CGPoint)point beginning:(BOOL)beginning;
 @end
 
-extern void HPSimulatorSceneSpan(int span);
 extern BOOL HPShouldShowSetup(UIViewController *controller);
 static NSMutableArray *Writes,*Reads,*BrightnessWrites,*WhiteReads;
 static NSMutableDictionary *WhiteValues;
@@ -353,13 +352,7 @@ static void AssertVisibleCardText(UIViewController *studio){
     [SDKLibCommand lightCTLSetWithDestination:0xc123 lightness:0 temperature:55 deltaUV:0 transitionTime:t delay:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];
     [self.studio capturePausedSceneWithName:@"Group whites off"completion:^(NSError *group){
      assert(!group);NSArray *saved=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(saved.count==14);for(NSUInteger i=0;i<saved.count;i++){if(i==0||i==4)assert([saved[i][@"deviceType"]intValue]==7&&[saved[i][@"cct"]intValue]==55&&![saved[i][@"onOff"]boolValue]);else assert([saved[i][@"deviceType"]intValue]==8);}
-     HPSimulatorSceneSpan(50);WhiteValues[@0x20]=@{@"light":@41,@"temperature":@55};WhiteValues[@0x24]=WhiteValues[@0x20];
-     [self.studio capturePausedSceneWithName:@"Exact brightness recall"completion:^(NSError *brightnessError){
-      assert(!brightnessError);NSArray *compensated=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];
-      for(NSUInteger i=0;i<compensated.count;i++){int before=[saved[i][@"deviceType"]intValue]==7?41:[saved[i][@"lightness"]intValue],stored=[compensated[i][@"lightness"]intValue];assert(stored*50/100==before);}
-      HPSimulatorSceneSpan(100);
-      NSDictionary *report=@{@"passed":@YES,@"staleHSLRegisterNotSavedForWhiteBulb":@YES,@"nativeShortcutWhiteCapturedAsCTL7":@YES,@"actualReturnedTemperatureAndLevelSaved":@YES,@"whiteSceneReplaysNativeCTL":@YES,@"laterHSLCommandRestoresColourCapture":@YES,@"whiteTimeoutSkipsBulbWithoutStaleFallback":@YES,@"groupSubscriptionsAndWhiteOffState":@YES,@"nativeTemperatureUnitsPreserved":@YES};NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
-     }];
+     NSDictionary *report=@{@"passed":@YES,@"staleHSLRegisterNotSavedForWhiteBulb":@YES,@"nativeShortcutWhiteCapturedAsCTL7":@YES,@"actualReturnedTemperatureAndLevelSaved":@YES,@"whiteSceneReplaysNativeCTL":@YES,@"laterHSLCommandRestoresColourCapture":@YES,@"whiteTimeoutSkipsBulbWithoutStaleFallback":@YES,@"groupSubscriptionsAndWhiteOffState":@YES,@"nativeTemperatureUnitsPreserved":@YES};NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
     }];
    }];
   }];
@@ -496,6 +489,5 @@ static void AssertVisibleCardText(UIViewController *studio){
 @end
 static void HPUnexpectedTestException(NSException *exception){NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"failure-report.json"];[[NSJSONSerialization dataWithJSONObject:@{@"exception":exception.name,@"reason":exception.reason?:@"",@"stack":exception.callStackSymbols}options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES];}
 int main(int argc,char **argv){@autoreleasepool{NSSetUncaughtExceptionHandler(HPUnexpectedTestException);return UIApplicationMain(argc,argv,nil,NSStringFromClass(HPSmokeDelegate.class));}}
-
 
 

@@ -5,7 +5,6 @@ static NSError *HPReadError(NSString *text){return [NSError errorWithDomain:@"Li
 static BOOL HPTransportOpen(void){id bearer=HPGet(NSClassFromString(@"SigBearer"),@"share");SEL selector=NSSelectorFromString(@"isOpen");return [bearer respondsToSelector:selector]&&((BOOL(*)(id,SEL))objc_msgSend)(bearer,selector);}
 static BOOL HPTransportBusy(void){return [HPGet(HPGet(NSClassFromString(@"SigMeshLib"),@"share"),@"commands")count]>0;}
 #import "LightChannel.inc"
-#import "NativeSceneBrightness.inc"
 static NSMutableDictionary *HPCommandColours;
 static void HPRememberColour(NSDictionary *light,HPWireColor value){if(!HPCommandColours)HPCommandColours=[NSMutableDictionary new];HPCommandColours[light[@"id"]]=@{@"hue":@(value.hue),@"sat":@(value.saturation),@"light":@(value.lightness)};}
 static NSDictionary *HPCachedColour(NSDictionary *light){
@@ -89,7 +88,7 @@ static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
     self.queueWaitBegan=0;NSDictionary *light=self.lights[self.index];
     HPReadSceneLight(light,^(NSDictionary *reading,NSError *error){
         // Keep actual replies only. A timeout must not discard other bulbs.
-        if(reading){NSMutableDictionary *effective=[reading mutableCopy];effective[@"sceneSpan"]=@(HPNativeSceneSpan());reading=effective;if(!self.readings)self.readings=[NSMutableArray new];[self.readings addObject:reading];}self.index++;
+        if(reading){if(!self.readings)self.readings=[NSMutableArray new];[self.readings addObject:reading];}self.index++;
         if(self.progress)self.progress(self.index,self.lights.count);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self next];});
     });
@@ -157,5 +156,4 @@ static void HPIdentifyLight(NSDictionary *light,void(^completion)(NSError *)){
         [operation finish:HPReadError(@"Keep the app open while identifying lights. Check the selected light's colour.")];
     }];[operation begin:0];
 }
-
 

@@ -2,7 +2,6 @@
 #import <objc/message.h>
 #import <dlfcn.h>
 #import "EffectPatterns.h"
-#import "SceneBrightness.h"
 static id HPCaptureError(NSError **error,NSString *reason){if(error)*error=[NSError errorWithDomain:@"SceneCapture" code:1 userInfo:@{NSLocalizedDescriptionKey:reason}];return nil;}
 static BOOL HPCaptureNumber(id n,NSInteger max){return [n isKindOfClass:NSNumber.class]&&isfinite([n doubleValue])&&floor([n doubleValue])==[n doubleValue]&&[n integerValue]>=0&&[n integerValue]<=max;}
 @implementation HPSceneCapture
@@ -15,13 +14,10 @@ static BOOL HPCaptureNumber(id n,NSInteger max){return [n isKindOfClass:NSNumber
         if(![r isKindOfClass:NSDictionary.class]||![r[@"id"]isKindOfClass:NSString.class]||![r[@"name"]isKindOfClass:NSString.class]||![r[@"name"]length]||[seen containsObject:r[@"id"]]||!HPCaptureNumber(r[@"hue"],360)||!HPCaptureNumber(r[@"sat"],100)||!HPCaptureNumber(r[@"light"],100))return HPCaptureError(error,@"A light did not return a complete colour reading. No scene was saved.");
         BOOL white=[r[@"kind"]isEqual:@"ctl"];
         if(white&&!HPCaptureNumber(r[@"cct"],65535))return HPCaptureError(error,@"A white light did not return its temperature. No scene was saved.");
-        int span=r[@"sceneSpan"]?[r[@"sceneSpan"]intValue]:100;
-        if(span<1||span>100)return HPCaptureError(error,@"The native scene brightness range is invalid.");
-        NSNumber *storedLevel=@(HPSceneStoredBrightness([r[@"light"]intValue],span));
         [seen addObject:r[@"id"]];
         // Native enum case 4 has raw value 8 and dispatches HSL. Entry uuid is
         // its PRIMARY KEY, independently generated for every scene and lamp.
-        [devices addObject:@{@"uuid":NSUUID.UUID.UUIDString,@"deviceName":r[@"name"],@"color":white?@-1:r[@"hue"],@"saturation":white?@-1:r[@"sat"],@"lightness":storedLevel,@"onOff":@([r[@"light"]integerValue]>0),@"cct":white?r[@"cct"]:@-1,@"isGroup":@NO,@"deviceType":white?@7:@8}];
+        [devices addObject:@{@"uuid":NSUUID.UUID.UUIDString,@"deviceName":r[@"name"],@"color":white?@-1:r[@"hue"],@"saturation":white?@-1:r[@"sat"],@"lightness":r[@"light"],@"onOff":@([r[@"light"]integerValue]>0),@"cct":white?r[@"cct"]:@-1,@"isGroup":@NO,@"deviceType":white?@7:@8}];
     }
     NSDictionary *first=readings.firstObject;double h=[first[@"hue"]doubleValue]/60.,s=[first[@"sat"]doubleValue]/100.,v=.65;
     double c=v*s,x=c*(1-fabs(fmod(h,2)-1)),m=v-c,r=0,g=0,b=0;
@@ -58,5 +54,4 @@ static BOOL HPCaptureNumber(id n,NSInteger max){return [n isKindOfClass:NSNumber
     if(began&&[[realm valueForKey:@"inWriteTransaction"]boolValue])((void(*)(id,SEL))objc_msgSend)(realm,NSSelectorFromString(@"cancelWriteTransaction"));return NO;
 }
 @end
-
 

@@ -17,8 +17,6 @@ jobs:
       - name: Verify saved scenes with real Realm 10.11
         run: |
           mkdir -p build
-          clang smarthome-plus/test_scene_brightness.c -o build/test-scene-brightness
-          ./build/test-scene-brightness
           curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 https://github.com/realm/realm-swift/releases/download/v10.11.0/Carthage.xcframework.zip --output build/realm-sdk.zip
           python3 - <<'PYREALM'
           import pathlib,zipfile,plistlib,stat,os,platform
@@ -134,5 +132,4 @@ jobs:
             build/Smoke.stderr
             build/failure-report.json
 # Enrollment presentation covers native pages and excludes system share sheets.
-
 
