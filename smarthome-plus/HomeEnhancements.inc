@@ -101,11 +101,18 @@ static id HPMenuHeader(id self,SEL selector,id table,NSInteger section){if(HPHid
 static CGFloat HPMenuHeaderHeight(id self,SEL selector,id table,NSInteger section){if(HPHiddenMenuSection(self,section))return .01;return ((CGFloat(*)(id,SEL,id,NSInteger))HPMenuHeaderHeightOriginal)(self,selector,table,section);}
 static void HPNoExperience(id self,SEL selector,id sender){(void)self;(void)selector;(void)sender;}
 static IMP HPManualHSLOriginal,HPManualCTLOriginal,HPManualOnOffOriginal,HPManualBrightnessOriginal;
-static void HPManualStop(void){dispatch_block_t stop=^{[HPLightEngine.shared stop];[HPCommandColours removeAllObjects];};if(NSThread.isMainThread)stop();else dispatch_async(dispatch_get_main_queue(),stop);}
-static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callback){HPManualStop();id result=((id(*)(id,SEL,id,int,int,int,id))HPManualHSLOriginal)(self,selector,target,h,s,l,callback);HPRememberNamedChannel(target,@"hsl");return result;}
-static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualStop();id result=((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);HPRememberNamedChannel(target,@"ctl");return result;}
-static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualStop();return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
-static id HPManualBrightness(id self,SEL selector,id target,int l,id callback){HPManualStop();return ((id(*)(id,SEL,id,int,id))HPManualBrightnessOriginal)(self,selector,target,l,callback);}
+static void HPManualPrepare(id target){
+ dispatch_block_t prepare=^{[HPLightEngine.shared stop];BOOL found=NO;
+  for(NSDictionary *light in HPLightRecords())if([light[@"name"]isEqual:target]||[light[@"id"]isEqual:target]){[HPCommandColours removeObjectForKey:light[@"id"]];found=YES;}
+  // Group/unknown destinations can affect several lights. Discard their cache.
+  if(!found)[HPCommandColours removeAllObjects];
+ };if(NSThread.isMainThread)prepare();else dispatch_async(dispatch_get_main_queue(),prepare);
+}
+static id HPManualHSL(id self,SEL selector,id target,int h,int s,int l,id callback){HPManualPrepare(target);id result=((id(*)(id,SEL,id,int,int,int,id))HPManualHSLOriginal)(self,selector,target,h,s,l,callback);HPRememberNamedChannel(target,@"hsl");
+ dispatch_block_t remember=^{for(NSDictionary *light in HPLightRecords())if([light[@"name"]isEqual:target]||[light[@"id"]isEqual:target])HPRememberColour(light,(HPWireColor){h,s,l});};if(NSThread.isMainThread)remember();else dispatch_async(dispatch_get_main_queue(),remember);return result;}
+static id HPManualCTL(id self,SEL selector,id target,int l,int t,id callback){HPManualPrepare(target);id result=((id(*)(id,SEL,id,int,int,id))HPManualCTLOriginal)(self,selector,target,l,t,callback);HPRememberNamedChannel(target,@"ctl");return result;}
+static id HPManualOnOff(id self,SEL selector,id target,BOOL on,id callback){HPManualPrepare(target);return ((id(*)(id,SEL,id,BOOL,id))HPManualOnOffOriginal)(self,selector,target,on,callback);}
+static id HPManualBrightness(id self,SEL selector,id target,int l,id callback){HPManualPrepare(target);return ((id(*)(id,SEL,id,int,id))HPManualBrightnessOriginal)(self,selector,target,l,callback);}
 static void HPHook(Class cls,NSString *name,IMP replacement,IMP *original){
     SEL selector=NSSelectorFromString(name);Method method=class_getInstanceMethod(cls,selector);
     if(method){IMP old=method_getImplementation(method);if(!class_addMethod(cls,selector,replacement,method_getTypeEncoding(method)))method_setImplementation(method,replacement);if(original)*original=old;}
