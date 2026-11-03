@@ -2,7 +2,7 @@ name: SYLVANIA Plus creative studio
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['.github/workflows/homeplus-creative.yml', 'smarthome-plus/ChoreographyEngine.inc', 'smarthome-plus/ChoreographyUI.inc', 'smarthome-plus/ChoreographyMath.h', 'smarthome-plus/LightStudio.inc', 'smarthome-plus/StudioPresets.m', 'smarthome-plus/SimulatorSmoke.m']
+    paths: ['.github/workflows/homeplus-creative.yml', 'smarthome-plus/ChoreographyEngine.inc', 'smarthome-plus/ChoreographyUI.inc', 'smarthome-plus/ChoreographyMath.h', 'smarthome-plus/LightStudio.inc', 'smarthome-plus/StudioPresets.m']
   workflow_dispatch:
 concurrency:
   group: homeplus-creative

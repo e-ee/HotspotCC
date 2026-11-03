@@ -27,7 +27,9 @@
 @end
 
 extern BOOL HPShouldShowSetup(UIViewController *controller);
-static NSMutableArray *Writes,*Reads,*BrightnessWrites;
+static NSMutableArray *Writes,*Reads,*BrightnessWrites,*WhiteReads;
+static NSMutableDictionary *WhiteValues;
+static BOOL DropWhiteReads;
 static NSMutableDictionary *LampValues,*LastTargets;
 static BOOL QueueBusy,DropReads,Disconnected;
 static NSUInteger PendingReads,CancelledReads;
@@ -90,11 +92,15 @@ static void HPTestFailure(const char *condition,const char *file,int line){
 @implementation SigTransitionTime
 - (instancetype)initWithRawValue:(uint8_t)raw{self=[super init];if(self)self.raw=raw;return self;}
 @end
+@interface HPMockWhiteStatus:NSObject
+@property(nonatomic) uint16_t presentCTLLightness,presentCTLTemperature;
+@end
+@implementation HPMockWhiteStatus @end
 @interface HPMockStatus:NSObject
 @property(nonatomic) uint16_t HSLLightness,HSLHue,HSLSaturation;
 @end
 @implementation HPMockStatus @end
-static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Reads=[NSMutableArray new];BrightnessWrites=[NSMutableArray new];MarkerWrites=[NSMutableArray new];LampValues=[NSMutableDictionary new];LastTargets=[NSMutableDictionary new];for(int i=0;i<14;i++){NSDictionary *value=@{@"hue":@(230+i),@"sat":@62,@"light":@35};LampValues[@(0x20+i)]=value;LastTargets[@(0x20+i)]=value;}}
+static void InitLamps(void){if(LampValues)return;WhiteReads=[NSMutableArray new];WhiteValues=[NSMutableDictionary new];Writes=[NSMutableArray new];Reads=[NSMutableArray new];BrightnessWrites=[NSMutableArray new];MarkerWrites=[NSMutableArray new];LampValues=[NSMutableDictionary new];LastTargets=[NSMutableDictionary new];for(int i=0;i<14;i++){NSDictionary *value=@{@"hue":@(230+i),@"sat":@62,@"light":@35};LampValues[@(0x20+i)]=value;LastTargets[@(0x20+i)]=value;}}
 @interface HPMockReadHandle:NSObject
 @property(nonatomic) BOOL cancelled;
 - (void)cancel;
@@ -103,10 +109,24 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
 - (void)cancel{if(!self.cancelled){self.cancelled=YES;assert(PendingReads>0);PendingReads--;CancelledReads++;}}
 @end
 @interface SDKLibCommand:NSObject
++ (id)lightCTLGetWithDestination:(uint16_t)target retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses successCallback:(void(^)(uint16_t,uint16_t,id))success resultCallback:(void(^)(BOOL,NSError *))result;
++ (id)lightCTLSetWithDestination:(uint16_t)target lightness:(uint16_t)light temperature:(uint16_t)temperature deltaUV:(uint16_t)delta transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result;
++ (id)lightCTLSetWithDestination:(uint16_t)target lightness:(uint16_t)light temperature:(uint16_t)temperature deltaUV:(uint16_t)delta retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result;
+
 + (id)lightHSLGetWithDestination:(uint16_t)target retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses successCallback:(void(^)(uint16_t,uint16_t,id))success resultCallback:(void(^)(BOOL,NSError *))result;
 + (id)lightHSLSetWithDestination:(uint16_t)target HSLLight:(uint16_t)light HSLHue:(uint16_t)hue HSLSaturation:(uint16_t)saturation transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result;
 @end
 @implementation SDKLibCommand
++ (id)lightCTLGetWithDestination:(uint16_t)target retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses successCallback:(void(^)(uint16_t,uint16_t,id))success resultCallback:(void(^)(BOOL,NSError *))result{
+ InitLamps();assert(retries==0&&responses==1);[WhiteReads addObject:@(target)];if(DropWhiteReads){PendingReads++;return [HPMockReadHandle new];}NSDictionary *v=WhiteValues[@(target)];assert(v);HPMockWhiteStatus *status=[HPMockWhiteStatus new];status.presentCTLLightness=[v[@"light"]unsignedShortValue];status.presentCTLTemperature=[v[@"temperature"]unsignedShortValue];success(target,0x7e00,status);result(YES,nil);return nil;
+}
++ (id)lightCTLSetWithDestination:(uint16_t)target lightness:(uint16_t)light temperature:(uint16_t)temperature deltaUV:(uint16_t)delta transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
+ InitLamps();NSArray *targets=target==0xc123?@[@0x20,@0x24]:@[@(target)];for(NSNumber *address in targets)WhiteValues[address]=@{@"light":@(light),@"temperature":@(temperature)};return nil;
+}
++ (id)lightCTLSetWithDestination:(uint16_t)target lightness:(uint16_t)light temperature:(uint16_t)temperature deltaUV:(uint16_t)delta retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
+ return [self lightCTLSetWithDestination:target lightness:light temperature:temperature deltaUV:delta transitionTime:nil delay:0 retryCount:retries responseMaxCount:responses ack:ack successCallback:success resultCallback:result];
+}
+
 + (id)lightLightnessSetWithDestination:(uint16_t)target lightness:(uint16_t)level transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
     assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil&&[transition raw]==6&&level<=100);NSMutableDictionary *value=[LampValues[@(target)]mutableCopy];assert(value);value[@"light"]=@(level);LampValues[@(target)]=value;[BrightnessWrites addObject:@{@"target":@(target),@"level":@(level)}];return nil;
 }
@@ -127,8 +147,12 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
 @interface DeviceControlApi:NSObject
 + (instancetype)share;
 - (id)setBrightness:(id)target level:(int)level onCompletion:(id)callback;
+- (id)setCTL:(id)target lightness:(int)level temp:(int)temp onCompletion:(id)callback;
 @end
 @implementation DeviceControlApi
+- (id)setCTL:(id)target lightness:(int)level temp:(int)temp onCompletion:(id)callback{
+ return [SDKLibCommand lightCTLSetWithDestination:0x24 lightness:level temperature:temp deltaUV:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];
+}
 + (instancetype)share{static DeviceControlApi *s;static dispatch_once_t once;dispatch_once(&once,^{s=[self new];});return s;}
 - (id)setBrightness:(id)target level:(int)level onCompletion:(id)callback{return nil;}
 @end
@@ -243,6 +267,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)checkControls:(dispatch_block_t)completion;
 - (void)checkStorage;
 - (void)checkReachableCapture;
+- (void)checkWhiteCapture;
 - (void)checkChoreography;
 - (void)checkShuffle:(dispatch_block_t)completion;
 - (void)checkMap:(UINavigationController *)navigation;
@@ -253,6 +278,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options{
     UIViewController *launch=[[UIStoryboard storyboardWithName:@"HomePlusBlankLaunch360"bundle:NSBundle.mainBundle]instantiateInitialViewController];[launch loadViewIfNeeded];assert(launch.view.subviews.count==0);CGFloat r,g,b,a;[launch.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.1&&g<.1&&b<.1);
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--white-capture"]){Later(1,^{[self checkWhiteCapture];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--choreography"]){Later(1,^{[self checkChoreography];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--capture-only"]){Later(1,^{[self checkReachableCapture];});return YES;}
     Later(1,^{id engine=Shared(@"HPLightEngine");DropReads=YES;QueueBusy=YES;[engine start:0];assert(Reads.count==0&&Writes.count==0);
@@ -300,6 +326,37 @@ static void AssertVisibleCardText(UIViewController *studio){
             });
         });
     });
+}
+- (void)checkWhiteCapture{
+ id e=Shared(@"HPLightEngine");[e start:0];for(int i=0;i<14;i++)[e tick];[e stop];[e setValue:@0 forKey:@"settleUntil"];
+ // Reproduce the native shortcut: colour registers stay at the old mood while
+ // a CTL command switches L5 to the separate white channel.
+ NSDictionary *oldHSL=[LampValues[@0x24]copy];
+ [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:65 temp:4000 onCompletion:nil];
+ assert([LampValues[@0x24]isEqual:oldHSL]&&[WhiteValues[@0x24][@"temperature"]intValue]==4000);
+ // The returned live status differs from the requested target: save readback.
+ WhiteValues[@0x24]=@{@"light":@42,@"temperature":@3500};NSUInteger beforeHSL=Reads.count;
+ [self.studio capturePausedSceneWithName:@"Kitchen shortcut then save"completion:^(NSError *error){
+  assert(!error&&Reads.count==beforeHSL+13&&WhiteReads.count==1);NSArray *entries=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(entries.count==14);NSDictionary *l5=entries[4];assert([l5[@"deviceName"]isEqual:@"Lamp 5"]&&[l5[@"deviceType"]intValue]==7&&[l5[@"cct"]intValue]==3500&&[l5[@"lightness"]intValue]==42&&[l5[@"color"]intValue]==-1&&[l5[@"saturation"]intValue]==-1);
+  for(NSUInteger i=0;i<entries.count;i++)if(i!=4)assert([entries[i][@"deviceType"]intValue]==8);
+  [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:[l5[@"lightness"]intValue]temp:[l5[@"cct"]intValue]onCompletion:nil];assert([WhiteValues[@0x24][@"temperature"]intValue]==3500&&[WhiteValues[@0x24][@"light"]intValue]==42);
+  SigTransitionTime *t=[[SigTransitionTime alloc]initWithRawValue:40];[SDKLibCommand lightHSLSetWithDestination:0x24 HSLLight:32 HSLHue:290 HSLSaturation:80 transitionTime:t delay:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];NSUInteger whites=WhiteReads.count;
+  [self.studio capturePausedSceneWithName:@"L5 back to purple"completion:^(NSError *colour){
+   assert(!colour&&WhiteReads.count==whites);NSDictionary *purple=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"][4];assert([purple[@"deviceType"]intValue]==8&&[purple[@"color"]intValue]==290&&[purple[@"cct"]intValue]==-1);
+   [[DeviceControlApi share]setCTL:@"Lamp 5"lightness:50 temp:55 onCompletion:nil];DropWhiteReads=YES;NSUInteger cancelled=CancelledReads;
+   [self.studio capturePausedSceneWithName:@"White reader unavailable"completion:^(NSError *partial){
+    assert(!partial&&CancelledReads==cancelled+1&&PendingReads==0);NSArray *available=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(available.count==13);for(NSDictionary *a in available)assert(![a[@"deviceName"]isEqual:@"Lamp 5"]);DropWhiteReads=NO;
+    // Group writes select CTL only for subscribed nodes. Support hex strings
+    // and numeric subscriptions, as both occur in exported mesh documents.
+    NSDictionary *mesh=@{@"nodes":@[@{@"UUID":@"mock-lamp-0",@"elements":@[@{@"models":@[@{@"subscribe":@[@"C123"]}]}]},@{@"UUID":@"mock-lamp-4",@"elements":@[@{@"models":@[@{@"subscribe":@[@49443]}]}]}],@"groups":@[]};[NSUserDefaults.standardUserDefaults setObject:[NSJSONSerialization dataWithJSONObject:mesh options:0 error:nil]forKey:@"mesh.json"];
+    [SDKLibCommand lightCTLSetWithDestination:0xc123 lightness:0 temperature:55 deltaUV:0 transitionTime:t delay:0 retryCount:0 responseMaxCount:0 ack:NO successCallback:nil resultCallback:nil];
+    [self.studio capturePausedSceneWithName:@"Group whites off"completion:^(NSError *group){
+     assert(!group);NSArray *saved=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(saved.count==14);for(NSUInteger i=0;i<saved.count;i++){if(i==0||i==4)assert([saved[i][@"deviceType"]intValue]==7&&[saved[i][@"cct"]intValue]==55&&![saved[i][@"onOff"]boolValue]);else assert([saved[i][@"deviceType"]intValue]==8);}
+     NSDictionary *report=@{@"passed":@YES,@"staleHSLRegisterNotSavedForWhiteBulb":@YES,@"nativeShortcutWhiteCapturedAsCTL7":@YES,@"actualReturnedTemperatureAndLevelSaved":@YES,@"whiteSceneReplaysNativeCTL":@YES,@"laterHSLCommandRestoresColourCapture":@YES,@"whiteTimeoutSkipsBulbWithoutStaleFallback":@YES,@"groupSubscriptionsAndWhiteOffState":@YES,@"nativeTemperatureUnitsPreserved":@YES};NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
+    }];
+   }];
+  }];
+ }];
 }
 - (void)checkChoreography{
  id e=Shared(@"HPLightEngine");[e start:32];NSArray *lights=[e valueForKey:@"lights"];assert(lights.count==14);NSDictionary *first=lights[0];HPColor jade=[e targetForLight:first];assert(isfinite(jade.hue));
@@ -430,5 +487,7 @@ static void AssertVisibleCardText(UIViewController *studio){
     NSData *data=[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([data writeToFile:path atomically:YES]);
 }
 @end
-int main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,NSStringFromClass(HPSmokeDelegate.class));}}
+static void HPUnexpectedTestException(NSException *exception){NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"failure-report.json"];[[NSJSONSerialization dataWithJSONObject:@{@"exception":exception.name,@"reason":exception.reason?:@"",@"stack":exception.callStackSymbols}options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES];}
+int main(int argc,char **argv){@autoreleasepool{NSSetUncaughtExceptionHandler(HPUnexpectedTestException);return UIApplicationMain(argc,argv,nil,NSStringFromClass(HPSmokeDelegate.class));}}
+
 

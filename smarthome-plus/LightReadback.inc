@@ -4,6 +4,7 @@ static UIBackgroundTaskIdentifier HPIdentifyTask;
 static NSError *HPReadError(NSString *text){return [NSError errorWithDomain:@"LightReadback" code:1 userInfo:@{NSLocalizedDescriptionKey:text}];}
 static BOOL HPTransportOpen(void){id bearer=HPGet(NSClassFromString(@"SigBearer"),@"share");SEL selector=NSSelectorFromString(@"isOpen");return [bearer respondsToSelector:selector]&&((BOOL(*)(id,SEL))objc_msgSend)(bearer,selector);}
 static BOOL HPTransportBusy(void){return [HPGet(HPGet(NSClassFromString(@"SigMeshLib"),@"share"),@"commands")count]>0;}
+#import "LightChannel.inc"
 static NSMutableDictionary *HPCommandColours;
 static void HPRememberColour(NSDictionary *light,HPWireColor value){if(!HPCommandColours)HPCommandColours=[NSMutableDictionary new];HPCommandColours[light[@"id"]]=@{@"hue":@(value.hue),@"sat":@(value.saturation),@"light":@(value.lightness)};}
 static NSDictionary *HPCachedColour(NSDictionary *light){
@@ -37,6 +38,28 @@ static void HPReadColour(NSDictionary *light,HPReadCompletion completion){
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,3*NSEC_PER_SEC),dispatch_get_main_queue(),^{finish(nil,HPReadError([NSString stringWithFormat:@"%@ did not return its colour.",light[@"name"]?:@"A light"]));});
     }@catch(NSException *exception){finish(nil,HPReadError(exception.reason?:@"Could not read a light."));}
 }
+// Read the currently selected native white channel, without falling back to an
+// old HSL register when the white query times out.
+static void HPReadSceneLight(NSDictionary *light,HPReadCompletion completion){
+ if(!HPUsesWhiteChannel(light)){HPReadColour(light,completion);return;}
+ if(!HPTransportOpen()){completion(nil,HPReadError(@"Connect to your lights before reading this look."));return;}
+ Class sdk=NSClassFromString(@"SDKLibCommand");SEL get=NSSelectorFromString(@"lightCTLGetWithDestination:retryCount:responseMaxCount:successCallback:resultCallback:");
+ if(![sdk respondsToSelector:get]){completion(nil,HPReadError(@"The native white reader is unavailable."));return;}
+ __block BOOL finished=NO;__block id handle=nil;
+ void(^finish)(NSDictionary *,NSError *)=^(NSDictionary *value,NSError *error){dispatch_async(dispatch_get_main_queue(),^{if(finished)return;finished=YES;if(error&&[handle respondsToSelector:@selector(cancel)])HPVoid(handle,@"cancel");handle=nil;completion(value,error);});};
+ @try{
+ void(^success)(uint16_t,uint16_t,id)=^(uint16_t source,uint16_t destination,id status){
+  if(source!=[light[@"address"]unsignedShortValue])return;
+  SEL level=NSSelectorFromString(@"presentCTLLightness"),temperature=NSSelectorFromString(@"presentCTLTemperature");
+  if(![status respondsToSelector:level]||![status respondsToSelector:temperature]){finish(nil,HPReadError(@"A light returned incomplete white settings."));return;}
+  uint16_t l=((uint16_t(*)(id,SEL))objc_msgSend)(status,level),t=((uint16_t(*)(id,SEL))objc_msgSend)(status,temperature);
+  NSMutableDictionary *reading=[light mutableCopy];reading[@"kind"]=@"ctl";reading[@"cct"]=@(t);reading[@"light"]=@(l>100?lround(l*100./65535.):l);reading[@"hue"]=@0;reading[@"sat"]=@0;finish(reading,nil);
+ };
+ void(^result)(BOOL,NSError *)=^(BOOL all,NSError *error){if(error)finish(nil,error);};
+ handle=((id(*)(id,SEL,uint16_t,NSInteger,NSInteger,id,id))objc_msgSend)(sdk,get,[light[@"address"]unsignedShortValue],0,1,success,result);
+ dispatch_after(dispatch_time(DISPATCH_TIME_NOW,3*NSEC_PER_SEC),dispatch_get_main_queue(),^{finish(nil,HPReadError([NSString stringWithFormat:@"%@ did not return its white settings.",light[@"name"]?:@"A light"]));});
+ }@catch(NSException *exception){finish(nil,HPReadError(exception.reason?:@"Could not read the white settings."));}
+}
 @interface HPSceneReadback : NSObject
 @property(nonatomic,strong) NSArray *lights;
 @property(nonatomic,strong) NSMutableArray *readings;
@@ -63,7 +86,7 @@ static void HPReadColour(NSDictionary *light,HPReadCompletion completion){
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self next];});return;
     }
     self.queueWaitBegan=0;NSDictionary *light=self.lights[self.index];
-    HPReadColour(light,^(NSDictionary *reading,NSError *error){
+    HPReadSceneLight(light,^(NSDictionary *reading,NSError *error){
         // Keep actual replies only. A timeout must not discard other bulbs.
         if(reading){if(!self.readings)self.readings=[NSMutableArray new];[self.readings addObject:reading];}self.index++;
         if(self.progress)self.progress(self.index,self.lights.count);
@@ -133,3 +156,4 @@ static void HPIdentifyLight(NSDictionary *light,void(^completion)(NSError *)){
         [operation finish:HPReadError(@"Keep the app open while identifying lights. Check the selected light's colour.")];
     }];[operation begin:0];
 }
+

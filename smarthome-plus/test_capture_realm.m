@@ -50,6 +50,8 @@ int main(void){@autoreleasepool{
     assert([HPSceneCapture deleteScene:@"shared-scene"realm:realm error:&error]);assert([realm allObjects:@"RoutinesInfo"].count==11&&[realm allObjects:@"RoutineDevice"].count==154);
     assert(![RoutineDevice objectInRealm:realm forPrimaryKey:sharedID]);
     assert(![HPSceneCapture deleteScene:@"missing"realm:realm error:&error]&&[realm allObjects:@"RoutinesInfo"].count==11);
+    NSArray *mixed=@[@{@"id":@"white-id",@"name":@"L5 Oven kitchen-M2A6A",@"kind":@"ctl",@"cct":@3500,@"hue":@0,@"sat":@0,@"light":@42},readings[1]];
+    error=nil;NSDictionary *whiteScene=[HPSceneCapture sceneWithName:@"Kitchen purple and white"readings:mixed error:&error];assert(whiteScene&&[HPSceneCapture writeScene:whiteScene realm:realm error:&error]);RoutinesInfo *white=[RoutinesInfo objectInRealm:realm forPrimaryKey:whiteScene[@"uuid"]];assert(white.routineList.count==2);RoutineDevice *lamp=white.routineList[0];assert(lamp.deviceType==7&&lamp.cct==3500&&lamp.lightness==42&&lamp.color==-1&&lamp.saturation==-1&&lamp.onOff);assert(white.routineList[1].deviceType==8);
     [NSFileManager.defaultManager removeItemAtURL:copy error:nil];
     puts("Real Realm 10.11: native scene schema, 14 actual readings, HSL type 8, independent entry keys, off bulbs, more than ten scenes, database-copy round trip and deletion with shared-child preservation passed.");
 }}
