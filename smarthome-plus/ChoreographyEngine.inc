@@ -40,7 +40,7 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  }return look;
 }
 - (void)beginCanvas{
- NSDictionary *look=[self snapshotLook];[self clearCreative];[self activate:self.lastMode journey:-1 reset:NO retarget:NO];self.creativeKind=1;self.creativeName=@"Painted room";self.painted=[look mutableCopy];self.retargets=[NSMutableSet new];
+ NSDictionary *look=[self snapshotLook];[self clearCreative];self.creativeKind=1;self.creativeName=@"Painted room";self.painted=[look mutableCopy];self.retargets=[NSMutableSet new];[self activate:self.lastMode journey:-1 reset:NO retarget:NO];
 }
 - (void)paintAt:(CGPoint)point colour:(HPColor)colour radius:(double)radius{
  if(self.creativeKind!=1)[self beginCanvas];if(self.mode<0)[self resume];
