@@ -2,7 +2,7 @@ name: SYLVANIA Plus static shortcut brightness
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m', 'smarthome-plus/LightChannel.inc', 'smarthome-plus/SimulatorSmoke.m']
+    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/HomePlus.m', 'smarthome-plus/HomeSQLite.h', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m', 'smarthome-plus/LightChannel.inc', 'smarthome-plus/SimulatorSmoke.m']
   workflow_dispatch:
 concurrency:
   group: homeplus-capture
@@ -45,6 +45,8 @@ jobs:
           codesign --force --deep --sign - build/realm-native/Realm.framework
           clang -fobjc-arc -fblocks smarthome-plus/SceneCapture.m smarthome-plus/test_capture_realm.m -Fbuild/realm-native -framework Realm -framework Foundation -Wl,-rpath,@executable_path/realm-native -o build/test-capture-realm
           ./build/test-capture-realm
+          clang smarthome-plus/test_home_sqlite.c -lsqlite3 -o build/test-home-sqlite
+          ./build/test-home-sqlite
       - name: Compile iOS 14 add-on and launch screen
         run: |
           xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types

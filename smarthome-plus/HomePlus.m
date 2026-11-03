@@ -7,7 +7,7 @@
 #import "HomeArchive.h"
 #import "SceneCapture.h"
 #import "SpatialLayout.h"
-#import <sqlite3.h>
+#import "HomeSQLite.h"
 
 // All runtime calls below use selectors and ABIs inspected in the supplied 3.0.2 app.
 // The scene-count branch is patched in the executable by make_homeplus.py.
@@ -228,17 +228,27 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
         NSMutableDictionary *files=[[HPHomeArchive documentsAtPath:HPDocuments() error:&error]mutableCopy];
         if(!files){HPAlert(self,@"Could not export Home",error.localizedDescription);return;}
         files[@"default.realm"]=[NSData dataWithContentsOfURL:realmURL];
-        // SQLite's backup API includes any committed WAL data.
-        NSString *sqlitePath=[HPDocuments() stringByAppendingPathComponent:@"UserModel.sqlite"];
-        if([NSFileManager.defaultManager fileExistsAtPath:sqlitePath]){
-            NSURL *copy=[self exportLocation:@"UserModel.sqlite"];sqlite3 *source=NULL,*target=NULL;
-            int read=sqlite3_open_v2(sqlitePath.fileSystemRepresentation,&source,SQLITE_OPEN_READONLY,NULL);
-            int opened=sqlite3_open(copy.path.fileSystemRepresentation,&target);int result=SQLITE_ERROR;
-            if(read==SQLITE_OK&&opened==SQLITE_OK){sqlite3_backup *backup=sqlite3_backup_init(target,"main",source,"main");if(backup){result=sqlite3_backup_step(backup,-1);sqlite3_backup_finish(backup);}}
-            if(source)sqlite3_close(source);if(target)sqlite3_close(target);
-            if(result!=SQLITE_DONE){HPAlert(self,@"Could not export Home",@"The Home account database is busy. Try again in a moment.");return;}
-            files[@"UserModel.sqlite"]=[NSData dataWithContentsOfURL:copy];
-        }
+        // Snapshot on a worker so Core Data can finish main-thread work while
+        // the backup waits. Never export the raw main file without its WAL.
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{
+            NSString *path=[HPDocuments() stringByAppendingPathComponent:@"UserModel.sqlite"];
+            int result=SQLITE_OK;NSData *account=nil;
+            if([NSFileManager.defaultManager fileExistsAtPath:path]){
+                NSURL *copy=[self exportLocation:@"UserModel.sqlite"];
+                result=HPBackupAccount(path.fileSystemRepresentation,copy.path.fileSystemRepresentation);
+                if(result==SQLITE_OK){account=[NSData dataWithContentsOfURL:copy];if(!account)result=SQLITE_IOERR;}
+            }
+            dispatch_async(dispatch_get_main_queue(),^{
+                if(result!=SQLITE_OK){HPAlert(self,@"Could not export Home",[NSString stringWithFormat:@"Account snapshot failed (%d: %s). Your Home has not been changed.",result,sqlite3_errstr(result)]);return;}
+                if(account)files[@"UserModel.sqlite"]=account;
+                [self finishHomeExport:files request:invitationRequest];
+            });
+        });
+    }@catch(NSException *exception){HPAlert(self,@"Could not export Home",exception.reason);}
+}
+- (void)finishHomeExport:(NSMutableDictionary *)files request:(NSDictionary *)invitationRequest {
+    @try {
+        NSError *error=nil;
         NSDictionary *preferences=[NSUserDefaults.standardUserDefaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier]?:@{};
         NSMutableDictionary *home=[@{@"Profile":preferences[@"HP.Profile"]?:@"This device",@"Preferences":preferences,@"Documents":files}mutableCopy];
         NSString *ledgerPath=[HPStatePath()stringByAppendingPathComponent:@"DeviceReservations.plist"];NSDictionary *ledger=[NSDictionary dictionaryWithContentsOfFile:ledgerPath]?:@{};
