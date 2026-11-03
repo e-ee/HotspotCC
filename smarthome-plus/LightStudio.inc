@@ -468,14 +468,14 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 }
 - (void)saveScene{
     if(HPLightEngine.shared.mode>=0||self.captureReader)return;
-    UIAlertController *prompt=[UIAlertController alertControllerWithTitle:@"Save this paused look" message:@"Your lights will be read and saved as a new scene." preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *prompt=[UIAlertController alertControllerWithTitle:@"Save this paused look" message:@"Lights that reply will be saved. Unreachable lights are left out." preferredStyle:UIAlertControllerStyleAlert];
     [prompt addTextFieldWithConfigurationHandler:^(UITextField *field){field.placeholder=@"Scene name";field.text=[[HPLightEngine.shared moodName]stringByAppendingString:@" Glow"];field.keyboardAppearance=UIKeyboardAppearanceDark;field.clearButtonMode=UITextFieldViewModeWhileEditing;}];
     [prompt addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [prompt addAction:[UIAlertAction actionWithTitle:@"Save scene" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){
         NSString *name=prompt.textFields.firstObject.text;
         [self capturePausedSceneWithName:name completion:^(NSError *error){
             if(!self.view.window)return;
-            UIAlertController *result=[UIAlertController alertControllerWithTitle:error?@"Could not save scene":@"Scene saved" message:error.localizedDescription?:@"Your paused look is available with your other scenes and shortcuts." preferredStyle:UIAlertControllerStyleAlert];
+            UIAlertController *result=[UIAlertController alertControllerWithTitle:error?@"Could not save scene":@"Scene saved" message:error.localizedDescription?:HPLightEngine.shared.status preferredStyle:UIAlertControllerStyleAlert];
             [result addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];[self presentViewController:result animated:YES completion:nil];
         }];
     }]];[self presentViewController:prompt animated:YES completion:nil];
@@ -486,9 +486,9 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(!trimmed.length||trimmed.length>40){completion(HPReadError(@"Give the scene a name of 1 to 40 characters."));return;}
     if(engine.mode>=0||engine.adjusting||self.captureReader||HPIdentifying){completion(HPReadError(@"Pause the lighting before saving a scene."));return;}
     [engine reloadLights];if(!engine.lights.count){completion(HPReadError(@"No colour lights are available to save."));return;}
-    NSUInteger token=engine.generation;HPSceneReadback *reader=[HPSceneReadback new];reader.lights=[engine.lights copy];self.captureReader=reader;
+    NSUInteger token=engine.generation;HPSceneReadback *reader=[HPSceneReadback new];reader.lights=[engine.lights copy];NSUInteger total=reader.lights.count;self.captureReader=reader;
     reader.stillPaused=^BOOL{return engine.mode<0&&engine.generation==token;};
-    reader.progress=^(NSUInteger read,NSUInteger total){engine.status=[NSString stringWithFormat:@"Reading your paused look · %lu/%lu",(unsigned long)read,(unsigned long)total];};
+    reader.progress=^(NSUInteger read,NSUInteger total){engine.status=[NSString stringWithFormat:@"Checking lights · %lu/%lu",(unsigned long)read,(unsigned long)total];};
     __weak HPStudio *weakSelf=self;
     reader.completion=^(NSArray *readings,NSError *error){
         HPStudio *controller=weakSelf;
@@ -497,7 +497,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
             NSDictionary *scene=[HPSceneCapture sceneWithName:trimmed readings:readings error:&error];
             if(scene&&[HPSceneCapture writeScene:scene realm:HPRealm() error:&error]){
                 for(NSDictionary *reading in readings){engine.sent[reading[@"id"]]=@[reading[@"light"],reading[@"hue"],reading[@"sat"]];HPRememberColour(reading,(HPWireColor){[reading[@"hue"]unsignedShortValue],[reading[@"sat"]unsignedShortValue],[reading[@"light"]unsignedShortValue]});}
-                engine.status=[NSString stringWithFormat:@"Saved %@ · %lu lights",trimmed,(unsigned long)readings.count];
+                engine.status=readings.count<total?[NSString stringWithFormat:@"Saved %@ · %lu of %lu lights",trimmed,(unsigned long)readings.count,(unsigned long)total]:[NSString stringWithFormat:@"Saved %@ · %lu lights",trimmed,(unsigned long)readings.count];
                 [NSNotificationCenter.defaultCenter postNotificationName:@"HP.OrderChanged" object:nil];
             }
         }@catch(NSException *exception){error=HPReadError(exception.reason?:@"The scene could not be saved.");}
