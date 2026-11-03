@@ -82,6 +82,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (NSDictionary *)recipeNamed:(NSString *)name;
 - (BOOL)applyRecipe:(NSDictionary *)recipe error:(NSError **)error;
 - (HPColor)targetForLight:(NSDictionary *)light;
+@end
+@interface HPLightEngine (Choreography)
 - (HPColor)creativeTarget:(NSDictionary *)light;
 - (void)advanceCreative:(double)elapsed;
 - (void)clearCreative;
@@ -128,9 +130,9 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(!found){if(error)*error=HPReadError(@"The room saved in this mood is not in this Home.");return NO;}
     [self stop];[self clearCreative];self.scope=valid[@"scope"];self.brightness=[valid[@"brightness"]floatValue];self.speed=[valid[@"motion"]floatValue];self.depth=[valid[@"depth"]floatValue];self.variation=[valid[@"variation"]unsignedIntValue];self.phase=[valid[@"phase"]doubleValue];self.journeyElapsed=[valid[@"journeyElapsed"]doubleValue];self.waveAngle=[valid[@"angle"]doubleValue];self.waveReverse=[valid[@"reverse"]boolValue];self.playbackRate=[valid[@"playbackRate"]doubleValue]?:1;
     NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;[prefs setFloat:self.brightness forKey:@"HP.StudioBrightness"];[prefs setFloat:self.speed forKey:@"HP.StudioMotion"];[prefs setFloat:self.depth forKey:@"HP.StudioDepth"];
+    self.creativeKind=[valid[@"creativeKind"]integerValue];self.anchorLook=valid[@"anchorLook"];self.painted=[valid[@"painted"]mutableCopy];self.exploreVariant=[valid[@"exploreVariant"]integerValue];self.creativeName=valid[@"name"];self.creativeBrightness=[valid[@"creativeBrightness"]doubleValue];self.creativeDepth=[valid[@"creativeDepth"]doubleValue];
     [self activate:[valid[@"mode"]integerValue] journey:[valid[@"journey"]integerValue] reset:NO retarget:YES];
-    if(self.mode<0){if(error)*error=HPReadError(self.status);return NO;}
-    self.creativeKind=[valid[@"creativeKind"]integerValue];self.anchorLook=valid[@"anchorLook"];self.painted=[valid[@"painted"]mutableCopy];self.exploreVariant=[valid[@"exploreVariant"]integerValue];self.creativeName=valid[@"name"];self.creativeBrightness=[valid[@"creativeBrightness"]doubleValue];self.creativeDepth=[valid[@"creativeDepth"]doubleValue];return YES;
+    if(self.mode<0){if(error)*error=HPReadError(self.status);return NO;}return YES;
 }
 - (void)start:(NSInteger)mode{[self clearCreative];[self activate:mode journey:-1 reset:self.lastMode!=mode||self.journey!=-1 retarget:YES];}
 - (void)startJourney:(NSInteger)journey{[self clearCreative];if(journey<0||journey>=HP_JOURNEY_COUNT)return;[self activate:0 journey:journey reset:self.journey!=journey retarget:YES];}
@@ -461,7 +463,7 @@ static UIViewController *HPCreateStudioTools(void);
 - (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
-    HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.status;[self.scopeButton setTitle:engine.scope forState:UIControlStateNormal];[self.pause setTitle:engine.mode>=0?@"Pause":@"Resume"forState:UIControlStateNormal];self.pause.enabled=!self.captureReader&&!HPIdentifying;self.navigationItem.rightBarButtonItem.enabled=!self.captureReader&&!HPIdentifying;self.save.enabled=engine.mode<0&&!engine.adjusting&&engine.lights.count>0&&!self.captureReader&&!HPIdentifying;self.save.alpha=self.save.enabled?1:.4;
+    HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.sleepActive?[NSString stringWithFormat:@"Sleep descent · %.0f min remaining%@",ceil(MAX(0,engine.sleepDuration-engine.sleepElapsed)/60.),engine.mode<0?@" · paused":@""]:engine.status;[self.scopeButton setTitle:engine.scope forState:UIControlStateNormal];[self.pause setTitle:engine.mode>=0?@"Pause":@"Resume"forState:UIControlStateNormal];self.pause.enabled=!self.captureReader&&!HPIdentifying;self.navigationItem.rightBarButtonItem.enabled=!self.captureReader&&!HPIdentifying;self.save.enabled=engine.mode<0&&!engine.adjusting&&engine.lights.count>0&&!self.captureReader&&!HPIdentifying;self.save.alpha=self.save.enabled?1:.4;
     BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.playbackSlider.enabled=enabled;self.playbackLabel.text=[NSString stringWithFormat:@"Speed %.1f×",engine.playbackRate];self.shuffleButton.enabled=enabled&&engine.lights.count>0;
     self.brightnessLabel.text=[NSString stringWithFormat:@"Brightness %.0f%%",engine.brightness*100];self.motionLabel.text=[NSString stringWithFormat:@"Motion %.1f×",HPMotionRate(engine.speed)];self.depthLabel.text=[NSString stringWithFormat:@"Colour depth %.0f%%",engine.depth*100];
     // Do not assign slider.value on the refresh timer; the user's thumb owns it.
