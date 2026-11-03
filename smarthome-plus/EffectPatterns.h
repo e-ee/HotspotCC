@@ -2,7 +2,7 @@
 #define HP_EFFECT_PATTERNS_H
 #include <math.h>
 #include <stdint.h>
-#define HP_MODE_COUNT 32
+#define HP_MODE_COUNT 34
 #define HP_JOURNEY_COUNT 6
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
@@ -156,3 +156,4 @@ static inline HPColor HPDrift(HPColor old,HPColor target,double elapsed){
 }
 static inline uint8_t HPSmoothTransitionSteps(unsigned count){return (uint8_t)HPClamp(ceil(count*2.2),40,60);}
 #endif
+

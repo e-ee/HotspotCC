@@ -4,9 +4,27 @@
 #import <objc/message.h>
 #import "SceneCapture.h"
 #import "EffectPatterns.h"
+#import "ChoreographyMath.h"
 #import "StudioPresets.h"
 #include <assert.h>
 #include <math.h>
+
+@interface NSObject (HPChoreographyTesting)
+- (HPColor)targetForLight:(NSDictionary *)light;
+- (NSDictionary *)snapshotLook;
+- (void)beginCanvas;
+- (void)paintAt:(CGPoint)point colour:(HPColor)colour radius:(double)radius;
+- (void)rippleAt:(CGPoint)point;
+- (void)beginExplore:(NSInteger)variant;
+- (NSDictionary *)recipeNamed:(NSString *)name;
+- (BOOL)beginMorph:(NSDictionary *)from to:(NSDictionary *)to duration:(double)duration stagger:(double)stagger;
+- (BOOL)beginSequence:(NSArray *)steps name:(NSString *)name loop:(BOOL)loop;
+- (void)beginSleep:(double)seconds;
+- (void)advanceCreative:(double)elapsed;
+- (void)cancelSleep;
+- (void)touchAt:(CGPoint)point beginning:(BOOL)beginning;
+@end
+
 extern BOOL HPShouldShowSetup(UIViewController *controller);
 static NSMutableArray *Writes,*Reads,*BrightnessWrites;
 static NSMutableDictionary *LampValues,*LastTargets;
@@ -224,6 +242,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)checkControls:(dispatch_block_t)completion;
 - (void)checkStorage;
 - (void)checkReachableCapture;
+- (void)checkChoreography;
 - (void)checkShuffle:(dispatch_block_t)completion;
 - (void)checkMap:(UINavigationController *)navigation;
 - (void)checkDeletion:(UINavigationController *)navigation;
@@ -233,6 +252,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options{
     UIViewController *launch=[[UIStoryboard storyboardWithName:@"HomePlusBlankLaunch360"bundle:NSBundle.mainBundle]instantiateInitialViewController];[launch loadViewIfNeeded];assert(launch.view.subviews.count==0);CGFloat r,g,b,a;[launch.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.1&&g<.1&&b<.1);
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--choreography"]){Later(1,^{[self checkChoreography];});return YES;}
     if([NSProcessInfo.processInfo.arguments containsObject:@"--capture-only"]){Later(1,^{[self checkReachableCapture];});return YES;}
     Later(1,^{id engine=Shared(@"HPLightEngine");DropReads=YES;QueueBusy=YES;[engine start:0];assert(Reads.count==0&&Writes.count==0);
         Later(.4,^{assert(Writes.count==0&&Reads.count==0);QueueBusy=NO;
@@ -279,6 +299,30 @@ static void AssertVisibleCardText(UIViewController *studio){
             });
         });
     });
+}
+- (void)checkChoreography{
+ id e=Shared(@"HPLightEngine");[e start:32];NSArray *lights=[e valueForKey:@"lights"];assert(lights.count==14);NSDictionary *first=lights[0];HPColor jade=[e targetForLight:first];assert(isfinite(jade.hue));
+ // Every mode still switches, including while the timer is running.
+ for(int mode=0;mode<HP_MODE_COUNT;mode++){[e start:mode];assert([[e valueForKey:@"lastMode"]intValue]==mode&&[[e valueForKey:@"creativeKind"]intValue]==0);}
+ [e start:32];[e setValue:@90 forKey:@"waveAngle"];HPColor turn=[e targetForLight:first];[e setValue:@270 forKey:@"waveAngle"];HPColor reverse=[e targetForLight:first];assert(fabs(turn.hue-reverse.hue)>.001);
+ [e setValue:@0 forKey:@"waveAngle"];[e beginCanvas];NSDictionary *original=[e snapshotLook];[e paintAt:CGPointMake([first[@"x"]doubleValue],[first[@"y"]doubleValue])colour:(HPColor){.93,1,.3}radius:.2];NSDictionary *painted=[e valueForKey:@"painted"];assert(![painted isEqual:original]);assert([[e valueForKey:@"retargets"]count]>0);
+ [e rippleAt:CGPointMake(.2,.8)];assert([[e valueForKey:@"rippleAge"]doubleValue]==0);[e setValue:@5 forKey:@"rippleAge"];
+ [e beginExplore:1];NSDictionary *anchor=[e valueForKey:@"anchorLook"];[e beginExplore:2];assert([[e valueForKey:@"anchorLook"]isEqual:anchor]);[e beginExplore:0];HPColor restored=[e targetForLight:first];NSArray *firstAnchor=anchor[first[@"id"]];assert(fabs(restored.hue-[firstAnchor[0]doubleValue])<.0001);
+ [e setValue:@123 forKey:@"waveAngle"];[e setValue:@YES forKey:@"waveReverse"];[e setValue:@3 forKey:@"playbackRate"];NSError *error=nil;NSDictionary *recipe=[HPStudioPresets validatedRecipe:[e recipeNamed:@"An exact variation"]error:&error];assert(recipe&&!error);[e start:3];assert([e applyRecipe:recipe error:&error]);assert([[e valueForKey:@"creativeKind"]intValue]==4&&[[e valueForKey:@"waveAngle"]intValue]==123&&[[e valueForKey:@"waveReverse"]boolValue]&&[[e valueForKey:@"playbackRate"]intValue]==3);
+ NSMutableDictionary *from=[[e snapshotLook]mutableCopy],*to=[from mutableCopy];for(NSString *key in from){from[key]=@[@.98,@.8,@.3];to[key]=@[@.02,@.9,@.2];}
+ [e setValue:@0 forKey:@"waveAngle"];[e setValue:@NO forKey:@"waveReverse"];assert([e beginMorph:from to:to duration:120 stagger:0]);[e setValue:@60 forKey:@"creativeElapsed"];HPColor middle=[e targetForLight:first];assert(middle.hue<.01||middle.hue>.99);[e setValue:@120 forKey:@"creativeElapsed"];HPColor end=[e targetForLight:first];assert(fabs(end.hue-.02)<.001);
+ NSArray *steps=@[@{@"name":@"First",@"look":from,@"hold":@5,@"fade":@5},@{@"name":@"Second",@"look":to,@"hold":@5,@"fade":@5}];assert([e beginSequence:steps name:@"Test evening"loop:YES]);[e setValue:@10 forKey:@"creativeElapsed"];HPColor second=[e targetForLight:first];assert(fabs(second.hue-.02)<.001);[e setValue:@20 forKey:@"creativeElapsed"];HPColor loop=[e targetForLight:first];assert(fabs(loop.hue-.98)<.001);
+ assert(![e beginSequence:@[@{@"hold":@5,@"fade":@5}]name:@"Invalid"loop:YES]);
+ [e start:32];[e setValue:@10 forKey:@"playbackRate"];[e beginSleep:60];[e advanceCreative:1];assert([[e valueForKey:@"sleepElapsed"]doubleValue]==1);[e setValue:@30 forKey:@"sleepElapsed"];HPColor sleepy=[e targetForLight:first];[e cancelSleep];HPColor awake=[e targetForLight:first];assert(sleepy.lightness<awake.lightness);[e beginSleep:60];[e setValue:@59 forKey:@"sleepElapsed"];[e advanceCreative:1];assert([[e valueForKey:@"retargets"]count]==14);
+ for(int i=0;i<16;i++)[e tick];for(NSDictionary *value in LampValues.allValues)assert([value[@"light"]intValue]==0);[e advanceCreative:0];assert([[e valueForKey:@"mode"]intValue]==-1&&![[e valueForKey:@"sleepActive"]boolValue]);
+ [e start:32];[e setValue:@1 forKey:@"playbackRate"];
+ UIViewController *tools=[NSClassFromString(@"HPStudioTools")new];UINavigationController *navigation=(id)self.window.rootViewController;[navigation pushViewController:tools animated:NO];[tools loadViewIfNeeded];UITableView *table=[tools valueForKey:@"tableView"];assert([table.dataSource tableView:table numberOfRowsInSection:0]==9);SaveScreen(self.window,@"CreativeTools.png");
+ UIViewController *direction=[NSClassFromString(@"HPStudioTools")new];[direction setValue:@1 forKey:@"screen"];[navigation pushViewController:direction animated:NO];[direction loadViewIfNeeded];UITableView *dt=[direction valueForKey:@"tableView"];UITableViewCell *angle=[dt.dataSource tableView:dt cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];UISlider *slider=(id)angle.accessoryView;slider.value=215;[slider sendActionsForControlEvents:UIControlEventValueChanged];assert(fabs([[e valueForKey:@"waveAngle"]doubleValue]-215)<.01);
+ UIViewController *touch=[NSClassFromString(@"HPTouchStudio")new];[navigation pushViewController:touch animated:NO];[touch loadViewIfNeeded];[self.window layoutIfNeeded];id canvas=[touch valueForKey:@"canvas"];assert([[canvas valueForKey:@"lights"]count]==14);[canvas touchAt:CGPointMake(80,80)beginning:YES];assert([[e valueForKey:@"creativeKind"]intValue]==1);[canvas setValue:@NO forKey:@"painting"];[canvas touchAt:CGPointMake(120,120)beginning:YES];assert([[e valueForKey:@"rippleAge"]doubleValue]==0);SaveScreen(self.window,@"TouchCanvas.png");
+ UIViewController *composer=[NSClassFromString(@"HPStudioTools")new];[composer setValue:@4 forKey:@"screen"];[composer setValue:[steps mutableCopy]forKey:@"steps"];[navigation pushViewController:composer animated:NO];[composer loadViewIfNeeded];UITableView *ct=[composer valueForKey:@"tableView"];assert([ct.dataSource tableView:ct numberOfRowsInSection:1]==2);[ct.dataSource tableView:ct moveRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:1]toIndexPath:[NSIndexPath indexPathForRow:1 inSection:1]];assert([[[composer valueForKey:@"steps"]firstObject][@"name"]isEqual:@"Second"]);SaveScreen(self.window,@"JourneyComposer.png");
+ [navigation popToRootViewControllerAnimated:NO];[e start:32];SaveScreen(self.window,@"CreativeStudio.png");[e stop];
+ NSDictionary *report=@{@"passed":@YES,@"all34ModesSwitch":@YES,@"directionControlChangesField":@YES,@"paintTouchesAlterNearbyTargets":@YES,@"touchRippleOrigin":@YES,@"explorationPreservesOriginalAnchor":@YES,@"variationDirectionSpeedRoundTrip":@YES,@"sceneMorphUsesShortHuePath":@YES,@"composedJourneyChaptersAndLoop":@YES,@"malformedJourneyRejected":@YES,@"sleepIndependentOfPlaybackSpeed":@YES,@"sleepDimsWarmsAndTurnsAll14Off":@YES,@"creativeMenusAndReordering":@YES};
+ NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
 }
 - (void)checkReachableCapture{
     id engine=Shared(@"HPLightEngine");[engine stop];[engine setValue:@0 forKey:@"settleUntil"];
@@ -384,3 +428,4 @@ static void AssertVisibleCardText(UIViewController *studio){
 }
 @end
 int main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,NSStringFromClass(HPSmokeDelegate.class));}}
+

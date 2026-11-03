@@ -2,7 +2,7 @@ name: SYLVANIA Plus quick build
 on:
   push:
     branches: [smarthome-plus]
-    paths: ['smarthome-plus/*.inc', 'smarthome-plus/*.m', 'smarthome-plus/*.h']
+    paths: ['smarthome-plus/HomeArchive.m'] # Studio edits are covered by homeplus-creative.yml
   workflow_dispatch:
 concurrency:
   group: homeplus-quick
@@ -34,3 +34,4 @@ jobs:
           path: |
             build/HomePlus.dylib
             build/HomePlusLaunch.storyboardc
+
