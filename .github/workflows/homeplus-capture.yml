@@ -1,0 +1,134 @@
+name: SYLVANIA Plus reachable scene capture
+on:
+  push:
+    branches: [smarthome-plus]
+    paths: ['.github/workflows/homeplus-capture.yml', 'smarthome-plus/LightReadback.inc', 'smarthome-plus/SceneCapture.m']
+  workflow_dispatch:
+concurrency:
+  group: homeplus-capture
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify saved scenes with real Realm 10.11
+        run: |
+          mkdir -p build
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 https://github.com/realm/realm-swift/releases/download/v10.11.0/Carthage.xcframework.zip --output build/realm-sdk.zip
+          python3 - <<'PYREALM'
+          import pathlib,zipfile,plistlib,stat,os,platform
+          z=zipfile.ZipFile('build/realm-sdk.zip')
+          info_name=next(n for n in z.namelist() if n.endswith('Realm.xcframework/Info.plist'))
+          info=plistlib.loads(z.read(info_name))
+          arch='arm64' if platform.machine()=='arm64' else 'x86_64'
+          lib=next(l for l in info['AvailableLibraries'] if l['SupportedPlatform']=='macos' and arch in l['SupportedArchitectures'])
+          prefix=info_name[:-len('Info.plist')]+lib['LibraryIdentifier']+'/'+lib['LibraryPath']+'/'
+          root=pathlib.Path('build/realm-native/Realm.framework');root.mkdir(parents=True,exist_ok=True)
+          links=[]
+          for f in z.infolist():
+              if not f.filename.startswith(prefix):continue
+              rel=pathlib.PurePosixPath(f.filename[len(prefix):])
+              assert not rel.is_absolute() and '..' not in rel.parts
+              out=root/pathlib.Path(*rel.parts)
+              if f.is_dir():out.mkdir(parents=True,exist_ok=True);continue
+              if stat.S_ISLNK(f.external_attr>>16):links.append((out,z.read(f).decode()));continue
+              out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(z.read(f));out.chmod((f.external_attr>>16)&0o777 or 0o644)
+          for out,target in links:
+              out.parent.mkdir(parents=True,exist_ok=True);out.symlink_to(target)
+          version=plistlib.loads((root/'Resources/Info.plist').read_bytes())['CFBundleShortVersionString']
+          assert version.startswith('10.11'),version
+          print('Testing native scene schema with Realm',version,arch)
+          PYREALM
+          codesign --force --deep --sign - build/realm-native/Realm.framework
+          clang -fobjc-arc -fblocks smarthome-plus/SceneCapture.m smarthome-plus/test_capture_realm.m -Fbuild/realm-native -framework Realm -framework Foundation -Wl,-rpath,@executable_path/realm-native -o build/test-capture-realm
+          ./build/test-capture-realm
+      - name: Compile iOS 14 add-on and launch screen
+        run: |
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          codesign --force --sign - build/HomePlus.dylib
+          file build/HomePlus.dylib
+          xcrun ibtool --compile build/HomePlusLaunch.storyboardc smarthome-plus/HomePlusLaunch.storyboard --minimum-deployment-target 14.0 --target-device iphone --target-device ipad
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HomePlus-arm64
+          path: |
+            build/HomePlus.dylib
+            build/HomePlusLaunch.storyboardc
+      - name: Exercise UIKit and the fourteen-lamp sender
+        run: |
+          mkdir -p build/StudioSmoke.app
+          xcrun --sdk iphonesimulator clang -target "$(uname -m)-apple-ios14.0-simulator" -fobjc-arc -fblocks smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m smarthome-plus/SimulatorSmoke.m -o build/StudioSmoke.app/StudioSmoke -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Wno-deprecated-declarations -Wno-incompatible-pointer-types
+          python3 - <<'PY'
+          import plistlib,pathlib
+          info={'CFBundleIdentifier':'local.homeplus.studiosmoke','CFBundleExecutable':'StudioSmoke','CFBundleName':'Light Studio','CFBundleVersion':'1','CFBundlePackageType':'APPL','MinimumOSVersion':'14.0','UIDeviceFamily':[1,2],'UILaunchStoryboardName':'HomePlusBlankLaunch360','LSRequiresIPhoneOS':True,'UIUserInterfaceStyle':'Dark'}
+          pathlib.Path('build/StudioSmoke.app/Info.plist').write_bytes(plistlib.dumps(info))
+          seed={'Profile':'Simulator','Summary':'14 lights / 0 groups','Documents':{},'Preferences':{'HP.Profile':'Simulator','mesh.json':b'{"groups":[],"nodes":[]}'}}
+          pathlib.Path('build/StudioSmoke.app/HomePlusSeed.plist').write_bytes(plistlib.dumps(seed))
+          PY
+          cp -R build/HomePlusLaunch.storyboardc build/StudioSmoke.app/HomePlusBlankLaunch360.storyboardc
+          codesign --force --sign - build/StudioSmoke.app
+          xcrun simctl list devices available --json > build/devices.json
+          DEVICE=$(python3 - <<'PY'
+          import json
+          devices=[d for group in json.load(open('build/devices.json'))['devices'].values() for d in group if d.get('isAvailable') and 'iPhone' in d['name']]
+          assert devices,'No iPhone simulator runtime available'
+          print(devices[0]['udid'])
+          PY
+          )
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/StudioSmoke.app
+          CONTAINER=$(xcrun simctl get_app_container "$DEVICE" local.homeplus.studiosmoke data)
+          trap 'cp "$CONTAINER/Documents/Smoke.stdout" build/Smoke.stdout 2>/dev/null || true; cp "$CONTAINER/Documents/Smoke.stderr" build/Smoke.stderr 2>/dev/null || true; cp "$CONTAINER/Documents/failure-report.json" build/failure-report.json 2>/dev/null || true' EXIT
+          xcrun simctl launch --stdout="$CONTAINER/Documents/Smoke.stdout" --stderr="$CONTAINER/Documents/Smoke.stderr" "$DEVICE" local.homeplus.studiosmoke --capture-only &
+          for attempt in $(seq 1 240); do
+            if test -f "$CONTAINER/Documents/ActualStudio.request" && ! test -f "$CONTAINER/Documents/ActualStudio.done"; then
+              xcrun simctl io "$DEVICE" screenshot build/ActualStudio.png
+              touch "$CONTAINER/Documents/ActualStudio.done"
+            fi
+            if test -f "$CONTAINER/Documents/failure-report.json"; then break; fi
+            if test -f "$CONTAINER/Documents/smoke-report.json"; then break; fi
+            sleep 1
+          done
+          if ! test -f "$CONTAINER/Documents/smoke-report.json"; then
+            cp "$CONTAINER/Documents/"*.png build/ || true
+            cat "$CONTAINER/Documents/Smoke.stdout" "$CONTAINER/Documents/Smoke.stderr" || true
+            xcrun simctl spawn "$DEVICE" log show --last 3m --style compact --predicate 'process == "StudioSmoke"' | tail -120 || true
+            exit 1
+          fi
+          cp "$CONTAINER/Documents/smoke-report.json" build/smoke-report.json
+          cat build/smoke-report.json
+          cp "$CONTAINER/Documents/LightStudio.png" build/LightStudio.png || true
+          cp "$CONTAINER/Documents/LegacyDark.png" build/LegacyDark.png || true
+          cp "$CONTAINER/Documents/HomeDark.png" build/HomeDark.png || true
+          cp "$CONTAINER/Documents/PausedScene.png" build/PausedScene.png || true
+          cp "$CONTAINER/Documents/ApartmentMap.png" build/ApartmentMap.png || true
+          cp "$CONTAINER/Documents/AuroraGreen.png" build/AuroraGreen.png || true
+          cp "$CONTAINER/Documents/StudioControls.png" build/StudioControls.png || true
+          cp "$CONTAINER/Documents/ShuffleColours.png" build/ShuffleColours.png || true
+          cp "$CONTAINER/Documents/Journeys.png" build/Journeys.png || true
+          cp "$CONTAINER/Documents/SavedMoods.png" build/SavedMoods.png || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Studio-UI-Smoke
+          path: |
+            build/smoke-report.json
+            build/LightStudio.png
+            build/LegacyDark.png
+            build/HomeDark.png
+            build/PausedScene.png
+            build/ApartmentMap.png
+            build/AuroraGreen.png
+            build/StudioControls.png
+            build/ShuffleColours.png
+            build/Journeys.png
+            build/SavedMoods.png
+            build/ActualStudio.png
+            build/Smoke.stdout
+            build/Smoke.stderr
+            build/failure-report.json
+# Enrollment presentation covers native pages and excludes system share sheets.
