@@ -172,13 +172,13 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
             result.hue=ranges[palette][0]+(ranges[palette][1]-ranges[palette][0])*pigment;
         }else if(style==1)result.hue=1-result.hue;
     }
-    if(journey<0)result=HPHomePalette(mode,result,1);
+    if(journey<0)result=HPHomePalette(mode,result,mode==0&&variation==0);
     else if(variation){
         // Shuffle journeys within a continuous blue-to-rose range; never reintroduce green.
         result.hue=.58+.38*HPWave(result.hue+(variation%251)/251.);
     }
     if(journey<0||journey>=HP_JOURNEY_COUNT)result.saturation=HPColourDepth(result.saturation,depth);
-    if(journey>=0||mode!=0){
+    if(journey>=0||mode!=0||variation){
         // Leave some RGB channel headroom in deep blue, where quantization is conspicuous.
         double blue=exp(-pow((result.hue-.66)/.065,2));
         result.saturation=fmin(result.saturation,.96-.10*blue);

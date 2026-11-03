@@ -239,7 +239,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     HPColor present=state.commandAt>0?HPCommandEstimate(state.commandStart,state.commandTarget,now-state.commandAt,state.commandDuration):state.color;
     // Cached first colour is also used as the start of the first native fade.
     if(!state.commandAt){NSDictionary *cached=HPCachedColour(light);if(cached)present=HPStatusColor([cached[@"hue"]unsignedShortValue],[cached[@"sat"]unsignedShortValue],[cached[@"light"]unsignedShortValue]);}
-    HPColor command=HPComfortWaypoint(present,state.color,self.journey<0&&self.lastMode==0);
+    HPColor command=HPComfortWaypoint(present,state.color,self.journey<0&&self.lastMode==0&&self.variation==0);
     BOOL waypoint=fabs(command.hue-state.color.hue)>.001||fabs(command.saturation-state.color.saturation)>.001;
     HPWireColor wire=HPVendorColor(command);NSArray *previous=self.sent[key];
     if(previous&&[previous[0]unsignedShortValue]==wire.lightness&&[previous[1]unsignedShortValue]==wire.hue&&[previous[2]unsignedShortValue]==wire.saturation){if(!waypoint)[self completeRetarget:key];return;}
