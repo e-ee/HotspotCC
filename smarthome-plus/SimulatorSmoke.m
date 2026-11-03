@@ -14,7 +14,8 @@ static BOOL QueueBusy,DropReads,Disconnected;
 static NSUInteger PendingReads,CancelledReads;
 static NSMutableArray *MarkerWrites;
 static NSUInteger ExplicitFadedWrites,AmbientWrites;
-static uint16_t FailReadTarget;
+static uint16_t FailReadTarget,SilentReadTarget;
+static BOOL DisconnectAfterRead;
 static NSString *TestWait;
 static void HPTestFailure(const char *condition,const char *file,int line) __attribute__((noreturn));
 static void HPTestFailure(const char *condition,const char *file,int line){
@@ -91,9 +92,9 @@ static void InitLamps(void){if(LampValues)return;Writes=[NSMutableArray new];Rea
     assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil&&[transition raw]==6&&level<=100);NSMutableDictionary *value=[LampValues[@(target)]mutableCopy];assert(value);value[@"light"]=@(level);LampValues[@(target)]=value;[BrightnessWrites addObject:@{@"target":@(target),@"level":@(level)}];return nil;
 }
 + (id)lightHSLGetWithDestination:(uint16_t)target retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses successCallback:(void(^)(uint16_t,uint16_t,id))success resultCallback:(void(^)(BOOL,NSError *))result{
-    InitLamps();assert(retries==0&&responses==1);[Reads addObject:@(target)];if(DropReads){PendingReads++;return [HPMockReadHandle new];}
+    InitLamps();assert(retries==0&&responses==1);[Reads addObject:@(target)];if(DropReads||target==SilentReadTarget){PendingReads++;return [HPMockReadHandle new];}
     if(target==FailReadTarget){result(NO,[NSError errorWithDomain:@"mock" code:1 userInfo:@{NSLocalizedDescriptionKey:@"A test light did not respond"}]);return nil;}
-    NSDictionary *v=LampValues[@(target)];assert(v);HPMockStatus *status=[HPMockStatus new];status.HSLHue=[v[@"hue"]unsignedShortValue];status.HSLSaturation=[v[@"sat"]unsignedShortValue];status.HSLLightness=[v[@"light"]unsignedShortValue];success(target,0x7e00,status);result(YES,nil);return nil;
+    NSDictionary *v=LampValues[@(target)];assert(v);HPMockStatus *status=[HPMockStatus new];status.HSLHue=[v[@"hue"]unsignedShortValue];status.HSLSaturation=[v[@"sat"]unsignedShortValue];status.HSLLightness=[v[@"light"]unsignedShortValue];success(target,0x7e00,status);if(DisconnectAfterRead)Disconnected=YES;result(YES,nil);return nil;
 }
 + (id)lightHSLSetWithDestination:(uint16_t)target HSLLight:(uint16_t)light HSLHue:(uint16_t)hue HSLSaturation:(uint16_t)saturation transitionTime:(id)transition delay:(uint8_t)delay retryCount:(NSInteger)retries responseMaxCount:(NSInteger)responses ack:(BOOL)ack successCallback:(id)success resultCallback:(id)result{
     InitLamps();assert(!ack&&retries==0&&responses==0&&success==nil&&result==nil);assert(hue<=360&&saturation<=100&&light<=100);assert(([transition raw]>=40&&[transition raw]<=60)||[transition raw]==10);
@@ -222,6 +223,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (void)checkMovingMoods;
 - (void)checkControls:(dispatch_block_t)completion;
 - (void)checkStorage;
+- (void)checkReachableCapture;
 - (void)checkShuffle:(dispatch_block_t)completion;
 - (void)checkMap:(UINavigationController *)navigation;
 - (void)checkDeletion:(UINavigationController *)navigation;
@@ -231,6 +233,7 @@ static void AssertVisibleCardText(UIViewController *studio){
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options{
     UIViewController *launch=[[UIStoryboard storyboardWithName:@"HomePlusBlankLaunch360"bundle:NSBundle.mainBundle]instantiateInitialViewController];[launch loadViewIfNeeded];assert(launch.view.subviews.count==0);CGFloat r,g,b,a;[launch.view.backgroundColor getRed:&r green:&g blue:&b alpha:&a];assert(r<.1&&g<.1&&b<.1);
     InitLamps();self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.studio=[NSClassFromString(@"HPStudio")new];assert(self.studio);self.window.rootViewController=[[UINavigationController alloc]initWithRootViewController:self.studio];[self.window makeKeyAndVisible];
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--capture-only"]){Later(1,^{[self checkReachableCapture];});return YES;}
     Later(1,^{id engine=Shared(@"HPLightEngine");DropReads=YES;QueueBusy=YES;[engine start:0];assert(Reads.count==0&&Writes.count==0);
         Later(.4,^{assert(Writes.count==0&&Reads.count==0);QueueBusy=NO;
             Later(5.2,^{NSMutableSet *targets=[NSMutableSet new];for(NSDictionary *write in Writes)[targets addObject:write[@"target"]];assert(targets.count==14&&Reads.count==0);DropReads=NO;assert(AmbientWrites>0);SaveScreen(self.window,@"AuroraGreen.png");[self checkControls:^{[self checkShuffle:^{[self checkStorage];}];}];});
@@ -277,6 +280,33 @@ static void AssertVisibleCardText(UIViewController *studio){
         });
     });
 }
+- (void)checkReachableCapture{
+    id engine=Shared(@"HPLightEngine");[engine stop];[engine setValue:@0 forKey:@"settleUntil"];
+    NSMutableDictionary *off=[LampValues[@0x20]mutableCopy];off[@"light"]=@0;LampValues[@0x20]=off;LastTargets[@0x20]=off;
+    [self.studio capturePausedSceneWithName:@"All replies"completion:^(NSError *error){
+        assert(!error&&[RLMRealm defaultRealm].scenes.count==12);NSArray *all=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(all.count==14&&[all[0][@"lightness"]intValue]==0);
+        SilentReadTarget=0x25;NSUInteger cancelled=CancelledReads;
+        [self.studio capturePausedSceneWithName:@"Reachable only"completion:^(NSError *partial){
+            assert(!partial&&[RLMRealm defaultRealm].scenes.count==13&&PendingReads==0&&CancelledReads==cancelled+1);
+            NSArray *entries=[RLMRealm defaultRealm].scenes.lastObject[@"routineList"];assert(entries.count==13);BOOL last=NO;for(NSDictionary *entry in entries){assert(![entry[@"deviceName"]isEqual:@"Lamp 6"]);if([entry[@"deviceName"]isEqual:@"Lamp 14"])last=YES;}assert(last&&[[engine valueForKey:@"status"]containsString:@"13 of 14"]);
+            SilentReadTarget=0;FailReadTarget=0x20;
+            [self.studio capturePausedSceneWithName:@"Skip first failure"completion:^(NSError *first){
+                assert(!first&&[RLMRealm defaultRealm].scenes.count==14&&[[RLMRealm defaultRealm].scenes.lastObject[@"routineList"]count]==13);FailReadTarget=0;DisconnectAfterRead=YES;
+                [self.studio capturePausedSceneWithName:@"Before disconnect"completion:^(NSError *disconnect){
+                    assert(!disconnect&&[RLMRealm defaultRealm].scenes.count==15&&[[RLMRealm defaultRealm].scenes.lastObject[@"routineList"]count]==1);DisconnectAfterRead=NO;Disconnected=NO;DropReads=YES;NSUInteger before=CancelledReads;
+                    [self.studio capturePausedSceneWithName:@"No replies"completion:^(NSError *none){
+                        assert(none&&[RLMRealm defaultRealm].scenes.count==15&&PendingReads==0&&CancelledReads==before+14);DropReads=NO;
+                        [self.studio capturePausedSceneWithName:@"Interrupted"completion:^(NSError *interrupted){
+                            assert(interrupted&&[RLMRealm defaultRealm].scenes.count==15);
+                            NSDictionary *report=@{@"passed":@YES,@"allReplyIncludesOffButReachableBulb":@YES,@"unreachableBulbOmitted":@YES,@"remainingThirteenReadAndSaved":@YES,@"firstBulbFailureDoesNotAbort":@YES,@"disconnectKeepsActualReplies":@YES,@"noRepliesCreatesNoScene":@YES,@"interruptedCaptureCreatesNoScene":@YES,@"timedOutHandlesCancelled":@YES};
+                            NSString *path=[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"smoke-report.json"];assert([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]writeToFile:path atomically:YES]);
+                        }];Later(.15,^{[engine stop];});
+                    }];
+                }];
+            }];
+        }];
+    }];
+}
 - (void)checkStorage{
     id engine=Shared(@"HPLightEngine");[[DeviceControlApi share]setBrightness:@"Lamp 1"level:40 onCompletion:nil];NSUInteger stopped=Writes.count;
     Later(.3,^{assert(Writes.count==stopped);[engine start:3];
@@ -285,7 +315,7 @@ static void AssertVisibleCardText(UIViewController *studio){
             [self.studio capturePausedSceneWithName:@"Aurora Glow"completion:^(NSError *error){assert(!error);RLMRealm *realm=[RLMRealm defaultRealm];assert(realm.scenes.count==12);NSDictionary *scene=realm.scenes.lastObject;NSArray *lights=scene[@"routineList"];assert(lights.count==14&&[scene[@"routineName"]isEqual:@"Aurora Glow"]);
                 for(int i=0;i<14;i++){NSDictionary *lamp=lights[i];assert([lamp[@"deviceType"]intValue]==8&&[lamp[@"color"]intValue]==201+i&&[lamp[@"saturation"]intValue]==43&&[lamp[@"lightness"]intValue]==22);}
                 assert(Reads.count>=beforeReads+14);SaveScreen(self.window,@"LightStudio.png");UIScrollView *scroll=(id)self.studio.view.subviews.firstObject;[scroll setContentOffset:CGPointMake(0,MAX(0,scroll.contentSize.height-scroll.bounds.size.height+scroll.adjustedContentInset.bottom))animated:NO];SaveScreen(self.window,@"PausedScene.png");
-                FailReadTarget=0x25;[self.studio capturePausedSceneWithName:@"Must not save"completion:^(NSError *failure){assert(failure&&[RLMRealm defaultRealm].scenes.count==12);FailReadTarget=0;[self checkMovingMoods];}];
+                FailReadTarget=0x25;[self.studio capturePausedSceneWithName:@"Reachable lights"completion:^(NSError *failure){assert(!failure&&[RLMRealm defaultRealm].scenes.count==13&&[[RLMRealm defaultRealm].scenes.lastObject[@"routineList"]count]==13);FailReadTarget=0;[self checkMovingMoods];}];
             }];Later(.2,^{assert(Reads.count==beforeReads);});
         });
     });
@@ -301,7 +331,7 @@ static void AssertVisibleCardText(UIViewController *studio){
     assert([self.studio saveMovingMoodNamed:@"Second mood"error:&error]);[self.studio deleteMovingMood:saved[@"id"]];homes=[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"];recipes=homes.allValues.firstObject;assert(recipes.count==1&&![recipes[0][@"id"]isEqual:saved[@"id"]]);
     // A genuinely silent request must release its own queue handle on timeout.
     [engine setValue:@0 forKey:@"settleUntil"];DropReads=YES;NSUInteger cancelled=CancelledReads;
-    [self.studio capturePausedSceneWithName:@"No reply"completion:^(NSError *failure){assert(failure&&[RLMRealm defaultRealm].scenes.count==12&&PendingReads==0&&CancelledReads==cancelled+1);DropReads=NO;[self checkInterface];}];
+    [self.studio capturePausedSceneWithName:@"No reply"completion:^(NSError *failure){assert(failure&&[RLMRealm defaultRealm].scenes.count==13&&PendingReads==0&&CancelledReads==cancelled+14);DropReads=NO;[self checkInterface];}];
 }
 - (void)checkInterface{
     _TtC13SmartHome_Prd20ReMenuViewController *menu=[_TtC13SmartHome_Prd20ReMenuViewController new];assert([menu tableView:nil numberOfRowsInSection:0]==2&&[menu tableView:nil numberOfRowsInSection:3]==0&&[menu tableView:nil numberOfRowsInSection:4]==0);assert([menu tableView:nil viewForHeaderInSection:3]==nil);NSIndexPath *remaining=[NSIndexPath indexPathForRow:1 inSection:0];assert([[[menu tableView:nil cellForRowAtIndexPath:remaining]textLabel].text isEqual:@"Original row 2"]);[menu tableView:nil didSelectRowAtIndexPath:remaining];assert(menu.selected==2&&[menu tableView:nil heightForRowAtIndexPath:remaining]==42);
@@ -342,9 +372,9 @@ static void AssertVisibleCardText(UIViewController *studio){
     });
 }
 - (void)checkDeletion:(UINavigationController *)navigation{
-    UITableViewController *editor=[[NSClassFromString(@"HPPathEditor")alloc]initWithStyle:UITableViewStyleInsetGrouped];[editor setValue:@YES forKey:@"scenes"];[navigation pushViewController:editor animated:NO];[editor loadViewIfNeeded];NSArray *items=[editor valueForKey:@"items"];assert(items.count==12);
+    UITableViewController *editor=[[NSClassFromString(@"HPPathEditor")alloc]initWithStyle:UITableViewStyleInsetGrouped];[editor setValue:@YES forKey:@"scenes"];[navigation pushViewController:editor animated:NO];[editor loadViewIfNeeded];NSArray *items=[editor valueForKey:@"items"];assert(items.count==13);
     NSUInteger commands=Writes.count;NSIndexPath *first=[NSIndexPath indexPathForRow:0 inSection:0];[editor.tableView.dataSource tableView:editor.tableView commitEditingStyle:UITableViewCellEditingStyleDelete forRowAtIndexPath:first];
-    Later(.4,^{UIAlertController *confirmation=(id)editor.presentedViewController;assert([confirmation isKindOfClass:UIAlertController.class]&&[confirmation.title containsString:@"Saved scene 1"]);UIAlertAction *action=confirmation.actions.lastObject;assert(action.style==UIAlertActionStyleDestructive);void(^handler)(UIAlertAction *)=[action valueForKey:@"handler"];assert(handler);[confirmation dismissViewControllerAnimated:NO completion:^{handler(action);assert([RLMRealm defaultRealm].scenes.count==11&&[[editor valueForKey:@"items"]count]==11&&Writes.count==commands);[self finishReport];}];});
+    Later(.4,^{UIAlertController *confirmation=(id)editor.presentedViewController;assert([confirmation isKindOfClass:UIAlertController.class]&&[confirmation.title containsString:@"Saved scene 1"]);UIAlertAction *action=confirmation.actions.lastObject;assert(action.style==UIAlertActionStyleDestructive);void(^handler)(UIAlertAction *)=[action valueForKey:@"handler"];assert(handler);[confirmation dismissViewControllerAnimated:NO completion:^{handler(action);assert([RLMRealm defaultRealm].scenes.count==12&&[[editor valueForKey:@"items"]count]==12&&Writes.count==commands);[self finishReport];}];});
 }
 - (void)finishReport{
     [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"HP.JoinPending"];UITableViewController *setup=[[NSClassFromString(@"HPPanel")alloc]initWithStyle:UITableViewStyleInsetGrouped];[setup loadViewIfNeeded];assert([setup.title isEqual:@"Add this device"]&&setup.navigationItem.rightBarButtonItem==nil&&[setup.tableView.dataSource numberOfSectionsInTableView:setup.tableView]==1&&[setup.tableView.dataSource tableView:setup.tableView numberOfRowsInSection:0]==2);assert(!HPShouldShowSetup(setup)&&!HPShouldShowSetup([[UIActivityViewController alloc]initWithActivityItems:@[@"request"]applicationActivities:nil])&&HPShouldShowSetup([_TtC13SmartHome_Prd20ReHomeViewController new]));[NSUserDefaults.standardUserDefaults removeObjectForKey:@"HP.JoinPending"];
