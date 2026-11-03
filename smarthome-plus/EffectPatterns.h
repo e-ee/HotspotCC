@@ -104,6 +104,42 @@ static inline double HPHeldDepth(double saturation,double startingDepth,double d
     if(depth>=startingDepth)return startingDepth>=.999999?saturation:saturation+(1-saturation)*(depth-startingDepth)/(1-startingDepth);
     return startingDepth<=.250001?saturation:saturation*(depth-.25)/(startingDepth-.25);
 }
+// Cabin-inspired hue lanes. Preserve Aurora only as a standalone mood.
+static inline HPColor HPHomePalette(int mode,HPColor c,int preserveAurora){
+    if(mode==0&&preserveAurora)return c;
+    static const double limits[HP_MODE_COUNT][2]={
+        {.65,.92},{.61,.79},{.57,.68},{.025,.095},{.79,.95},{.57,.97},{.04,.10},{.73,.87},
+        {.015,.09},{.61,.70},{.06,.12},{.58,.70},{.80,.94},{.61,.75},{.015,.08},{.67,.94},
+        {.73,.85},{.58,.68},{.74,.86},{.68,.88},{.62,.75},{.58,.70},{.87,.95},{.70,.84},
+        {.84,.94},{.59,.70},{.86,.96},{.025,.10},{.68,.88},{.84,.96},{.04,.10},{.57,.97}};
+    mode=mode<0||mode>=HP_MODE_COUNT?0:mode;
+    // Map the existing field smoothly into its new hue lane, rather than clipping green.
+    double pigment=.5+.5*sin((c.hue-.5)*3.141592653589793);
+    c.hue=limits[mode][0]+(limits[mode][1]-limits[mode][0])*pigment;
+    return c;
+}
+static inline int HPHueCrossesGreen(double a,double b){return fmin(a,b)<.55&&fmax(a,b)>.16;}
+static inline HPColor HPComfortBlend(HPColor a,HPColor b,double mix){
+    double saturation=a.saturation+(b.saturation-a.saturation)*mix,hue=a.hue+(b.hue-a.hue)*mix;
+    if(HPHueCrossesGreen(a.hue,b.hue)){
+        if(mix<.45){hue=a.hue;saturation=a.saturation*(1-mix/.45);}
+        else if(mix>.55){hue=b.hue;saturation=b.saturation*(mix-.55)/.45;}
+        else{saturation=0;hue=a.hue+(b.hue-a.hue)*(mix-.45)/.10;}
+    }
+    return (HPColor){hue,saturation,a.lightness+(b.lightness-a.lightness)*mix};
+}
+// Hardware interpolation of warm-to-blue HSL values would otherwise pass through green.
+static inline HPColor HPComfortWaypoint(HPColor present,HPColor desired,int allowGreen){
+    if(!allowGreen&&HPHueCrossesGreen(present.hue,desired.hue)){
+        desired.hue=present.saturation>.005?present.hue:desired.hue;
+        desired.saturation=0;
+    }
+    return desired;
+}
+static inline HPColor HPCommandEstimate(HPColor start,HPColor target,double elapsed,double duration){
+    double x=duration>0?HPClamp(elapsed/duration,0,1):1;
+    return (HPColor){start.hue+(target.hue-start.hue)*x,start.saturation+(target.saturation-start.saturation)*x,start.lightness+(target.lightness-start.lightness)*x};
+}
 // Each chapter lasts six active minutes: four to settle, two to dissolve.
 // Related palettes interpolate without crossing the hue seam. The next chapter
 // uses the same field phase, so every boundary (including the loop) is continuous.
@@ -123,9 +159,10 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
         double time=isfinite(journeySeconds)?fmax(0,journeySeconds):0;
         time=fmod(time,counts[journey]*360.);
         int chapter=(int)(time/360.);double mix=HPClamp((fmod(time,360.)-240.)/120.,0,1);mix=mix*mix*(3-2*mix);
-        HPColor a=HPPattern2D(chapters[journey][chapter],phase,x,y,brightness,1);
-        HPColor b=HPPattern2D(chapters[journey][(chapter+1)%counts[journey]],phase,x,y,brightness,1);
-        result=(HPColor){a.hue+(b.hue-a.hue)*mix,a.saturation+(b.saturation-a.saturation)*mix,a.lightness+(b.lightness-a.lightness)*mix};
+        HPColor a=HPHomePalette(chapters[journey][chapter],HPPattern2D(chapters[journey][chapter],phase,x,y,brightness,1),0);
+        HPColor b=HPHomePalette(chapters[journey][(chapter+1)%counts[journey]],HPPattern2D(chapters[journey][(chapter+1)%counts[journey]],phase,x,y,brightness,1),0);
+        a.saturation=HPColourDepth(a.saturation,depth);b.saturation=HPColourDepth(b.saturation,depth);
+        result=HPComfortBlend(a,b,mix);
     }else result=HPPattern2D(mode,phase,x,y,brightness,1);
     if(variation){
         unsigned style=(variation>>3)%4;
@@ -135,7 +172,17 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
             result.hue=ranges[palette][0]+(ranges[palette][1]-ranges[palette][0])*pigment;
         }else if(style==1)result.hue=1-result.hue;
     }
-    result.saturation=HPColourDepth(result.saturation,depth);
+    if(journey<0)result=HPHomePalette(mode,result,1);
+    else if(variation){
+        // Shuffle journeys within a continuous blue-to-rose range; never reintroduce green.
+        result.hue=.58+.38*HPWave(result.hue+(variation%251)/251.);
+    }
+    if(journey<0||journey>=HP_JOURNEY_COUNT)result.saturation=HPColourDepth(result.saturation,depth);
+    if(journey>=0||mode!=0){
+        // Leave some RGB channel headroom in deep blue, where quantization is conspicuous.
+        double blue=exp(-pow((result.hue-.66)/.065,2));
+        result.saturation=fmin(result.saturation,.96-.10*blue);
+    }
     return result;
 }
 // Older firmware may report normalized status. Command units stay degrees/percent.
@@ -165,5 +212,14 @@ static inline uint8_t HPSmoothTransitionSteps(unsigned count){return (uint8_t)HP
 static inline uint8_t HPPlaybackTransitionSteps(unsigned count,double speed){
     double tenths=ceil(HPSmoothTransitionSteps(count)/HPPlaybackRate(speed));
     return tenths<=62?(uint8_t)fmax(1,tenths):(uint8_t)(0x40|(unsigned)ceil(tenths/10));
+}
+static inline double HPTransitionSeconds(uint8_t raw){return (raw&63)*((raw>>6)==1?1.:.1);}
+static inline uint8_t HPContinuousTransitionSteps(unsigned count,double speed,double observedRound,double hue){
+    double desired=HPTransitionSeconds(HPPlaybackTransitionSteps(count,speed));
+    // Native fades must overlap the next visit even when Speed is at its maximum.
+    double floorSeconds=fmax(1.6,observedRound*1.35+.25);
+    if(hue>.56&&hue<.75)floorSeconds=fmax(2.2,floorSeconds);
+    double tenths=ceil(fmax(desired,floorSeconds)*10);
+    return tenths<=62?(uint8_t)tenths:(uint8_t)(0x40|(unsigned)HPClamp(ceil(tenths/10),1,62));
 }
 #endif

@@ -326,6 +326,7 @@ static void HPAlert(UIViewController *controller, NSString *title, NSString *mes
 
 #import "HomeEnhancements.inc"
 #import "DarkTheme.inc"
+#import "ConnectionComfort.inc"
 
 BOOL HPShouldShowSetup(UIViewController *controller){return [NSUserDefaults.standardUserDefaults boolForKey:@"HP.JoinPending"]&&HPLegacyController(controller);}
 
@@ -343,6 +344,7 @@ __attribute__((constructor)) static void HPInitialize(void) {
         HPBootstrap();
         HPInstallEnhancements();
         HPInstallDarkTheme();
+        HPInstallConnectionComfort();
         Method method=class_getInstanceMethod(UIViewController.class,@selector(viewDidAppear:));
         if(method)HPOriginalDidAppear=method_setImplementation(method,(IMP)HPDidAppear);
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){[[HPManager shared]install];}];

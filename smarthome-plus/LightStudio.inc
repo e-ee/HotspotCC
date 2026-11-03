@@ -4,11 +4,11 @@
 #import "LightReadback.inc"
 #import <unistd.h>
 
-static NSArray *HPThemeNames(void){return @[@"Aurora",@"Comet",@"Ocean",@"Embers",@"Neon",@"Prism",@"Breathe",@"Velvet",@"Sunset",@"Moonlight",@"Fireflies",@"Tide",@"Silk",@"Rain",@"Dawn",@"Orbit",@"Forest Mist",@"Lagoon",@"Heather",@"Opal",@"Blue Hour",@"Coast",@"Rose Dusk",@"Polar Mist",@"Emerald Sky",@"Fjord",@"Cherry Blossom",@"Solstice",@"Nebula",@"Sea Glass",@"Candle Garden",@"Kaleidoscope"];}
-static NSArray *HPThemeDetails(void){return @[@"Original jade, blue and violet ribbons",@"A soft glow drifting through home",@"Long, quiet teal swells",@"A steady, living amber glow",@"Soft rose and turquoise drift",@"A slow journey through colour",@"Gentle, warm breathing light",@"Quiet plum and indigo",@"Honey and peach across home",@"Soft silver-blue moonlight",@"Warm pools wandering nearby",@"Quiet rings through your space",@"Rose and lilac ribbons",@"Cool light drifting downward",@"A slow wash of warm morning",@"Colour circling the apartment",@"Sage and eucalyptus in the mist",@"Still turquoise, deepening blue",@"Lilac hills under a quiet sky",@"Pearl, sea glass and lavender",@"The sky just after sunset",@"Pale blue meeting soft green",@"Dusty rose fading into mauve",@"Jade and ice-blue veils",@"Deep greens in layered ribbons",@"Blue water flowing between cliffs",@"Rose and lilac petals drifting",@"Amber and gold flowing softly",@"Violet clouds in deep blue",@"Jade and turquoise crossing gently",@"Wandering pools of candlelight",@"Mirrored colour fields turning slowly"];}
+static NSArray *HPThemeNames(void){return @[@"Aurora",@"Comet",@"Ocean",@"Embers",@"Neon",@"Prism",@"Breathe",@"Velvet",@"Sunset",@"Moonlight",@"Fireflies",@"Tide",@"Silk",@"Rain",@"Dawn",@"Orbit",@"Lavender Haze",@"Sapphire",@"Heather",@"Opal",@"Blue Hour",@"Coast",@"Rose Dusk",@"Polar Mist",@"Rose Sky",@"Blue Horizon",@"Cherry Blossom",@"Solstice",@"Nebula",@"Pink Pearl",@"Candle Glow",@"Kaleidoscope"];}
+static NSArray *HPThemeDetails(void){return @[@"Original jade, blue and violet ribbons",@"A soft glow drifting through home",@"Long, quiet sapphire swells",@"A steady, living amber glow",@"Soft rose and lilac drift",@"A slow journey through colour",@"Gentle, warm breathing light",@"Quiet plum and indigo",@"Honey and peach across home",@"Soft silver-blue moonlight",@"Warm pools wandering nearby",@"Blue and lilac rings through your space",@"Rose and lilac ribbons",@"Cool light drifting downward",@"A slow wash of warm morning",@"Colour circling the apartment",@"Lavender and violet in the mist",@"Still sapphire, deepening blue",@"Lilac hills under a quiet sky",@"Pearl, blush and lavender",@"The sky just after sunset",@"Soft blue meeting lilac",@"Dusty rose fading into mauve",@"Lilac and ice-blue veils",@"Rose and plum in layered ribbons",@"Blue water flowing between cliffs",@"Rose and lilac petals drifting",@"Amber and gold flowing softly",@"Violet clouds in deep blue",@"Blush and soft pink crossing gently",@"Wandering pools of candlelight",@"Mirrored colour fields turning slowly"];}
 static NSArray *HPThemeOrder(void){return @[@0,@24,@25,@26,@27,@28,@29,@30,@31,@16,@17,@18,@19,@20,@21,@22,@23,@2,@8,@9,@11,@12,@13,@14,@3,@6,@7,@1,@4,@5,@10,@15];}
-static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening",@"Forest after rain",@"Velvet night",@"Golden hour"];}
-static NSArray *HPJourneyDetails(void){return @[@"Jade ribbons, lilac and blue hour",@"Sea glass, deep water and moonlight",@"Peach, embers and quiet fireflies",@"Emerald, sea glass and fjord blue",@"Blossom, violet clouds and moonlight",@"Sunrise, golden skies and candlelight"];}
+static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening",@"Lavender evening",@"Velvet night",@"Golden hour"];}
+static NSArray *HPJourneyDetails(void){return @[@"Violet ribbons, lilac and blue hour",@"Soft blue, deep water and moonlight",@"Peach, embers and quiet fireflies",@"Rose, pink pearl and soft blue",@"Blossom, violet clouds and moonlight",@"Sunrise, golden skies and candlelight"];}
 static NSString *HPMoodStorageKey(void){return HPMeshUUID()?:@"current";}
 static NSArray *HPSavedMoods(void){return [HPStudioPresets validRecipes:[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"][HPMoodStorageKey()]];}
 static void HPStoreMoods(NSArray *moods){NSMutableDictionary *homes=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"]mutableCopy]?:[NSMutableDictionary new];homes[HPMoodStorageKey()]=moods;[NSUserDefaults.standardUserDefaults setObject:homes forKey:@"HP.StudioMoods"];}
@@ -31,8 +31,8 @@ static NSArray *HPLightRecords(void){
 static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefaults dataForKey:@"mesh.json"];return data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;}
 
 @interface HPBulbMotion : NSObject
-@property(nonatomic) HPColor color;
-@property(nonatomic) double updatedAt;
+@property(nonatomic) HPColor color,commandStart,commandTarget;
+@property(nonatomic) double updatedAt,commandAt,commandDuration;
 @property(nonatomic) float referenceSaturation,referenceDepth;
 @property(nonatomic) BOOL known;
 @end
@@ -48,7 +48,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 @property(nonatomic) NSUInteger generation;
 @property(nonatomic) float brightness,speed,depth,playbackSpeed;
 @property(nonatomic) uint32_t variation;
-@property(nonatomic) double lastSent,phase,lastTick,lastConnectAttempt,settleUntil,journeyElapsed;
+@property(nonatomic) double lastSent,phase,lastTick,lastConnectAttempt,settleUntil,journeyElapsed,observedRound;
 @property(nonatomic) BOOL oldIdle,backgroundReady,connecting,needsRead,adjusting;
 @property(nonatomic,strong) NSString *scope,*status;
 + (instancetype)shared;
@@ -56,6 +56,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)stop;
 - (void)tick;
 - (void)reloadLights;
+- (void)ensureConnection;
 - (void)startJourney:(NSInteger)journey;
 - (void)resume;
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget;
@@ -131,7 +132,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
         SEL valid=NSSelectorFromString(@"isValid");self.backgroundReady=[self.assertion respondsToSelector:valid]&&((BOOL(*)(id,SEL))objc_msgSend)(self.assertion,valid);
     }
     self.status=@"Starting a gentle fade";
-    self.timer=[NSTimer timerWithTimeInterval:.10 target:self selector:@selector(tick) userInfo:nil repeats:YES];
+    self.timer=[NSTimer timerWithTimeInterval:.08 target:self selector:@selector(tick) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop]addTimer:self.timer forMode:NSRunLoopCommonModes];[self tick];
 }
 - (void)requestRetarget{
@@ -145,7 +146,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(!self.heldTargets.count){self.status=@"Choose a mood before shaping a paused look";return NO;}
     self.adjusting=YES;self.generation++;self.lastTick=NSProcessInfo.processInfo.systemUptime;self.oldIdle=UIApplication.sharedApplication.idleTimerDisabled;
     if(!self.states)self.states=[NSMutableDictionary new];if(!self.sent)self.sent=[NSMutableDictionary new];
-    self.timer=[NSTimer timerWithTimeInterval:.10 target:self selector:@selector(tick)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.timer forMode:NSRunLoopCommonModes];return YES;
+    self.timer=[NSTimer timerWithTimeInterval:.08 target:self selector:@selector(tick)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.timer forMode:NSRunLoopCommonModes];return YES;
 }
 - (void)completeRetarget:(NSString *)key{
     [self.retargets removeObject:key];
@@ -193,18 +194,24 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(was)UIApplication.sharedApplication.idleTimerDisabled=self.oldIdle;
     self.status=@"Paused · save this look as a scene";
 }
+- (void)ensureConnection{
+    if(HPTransportOpen())return;
+    id bearer=HPGet(NSClassFromString(@"SigBearer"),@"share");
+    SEL autoConnect=NSSelectorFromString(@"isAutoReconnect");
+    // Do not cancel the native scan/connect sequence by starting it again every 8s.
+    if([bearer respondsToSelector:autoConnect]&&((BOOL(*)(id,SEL))objc_msgSend)(bearer,autoConnect))return;
+    double now=NSProcessInfo.processInfo.systemUptime;
+    if(self.connecting&&now-self.lastConnectAttempt<15)return;
+    if(now-self.lastConnectAttempt<2)return;
+    SEL connect=NSSelectorFromString(@"startMeshConnectWithComplete:");if(![bearer respondsToSelector:connect])return;
+    self.connecting=YES;self.lastConnectAttempt=now;
+    ((void(*)(id,SEL,id))objc_msgSend)(bearer,connect,^(BOOL ok){dispatch_async(dispatch_get_main_queue(),^{self.connecting=NO;});});
+}
 - (void)tick {
     if((self.mode<0&&!self.adjusting)||!self.lights.count)return;
     double now=NSProcessInfo.processInfo.systemUptime,gap=now-self.lastTick,elapsed=HPClamp(gap,0,.25);self.lastTick=now;
     if(gap>4){self.needsRead=YES;elapsed=0;}
-    if(!HPTransportOpen()){
-        self.needsRead=YES;
-        self.status=@"Reconnecting to your lights";
-        if(!self.connecting&&now-self.lastConnectAttempt>8){self.connecting=YES;self.lastConnectAttempt=now;
-            id bearer=HPGet(NSClassFromString(@"SigBearer"),@"share");SEL connect=NSSelectorFromString(@"startMeshConnectWithComplete:");
-            if([bearer respondsToSelector:connect])((void(*)(id,SEL,id))objc_msgSend)(bearer,connect,^(BOOL ok){dispatch_async(dispatch_get_main_queue(),^{self.connecting=NO;});});else self.connecting=NO;
-        }return;
-    }
+    if(!HPTransportOpen()){self.needsRead=YES;self.status=@"Reconnecting to your lights";[self ensureConnection];return;}
     if(self.needsRead){self.generation++;[self.states removeAllObjects];[self.sent removeAllObjects];[HPCommandColours removeAllObjects];self.needsRead=NO;self.status=@"Resuming from the light controls";elapsed=0;}
     if(self.mode>=0){double played=elapsed*HPPlaybackRate(self.playbackSpeed);self.phase+=played*HPMotionRate(self.speed);self.journeyElapsed+=played;}
     id peripheral=HPGet(HPGet(NSClassFromString(@"SigBearer"),@"share"),@"getCurrentPeripheral");SEL ready=NSSelectorFromString(@"canSendWriteWithoutResponse");
@@ -225,18 +232,27 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     // A user's choice must reach the sender on the next visit to this bulb,
     // rather than spending minutes behind the 1-degree/sec ambient limiter.
     // The explicit native fade below provides the physical interpolation.
-    BOOL requested=[self.retargets containsObject:key];state.color=requested?target:HPPlaybackDrift(state.color,target,now-state.updatedAt,self.adjusting?1:self.playbackSpeed);state.updatedAt=now;
-    HPWireColor wire=HPVendorColor(state.color);NSArray *previous=self.sent[key];
-    if(previous&&[previous[0]unsignedShortValue]==wire.lightness&&[previous[1]unsignedShortValue]==wire.hue&&[previous[2]unsignedShortValue]==wire.saturation){[self completeRetarget:key];return;}
-    uint8_t steps=(requested||self.adjusting)?HPSmoothTransitionSteps((unsigned)self.lights.count):HPPlaybackTransitionSteps((unsigned)self.lights.count,self.playbackSpeed);
+    BOOL requested=[self.retargets containsObject:key];
+    double visit=now-state.updatedAt;
+    if(visit>.02&&visit<6){double baseline=fmax(.08,self.lights.count*.08);self.observedRound=self.observedRound>0?.85*self.observedRound+.15*visit:fmax(baseline,visit);}
+    state.color=requested?target:HPPlaybackDrift(state.color,target,visit,self.adjusting?1:self.playbackSpeed);state.updatedAt=now;
+    HPColor present=state.commandAt>0?HPCommandEstimate(state.commandStart,state.commandTarget,now-state.commandAt,state.commandDuration):state.color;
+    // Cached first colour is also used as the start of the first native fade.
+    if(!state.commandAt){NSDictionary *cached=HPCachedColour(light);if(cached)present=HPStatusColor([cached[@"hue"]unsignedShortValue],[cached[@"sat"]unsignedShortValue],[cached[@"light"]unsignedShortValue]);}
+    HPColor command=HPComfortWaypoint(present,state.color,self.journey<0&&self.lastMode==0);
+    BOOL waypoint=fabs(command.hue-state.color.hue)>.001||fabs(command.saturation-state.color.saturation)>.001;
+    HPWireColor wire=HPVendorColor(command);NSArray *previous=self.sent[key];
+    if(previous&&[previous[0]unsignedShortValue]==wire.lightness&&[previous[1]unsignedShortValue]==wire.hue&&[previous[2]unsignedShortValue]==wire.saturation){if(!waypoint)[self completeRetarget:key];return;}
+    uint8_t steps=(requested||self.adjusting)?HPSmoothTransitionSteps((unsigned)self.lights.count):HPContinuousTransitionSteps((unsigned)self.lights.count,self.playbackSpeed,fmax(self.lights.count*.08,self.observedRound),command.hue);
+    if(waypoint)steps=HPContinuousTransitionSteps((unsigned)self.lights.count,1,fmax(self.lights.count*.08,self.observedRound),command.hue);
     id transition=((id(*)(id,SEL))objc_msgSend)(NSClassFromString(@"SigTransitionTime"),@selector(alloc));
     transition=((id(*)(id,SEL,uint8_t))objc_msgSend)(transition,NSSelectorFromString(@"initWithRawValue:"),steps);
     SEL set=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:transitionTime:delay:retryCount:responseMaxCount:ack:successCallback:resultCallback:");Class sdk=NSClassFromString(@"SDKLibCommand");
     @try{
         if(![sdk respondsToSelector:set]){[self stop];self.status=@"The colour backend is unavailable";return;}
         ((id(*)(id,SEL,uint16_t,uint16_t,uint16_t,uint16_t,id,uint8_t,NSInteger,NSInteger,BOOL,id,id))objc_msgSend)(sdk,set,[light[@"address"]unsignedShortValue],wire.lightness,wire.hue,wire.saturation,transition,0,0,0,NO,nil,nil);
-        self.sent[key]=@[@(wire.lightness),@(wire.hue),@(wire.saturation)];HPRememberColour(light,wire);self.lastSent=now;self.settleUntil=now+(steps&0x3f)*((steps>>6)==1?1:.1);
-        BOOL heldUpdate=self.adjusting;[self completeRetarget:key];
+        self.sent[key]=@[@(wire.lightness),@(wire.hue),@(wire.saturation)];HPRememberColour(light,wire);self.lastSent=now;self.settleUntil=now+HPTransitionSeconds(steps);state.commandStart=present;state.commandTarget=HPStatusColor(wire.hue,wire.saturation,wire.lightness);state.commandAt=now;state.commandDuration=HPTransitionSeconds(steps);
+        BOOL heldUpdate=self.adjusting;if(!waypoint)[self completeRetarget:key];
         if(!heldUpdate)self.status=[NSString stringWithFormat:@"%@ · %.2g× speed · %lu lights",[self moodName],self.playbackSpeed,(unsigned long)self.lights.count];
     }@catch(NSException *exception){[self stop];self.status=@"Could not send the lighting effect";}
 }
@@ -438,7 +454,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     }
 }
 - (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.speedSlider.value=HPLightEngine.shared.playbackSpeed;self.depthSlider.value=HPLightEngine.shared.depth;}
-- (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
+- (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[HPLightEngine.shared ensureConnection];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
     HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.status;[self.scopeButton setTitle:engine.scope forState:UIControlStateNormal];[self.pause setTitle:engine.mode>=0?@"Pause":@"Resume"forState:UIControlStateNormal];self.pause.enabled=!self.captureReader&&!HPIdentifying;self.navigationItem.rightBarButtonItem.enabled=!self.captureReader&&!HPIdentifying;self.save.enabled=engine.mode<0&&!engine.adjusting&&engine.lights.count>0&&!self.captureReader&&!HPIdentifying;self.save.alpha=self.save.enabled?1:.4;
