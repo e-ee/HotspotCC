@@ -18,7 +18,7 @@ static NSDictionary *HPSceneLook(NSDictionary *scene,NSArray *lights){
  for(int pass=0;pass<2;pass++)for(NSDictionary *entry in scene[@"routineList"]){
  BOOL group=[entry[@"isGroup"]boolValue];if(group!=(pass==0))continue;
  BOOL off=![entry[@"onOff"]boolValue];double hue=[entry[@"color"]doubleValue],sat=[entry[@"saturation"]doubleValue],level=[entry[@"lightness"]doubleValue];
- NSInteger type=[entry[@"deviceType"]integerValue];
+ NSInteger type=[entry[@"deviceType"]integerValue];int span=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.CapturedSceneSpans"][scene[@"uuid"]]intValue];if(span>0&&span<100)level=floor(level*span/100.);
  if(!off&&type!=8&&type!=4)continue; // CT-only entries cannot supply an HSL colour.
  if(!off&&(!isfinite(hue)||!isfinite(sat)||!isfinite(level)||hue<0||hue>360||sat<0||sat>100||level<0||level>100))continue;
  for(NSDictionary *light in lights){BOOL match=group?HPNodeInGroup(light[@"id"],entry[@"deviceName"]):[light[@"name"]isEqual:entry[@"deviceName"]];if(match)look[light[@"id"]]=HPColourArray((HPColor){off?0:hue/360.,off?0:sat/100.,off?0:level/100.});}
@@ -111,3 +111,4 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
 }
 - (void)cancelSleep{self.sleepActive=NO;self.sleepElapsed=0;self.status=@"Sleep descent cancelled";}
 @end
+
