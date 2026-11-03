@@ -48,26 +48,55 @@ static void HPBootstrap(void) {
         HPSeed = [NSDictionary dictionaryWithContentsOfURL:[NSBundle.mainBundle URLForResource:@"HomePlusSeed" withExtension:@"plist"]];
         if (!HPSeed) { HPBootstrapError = @"The saved home is missing from this installation."; return; }
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-        if (![defaults boolForKey:@"HP.Seeded"]) {
-        NSFileManager *fm = NSFileManager.defaultManager;
-        NSDictionary *seedPrefs=HPSeed[@"Universal"]?[HPHomeArchive isolatedPreferences:HPSeed[@"Preferences"]]:HPSeed[@"Preferences"];
-        // This is a separate app container. Never enumerate, open or modify the original app container.
-        for (NSString *relative in HPSeed[@"Documents"]) {
-            if ([relative hasPrefix:@"/"] || [[relative pathComponents] containsObject:@".."])
-                @throw [NSException exceptionWithName:@"HPSeed" reason:@"Invalid saved-home path." userInfo:nil];
-            NSString *path = [HPDocuments() stringByAppendingPathComponent:relative];
-            if ([fm fileExistsAtPath:path]) continue;
-            NSError *error;
-            if (![fm createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:&error] ||
-                ![(HPSeed[@"Universal"]&&[relative hasPrefix:@"Network/"]?seedPrefs[@"mesh.json"]:HPSeed[@"Documents"][relative]) writeToFile:path options:NSDataWritingAtomic error:&error])
-                @throw [NSException exceptionWithName:@"HPSeed" reason:error.localizedDescription userInfo:nil];
-        }
-        NSDictionary *prefs = seedPrefs;
-        if (![prefs[@"mesh.json"] isKindOfClass:NSData.class])
-            @throw [NSException exceptionWithName:@"HPSeed" reason:@"Saved light network is unavailable." userInfo:nil];
-        for (NSString *key in prefs) [defaults setObject:prefs[key] forKey:key];
-        [defaults setBool:YES forKey:@"HP.Seeded"];
-        [defaults synchronize];
+        BOOL recovery=[HPSeed[@"RecoverHome"]boolValue];
+        NSString *recoveryID=HPSeed[@"RecoveryID"];
+        BOOL unfinished=recovery&&[recoveryID isEqual:[defaults stringForKey:@"HP.BundledRecoveryPending"]];
+        BOOL isolated=recovery&&[defaults boolForKey:@"HP.JoinPending"];
+        if (![defaults boolForKey:@"HP.Seeded"]||isolated||unfinished) {
+            NSFileManager *fm=NSFileManager.defaultManager;
+            NSDictionary *seedPrefs=(HPSeed[@"Universal"]&&!recovery)?[HPHomeArchive isolatedPreferences:HPSeed[@"Preferences"]]:HPSeed[@"Preferences"];
+            if(![seedPrefs[@"mesh.json"]isKindOfClass:NSData.class])
+                @throw [NSException exceptionWithName:@"HPSeed"reason:@"Saved light network is unavailable."userInfo:nil];
+            if(recovery){
+                if(![recoveryID isKindOfClass:NSString.class]||!recoveryID.length)
+                    @throw [NSException exceptionWithName:@"HPSeed"reason:@"Recovery identity is missing."userInfo:nil];
+                // Record intent before changing documents. The constructor completes before transport starts.
+                if(!unfinished){
+                    NSError *snapshotError=nil;
+                    NSDictionary *before=[HPHomeArchive documentsAtPath:HPDocuments() error:&snapshotError];
+                    if(!before)@throw [NSException exceptionWithName:@"HPSeed"reason:snapshotError.localizedDescription userInfo:nil];
+                    if(![fm createDirectoryAtPath:HPStatePath()withIntermediateDirectories:YES attributes:nil error:&snapshotError])
+                        @throw [NSException exceptionWithName:@"HPSeed"reason:snapshotError.localizedDescription userInfo:nil];
+                    NSDictionary *snapshot=@{@"Preferences":[defaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier]?:@{},@"Documents":before};
+                    if(![snapshot writeToFile:[HPStatePath()stringByAppendingPathComponent:@"BeforeBundledRecovery.plist"]atomically:YES])
+                        @throw [NSException exceptionWithName:@"HPSeed"reason:@"Could not preserve the pre-recovery Home."userInfo:nil];
+                    for(NSString *name in @[@"Incoming.sylhome",@"Restore.plist"]){NSString *old=[HPStatePath()stringByAppendingPathComponent:name];if([fm fileExistsAtPath:old]){NSString *kept=[HPStatePath()stringByAppendingPathComponent:[@"BeforeBundledRecovery-"stringByAppendingString:name]];if(![fm fileExistsAtPath:kept]&&![fm moveItemAtPath:old toPath:kept error:&snapshotError])@throw [NSException exceptionWithName:@"HPSeed"reason:snapshotError.localizedDescription userInfo:nil];}}
+                    [defaults setObject:recoveryID forKey:@"HP.BundledRecoveryPending"];[defaults synchronize];
+                }
+            }
+            // Only the private recovery build overwrites an unenrolled installation's isolated documents.
+            for(NSString *relative in HPSeed[@"Documents"]){
+                if(![HPHomeArchive isHomePath:relative])
+                    @throw [NSException exceptionWithName:@"HPSeed"reason:@"Invalid saved-home path."userInfo:nil];
+                NSString *path=[HPDocuments()stringByAppendingPathComponent:relative];
+                if(!recovery&&[fm fileExistsAtPath:path])continue;
+                NSError *error=nil;
+                NSData *bytes=(HPSeed[@"Universal"]&&[relative hasPrefix:@"Network/"])?seedPrefs[@"mesh.json"]:HPSeed[@"Documents"][relative];
+                if(![fm createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:&error]||![bytes writeToFile:path options:NSDataWritingAtomic error:&error])
+                    @throw [NSException exceptionWithName:@"HPSeed"reason:error.localizedDescription userInfo:nil];
+            }
+            if(recovery){
+                for(NSString *temporary in @[@"default.realm.lock",@"default.realm.note",@"default.realm.management",@"UserModel.sqlite-wal",@"UserModel.sqlite-shm"])[fm removeItemAtPath:[HPDocuments()stringByAppendingPathComponent:temporary]error:nil];
+            }
+            if(recovery){
+                NSMutableDictionary *ready=[[defaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier]mutableCopy]?:[NSMutableDictionary new];
+                [ready addEntriesFromDictionary:seedPrefs];
+                for(NSString *key in @[@"HP.JoinUUID",@"HP.JoinKey",@"kUUIDOfConnectedDevices",@"scanList_key",@"HP.BundledRecoveryPending"])[ready removeObjectForKey:key];
+                ready[@"HP.JoinPending"]=@NO;ready[@"HP.Seeded"]=@YES;ready[@"HP.BundledRecoveryApplied"]=recoveryID;
+                // Adopt the network, identity and counter as one defaults-domain replacement.
+                [defaults setPersistentDomain:ready forName:NSBundle.mainBundle.bundleIdentifier];
+            }else for(NSString *key in seedPrefs)[defaults setObject:seedPrefs[key]forKey:key];
+            [defaults setBool:YES forKey:@"HP.Seeded"];[defaults synchronize];
         }
         if(![defaults stringForKey:@"HP.EnrollmentAuthority"]&&HPSeed[@"AuthorityUUID"])[defaults setObject:HPSeed[@"AuthorityUUID"]forKey:@"HP.EnrollmentAuthority"];
         NSError *restoreError=nil;

@@ -1,7 +1,7 @@
 name: SYLVANIA Plus quick build
 on:
   push:
-    branches: [smarthome-plus, codex/studio-playback-speed, codex/smooth-cabin]
+    branches: [smarthome-plus, codex/studio-playback-speed, codex/smooth-cabin, codex/home-recovery]
     paths: ['smarthome-plus/*.inc', 'smarthome-plus/*.m', 'smarthome-plus/*.h', '.github/workflows/homeplus-quick.yml']
   workflow_dispatch:
 concurrency:
