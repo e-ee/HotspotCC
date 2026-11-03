@@ -46,24 +46,26 @@ static void HPReadColour(NSDictionary *light,HPReadCompletion completion){
 @property(nonatomic) NSUInteger index;
 @property(nonatomic) double queueWaitBegan;
 - (void)next;
+- (void)finishAvailable;
 @end
 @implementation HPSceneReadback
 - (void)finish:(NSError *)error{if(!self.completion)return;void(^callback)(NSArray *,NSError *)=self.completion;self.completion=nil;self.progress=nil;callback(error?nil:self.readings,error);}
+- (void)finishAvailable{[self finish:self.readings.count?nil:HPReadError(@"None of the selected lights replied. No scene was saved.")];}
 - (void)next{
     if(!self.completion)return;
     if(self.stillPaused&&!self.stillPaused()){[self finish:HPReadError(@"Pause the lighting before saving a scene.")];return;}
-    if(self.index>=self.lights.count){[self finish:nil];return;}
-    if(!HPTransportOpen()){[self finish:HPReadError(@"The lights disconnected. No scene was saved.")];return;}
+    if(self.index>=self.lights.count){[self finishAvailable];return;}
+    if(!HPTransportOpen()){[self finishAvailable];return;}
     double now=NSProcessInfo.processInfo.systemUptime;
     if(HPTransportBusy()){
         if(!self.queueWaitBegan)self.queueWaitBegan=now;
-        if(now-self.queueWaitBegan>6){[self finish:HPReadError(@"The light connection is busy. Please try saving again.")];return;}
+        if(now-self.queueWaitBegan>6){[self finishAvailable];return;}
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self next];});return;
     }
     self.queueWaitBegan=0;NSDictionary *light=self.lights[self.index];
     HPReadColour(light,^(NSDictionary *reading,NSError *error){
-        if(!reading){[self finish:error];return;}
-        if(!self.readings)self.readings=[NSMutableArray new];[self.readings addObject:reading];self.index++;
+        // Keep actual replies only. A timeout must not discard other bulbs.
+        if(reading){if(!self.readings)self.readings=[NSMutableArray new];[self.readings addObject:reading];}self.index++;
         if(self.progress)self.progress(self.index,self.lights.count);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self next];});
     });
