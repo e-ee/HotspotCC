@@ -455,8 +455,10 @@ static UIViewController *HPCreateStudioTools(void);
 @property(nonatomic,strong) HPStudioPreview *preview;
 @property(nonatomic,strong) NSTimer *previewTimer;
 @property(nonatomic,strong) UIButton *scopeButton,*pause,*save,*shuffleButton;
-@property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider,*playbackSlider;
-@property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel,*playbackLabel;
+@property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider,*playbackSlider,*journeyDurationSlider;
+@property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel,*playbackLabel,*journeyDurationLabel;
+@property(nonatomic,strong) UIStackView *journeyControlPanel;
+@property(nonatomic,strong) UIButton *journeyShuffleButton;
 @property(nonatomic,strong) UISegmentedControl *category;
 @property(nonatomic,strong) UIStackView *gallery;
 @property(nonatomic,strong) HPSceneReadback *captureReader;
@@ -494,6 +496,39 @@ static UIViewController *HPCreateStudioTools(void);
     self.status=[self text:@""size:12];self.status.textColor=[UIColor colorWithWhite:.64 alpha:1];[self.status.heightAnchor constraintGreaterThanOrEqualToConstant:30].active=YES;[stack addArrangedSubview:self.status];
     self.shuffleButton=[self button:@"Shuffle colours"action:@selector(shuffleColours)filled:NO];self.shuffleButton.accessibilityIdentifier=@"HP.ShuffleColours";self.shuffleButton.accessibilityHint=@"Give this mode a new palette or mirror its flow. The room fades into the new look.";[stack addArrangedSubview:self.shuffleButton];
     self.category=[[UISegmentedControl alloc]initWithItems:@[@"Moods",@"Journeys",@"My moods"]];self.category.selectedSegmentIndex=0;self.category.selectedSegmentTintColor=[UIColor colorWithRed:.25 green:.23 blue:.34 alpha:1];[self.category setTitleTextAttributes:@{NSForegroundColorAttributeName:UIColor.whiteColor}forState:UIControlStateNormal];[self.category addTarget:self action:@selector(buildGallery)forControlEvents:UIControlEventValueChanged];[stack addArrangedSubview:self.category];
+    // Journey controls are separate from Speed: one full repeat takes exactly
+    // 2..48 minutes in real elapsed time, even if Speed is changed.
+    self.journeyControlPanel=[UIStackView new];
+    self.journeyControlPanel.axis=UILayoutConstraintAxisVertical;
+    self.journeyControlPanel.spacing=7;
+    self.journeyDurationLabel=[self text:@"Journey duration · 48 min · Repeat on" size:13];
+    self.journeyDurationLabel.textColor=[UIColor colorWithRed:.77 green:.81 blue:.96 alpha:1];
+    [self.journeyControlPanel addArrangedSubview:self.journeyDurationLabel];
+    UIStackView *journeyRow=[UIStackView new];
+    journeyRow.axis=UILayoutConstraintAxisHorizontal;journeyRow.spacing=10;
+    journeyRow.alignment=UIStackViewAlignmentCenter;
+    self.journeyDurationSlider=[UISlider new];
+    self.journeyDurationSlider.minimumValue=2;
+    self.journeyDurationSlider.maximumValue=48;
+    self.journeyDurationSlider.value=HPLightEngine.shared.journeyDurationMinutes;
+    self.journeyDurationSlider.continuous=YES;
+    self.journeyDurationSlider.accessibilityLabel=@"Full journey repeat duration, 2 to 48 minutes";
+    self.journeyDurationSlider.minimumTrackTintColor=[UIColor colorWithRed:.55 green:.65 blue:.93 alpha:1];
+    [self.journeyDurationSlider setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+    [self.journeyDurationSlider addTarget:self action:@selector(journeyDuration:) forControlEvents:UIControlEventValueChanged];
+    [journeyRow addArrangedSubview:self.journeyDurationSlider];
+    self.journeyShuffleButton=[self button:@"Shuffle" action:@selector(shuffleJourney:) filled:NO];
+    self.journeyShuffleButton.accessibilityLabel=@"Shuffle aurora chapters";
+    self.journeyShuffleButton.accessibilityHint=@"Change the order of aurora colours and blend into the new arrangement.";
+    [self.journeyShuffleButton.widthAnchor constraintEqualToConstant:92].active=YES;
+    [journeyRow addArrangedSubview:self.journeyShuffleButton];
+    [self.journeyControlPanel addArrangedSubview:journeyRow];
+    UILabel *journeyHint=[self text:@"Cycles continuously. Changes take effect live without restarting." size:11];
+    journeyHint.font=[UIFont systemFontOfSize:11];
+    journeyHint.textColor=[UIColor colorWithWhite:.65 alpha:1];
+    [self.journeyControlPanel addArrangedSubview:journeyHint];
+    self.journeyControlPanel.hidden=YES;
+    [stack addArrangedSubview:self.journeyControlPanel];
     self.gallery=[UIStackView new];self.gallery.axis=UILayoutConstraintAxisVertical;self.gallery.spacing=11;[stack addArrangedSubview:self.gallery];[self buildGallery];[self reloadPreview];
 }
 - (void)reloadPreview{[HPLightEngine.shared reloadLights];self.preview.lights=[HPLightEngine.shared.lights copy];}
@@ -506,6 +541,7 @@ static UIViewController *HPCreateStudioTools(void);
 - (void)buildGallery{
     for(UIView *view in [self.gallery.arrangedSubviews copy]){[self.gallery removeArrangedSubview:view];[view removeFromSuperview];}
     NSInteger category=self.category.selectedSegmentIndex;
+    self.journeyControlPanel.hidden=category!=1;
     if(category==0){for(int row=0;row<HP_MODE_COUNT/2;row++){
         UIStackView *pair=[UIStackView new];pair.axis=UILayoutConstraintAxisHorizontal;pair.spacing=11;pair.distribution=UIStackViewDistributionFillEqually;
         for(int col=0;col<2;col++){int mode=[HPThemeOrder()[row*2+col]intValue];HPModeCard *card=[self card:HPThemeNames()[mode]detail:HPThemeDetails()[mode]mode:mode journey:-1];card.tag=mode;card.accessibilityIdentifier=[@"HP.Mood."stringByAppendingString:HPThemeNames()[mode]];[card addTarget:self action:@selector(selectTheme:)forControlEvents:UIControlEventTouchUpInside];[pair addArrangedSubview:card];}[self.gallery addArrangedSubview:pair];
@@ -517,12 +553,16 @@ static UIViewController *HPCreateStudioTools(void);
         for(NSDictionary *recipe in recipes){NSString *detail=[NSString stringWithFormat:@"%@ · %@",[recipe[@"journey"]integerValue]>=0?HPJourneyNames()[[recipe[@"journey"]integerValue]]:HPThemeNames()[[recipe[@"mode"]integerValue]],recipe[@"scope"]];HPModeCard *card=[self card:recipe[@"name"]detail:detail mode:[recipe[@"mode"]intValue]journey:[recipe[@"journey"]intValue]];card.recipeID=recipe[@"id"];[card addTarget:self action:@selector(playSaved:)forControlEvents:UIControlEventTouchUpInside];[card addGestureRecognizer:[[UILongPressGestureRecognizer alloc]initWithTarget:self action:@selector(holdSaved:)]];[self.gallery addArrangedSubview:card];}
     }
 }
-- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;self.playbackSlider.value=HPLightEngine.shared.playbackRate;}
+- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;self.playbackSlider.value=HPLightEngine.shared.playbackRate;self.journeyDurationSlider.value=HPLightEngine.shared.journeyDurationMinutes;}
 - (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
     HPLightEngine *engine=HPLightEngine.shared;self.status.text=engine.sleepActive?[NSString stringWithFormat:@"Sleep descent · %.0f min remaining%@",ceil(MAX(0,engine.sleepDuration-engine.sleepElapsed)/60.),engine.mode<0?@" · paused":@""]:engine.status;[self.scopeButton setTitle:engine.scope forState:UIControlStateNormal];[self.pause setTitle:engine.mode>=0?@"Pause":@"Resume"forState:UIControlStateNormal];self.pause.enabled=!self.captureReader&&!HPIdentifying;self.navigationItem.rightBarButtonItem.enabled=!self.captureReader&&!HPIdentifying;self.save.enabled=engine.mode<0&&!engine.adjusting&&engine.lights.count>0&&!self.captureReader&&!HPIdentifying;self.save.alpha=self.save.enabled?1:.4;
-    BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.playbackSlider.enabled=enabled;self.playbackLabel.text=[NSString stringWithFormat:@"Speed %.1f×",engine.playbackRate];self.shuffleButton.enabled=enabled&&engine.lights.count>0;
+    BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.playbackSlider.enabled=enabled;self.playbackLabel.text=[NSString stringWithFormat:@"Speed %.1f×",engine.playbackRate];
+    self.journeyDurationSlider.enabled=enabled;
+    self.journeyShuffleButton.enabled=enabled;
+    self.journeyDurationLabel.text=[NSString stringWithFormat:@"Journey duration · %.0f min · Repeat on",engine.journeyDurationMinutes];
+    self.journeyDurationSlider.accessibilityValue=[NSString stringWithFormat:@"%.0f minutes",engine.journeyDurationMinutes];self.shuffleButton.enabled=enabled&&engine.lights.count>0;
     self.brightnessLabel.text=[NSString stringWithFormat:@"Brightness %.0f%%",engine.brightness*100];self.motionLabel.text=[NSString stringWithFormat:@"Motion %.1f×",HPMotionRate(engine.speed)];self.depthLabel.text=[NSString stringWithFormat:@"Colour depth %.0f%%",engine.depth*100];
     // Do not assign slider.value on the refresh timer; the user's thumb owns it.
     for(UIView *row in self.gallery.arrangedSubviews){NSArray *cards=[row isKindOfClass:UIStackView.class]?[(UIStackView *)row arrangedSubviews]:@[row];for(UIView *view in cards)if([view isKindOfClass:HPModeCard.class]){HPModeCard *card=(id)view;BOOL selected=self.category.selectedSegmentIndex==0?engine.journey<0&&card.tag==engine.lastMode:self.category.selectedSegmentIndex==1&&card.tag==engine.journey;card.layer.borderWidth=selected?2:.5;card.layer.borderColor=[UIColor colorWithWhite:1 alpha:selected?.68:.13].CGColor;card.accessibilityTraits=UIAccessibilityTraitButton|(selected?UIAccessibilityTraitSelected:0);}}
@@ -535,6 +575,16 @@ static UIViewController *HPCreateStudioTools(void);
 - (void)depth:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeDepth:slider.value];[self refresh];}
 - (void)creativeTools{if(self.captureReader||HPIdentifying)return;[self.navigationController pushViewController:HPCreateStudioTools() animated:YES];}
 - (void)playback:(UISlider *)slider{HPLightEngine.shared.playbackRate=slider.value;[NSUserDefaults.standardUserDefaults setDouble:slider.value forKey:@"HP.PlaybackRate"];[self refresh];}
+- (void)journeyDuration:(UISlider *)slider{
+    if(self.captureReader||HPIdentifying)return;
+    [HPLightEngine.shared changeJourneyDuration:round(slider.value)];
+    [self refresh];
+}
+- (void)shuffleJourney:(UIButton *)sender{
+    if(self.captureReader||HPIdentifying)return;
+    [HPLightEngine.shared shuffleJourney];
+    [self refresh];
+}
 - (void)shuffleColours{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared shuffleColours];[self refresh];}
 - (void)stop{[HPLightEngine.shared stop];[self refresh];}
 - (void)toggle{if(HPLightEngine.shared.mode>=0)[self stop];else[HPLightEngine.shared resume];[self refresh];}
