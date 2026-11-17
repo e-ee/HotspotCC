@@ -104,6 +104,13 @@ static inline double HPHeldDepth(double saturation,double startingDepth,double d
     return startingDepth<=.250001?saturation:saturation*(depth-.25)/(startingDepth-.25);
 }
 #include "SkyAurora.h"
+// Native cycle durations for built-in journeys; the UI scales virtual time.
+static inline double HPJourneyCycleSeconds(int journey){
+    static const int chapterCounts[6]={5,6,5,5,6,6};
+    if(journey>=6&&journey<=8)return 2880.;
+    if(journey>=0&&journey<6)return chapterCounts[journey]*360.;
+    return 2880.;
+}
 // Legacy journeys: each chapter lasts six active minutes.
 // Related palettes interpolate without crossing the hue seam. The next chapter
 // uses the same field phase, so every boundary (including the loop) is continuous.
