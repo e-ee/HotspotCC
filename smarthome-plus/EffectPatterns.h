@@ -2,8 +2,8 @@
 #define HP_EFFECT_PATTERNS_H
 #include <math.h>
 #include <stdint.h>
-#define HP_MODE_COUNT 34
-#define HP_JOURNEY_COUNT 6
+#define HP_MODE_COUNT 40
+#define HP_JOURNEY_COUNT 9
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
@@ -103,22 +103,28 @@ static inline double HPHeldDepth(double saturation,double startingDepth,double d
     if(depth>=startingDepth)return startingDepth>=.999999?saturation:saturation+(1-saturation)*(depth-startingDepth)/(1-startingDepth);
     return startingDepth<=.250001?saturation:saturation*(depth-.25)/(startingDepth-.25);
 }
-// Each chapter lasts six active minutes: four to settle, two to dissolve.
+#include "SkyAurora.h"
+// Legacy journeys: each chapter lasts six active minutes.
 // Related palettes interpolate without crossing the hue seam. The next chapter
 // uses the same field phase, so every boundary (including the loop) is continuous.
 static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,double phase,double x,double y,double brightness,double depth,uint32_t variation){
     phase=isfinite(phase)?phase:0;
     x=isfinite(x)?HPClamp(x,0,1):.5;y=isfinite(y)?HPClamp(y,0,1):.5;
-    if(variation){
+    const int skyMode=(mode>=34&&mode<=39),skyJourney=(journey>=6&&journey<=8),sky=skyMode||skyJourney;
+    // Never rotate the physical room map for sky effects: greens stay peripheral.
+    if(sky&&variation)phase+=(variation%997)*.11;
+    if(variation&&!sky){
         double originalX=x;
         switch(variation%4){case 1:x=1-y;y=originalX;break;case 2:x=1-x;y=1-y;break;case 3:x=y;y=1-originalX;break;default:break;}
         if(variation&4)x=1-x;
         phase+=(variation%997)*.73;
     }
     HPColor result;
-    if(journey>=0&&journey<HP_JOURNEY_COUNT){
-        static const int chapters[HP_JOURNEY_COUNT][6]={{0,23,18,19,20,0},{21,17,2,11,9,23},{14,8,3,6,10,14},{16,24,29,21,25,16},{26,18,28,7,20,9},{14,27,8,6,30,3}};
-        static const int counts[HP_JOURNEY_COUNT]={5,6,5,5,6,6};
+    if(skyJourney)result=HPSkyAuroraJourney(journey,journeySeconds,phase,x,y,brightness,depth);
+    else if(skyMode)result=HPSkyAuroraField(mode-34,phase,x,y,brightness,depth);
+    else if(journey>=0&&journey<6){
+        static const int chapters[6][6]={{0,23,18,19,20,0},{21,17,2,11,9,23},{14,8,3,6,10,14},{16,24,29,21,25,16},{26,18,28,7,20,9},{14,27,8,6,30,3}};
+        static const int counts[6]={5,6,5,5,6,6};
         double time=isfinite(journeySeconds)?fmax(0,journeySeconds):0;
         time=fmod(time,counts[journey]*360.);
         int chapter=(int)(time/360.);double mix=HPClamp((fmod(time,360.)-240.)/120.,0,1);mix=mix*mix*(3-2*mix);
@@ -126,7 +132,7 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
         HPColor b=HPPattern2D(chapters[journey][(chapter+1)%counts[journey]],phase,x,y,brightness,1);
         result=(HPColor){a.hue+(b.hue-a.hue)*mix,a.saturation+(b.saturation-a.saturation)*mix,a.lightness+(b.lightness-a.lightness)*mix};
     }else result=HPPattern2D(mode,phase,x,y,brightness,1);
-    if(variation){
+    if(variation&&!sky){
         unsigned style=(variation>>3)%4;
         if(mode==5||mode==31||style>=2){
             static const double ranges[8][2]={{.04,.94},{.34,.75},{.04,.16},{.72,.94},{.43,.65},{.16,.52},{.04,.32},{.55,.81}};
@@ -134,7 +140,7 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
             result.hue=ranges[palette][0]+(ranges[palette][1]-ranges[palette][0])*pigment;
         }else if(style==1)result.hue=1-result.hue;
     }
-    result.saturation=HPColourDepth(result.saturation,depth);
+    if(!sky)result.saturation=HPColourDepth(result.saturation,depth);
     return result;
 }
 // Older firmware may report normalized status. Command units stay degrees/percent.
