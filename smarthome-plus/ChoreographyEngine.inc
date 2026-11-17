@@ -117,7 +117,7 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  if(self.journey>=0){
      NSString *lampName=light[@"name"];
      if([lampName isKindOfClass:NSString.class]&&[lampName rangeOfString:@"TV" options:NSCaseInsensitiveSearch].location!=NSNotFound){
-         c.lightness=(float)MIN(c.lightness,.10);
+         c=HPSkyLimitTV(c,YES,YES);
      }
  }
  return c;
