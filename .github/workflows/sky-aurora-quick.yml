@@ -1,12 +1,13 @@
 name: Blue Sky Aurora quick prototype
 on:
   push:
-    branches: [blue-sky-aurora-v406]
+    branches: [blue-sky-aurora-v406, astro-l6-ribbon-v421]
     paths:
       - '.github/workflows/sky-aurora-quick.yml'
       - 'smarthome-plus/LightStudio.inc'
       - 'smarthome-plus/EffectPatterns.h'
       - 'smarthome-plus/SkyAurora.h'
+      - 'smarthome-plus/test_sky_aurora.c'
       - 'smarthome-plus/ChoreographyEngine.inc'
       - 'smarthome-plus/StudioPresets.m'
   workflow_dispatch:
