@@ -5,15 +5,15 @@
 #define HP_SKY_PALETTES 36
 #define HP_SKY_PROGRAMS 35
 static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double y,double brightness,double depth){
-    static const double blue[HP_SKY_PALETTES]={0.620,0.622,0.654,0.634,0.669,0.710,0.612,0.656,0.623,0.681,0.643,0.718,0.608,0.663,0.700,0.618,0.674,0.635,0.650,0.716,0.624,0.688,0.657,0.728,0.742,0.762,0.787,0.806,0.823,0.850,0.758,0.774,0.812,0.782,0.835,0.795};
-    static const double left[HP_SKY_PALETTES]={0.745,0.721,0.760,0.784,0.762,0.820,0.738,0.758,0.718,0.792,0.752,0.802,0.726,0.798,0.813,0.742,0.800,0.738,0.777,0.829,0.746,0.814,0.759,0.836,0.840,0.868,0.886,0.899,0.913,0.914,0.847,0.874,0.909,0.878,0.916,0.889};
-    static const double right[HP_SKY_PALETTES]={0.845,0.785,0.864,0.896,0.824,0.895,0.855,0.878,0.825,0.902,0.869,0.895,0.817,0.903,0.890,0.870,0.919,0.835,0.891,0.916,0.868,0.913,0.856,0.913,0.918,0.944,0.952,0.946,0.959,0.960,0.942,0.955,0.967,0.936,0.959,0.947};
-    static const double level[HP_SKY_PALETTES]={0.920,0.870,0.880,0.930,0.900,0.840,0.900,0.860,0.890,0.880,0.860,0.850,0.850,0.890,0.840,0.860,0.840,0.880,0.850,0.830,0.880,0.870,0.860,0.830,0.880,0.870,0.880,0.860,0.860,0.850,0.880,0.850,0.840,0.870,0.850,0.860};
+    static const double blue[HP_SKY_PALETTES]={0.600,0.596,0.622,0.583,0.609,0.623,0.603,0.615,0.584,0.612,0.592,0.631,0.591,0.621,0.635,0.603,0.640,0.655,0.626,0.669,0.648,0.675,0.645,0.705,0.667,0.687,0.708,0.724,0.668,0.743,0.676,0.695,0.717,0.694,0.745,0.718};
+    static const double left[HP_SKY_PALETTES]={0.375,0.397,0.425,0.355,0.400,0.418,0.382,0.405,0.390,0.427,0.410,0.442,0.374,0.422,0.433,0.387,0.410,0.400,0.398,0.426,0.413,0.738,0.430,0.765,0.740,0.759,0.780,0.795,0.741,0.828,0.764,0.776,0.796,0.765,0.830,0.784};
+    static const double right[HP_SKY_PALETTES]={0.461,0.473,0.486,0.454,0.492,0.484,0.467,0.481,0.455,0.490,0.496,0.497,0.461,0.499,0.492,0.482,0.766,0.785,0.748,0.812,0.790,0.849,0.826,0.865,0.860,0.879,0.900,0.904,0.854,0.919,0.887,0.918,0.916,0.885,0.922,0.910};
+    static const double level[HP_SKY_PALETTES]={0.880,0.900,0.890,0.910,0.850,0.760,0.870,0.890,0.880,0.890,0.850,0.850,0.870,0.880,0.820,0.880,0.870,0.880,0.890,0.850,0.890,0.860,0.870,0.840,0.890,0.870,0.850,0.870,0.860,0.870,0.900,0.860,0.870,0.880,0.870,0.850};
     variant=(variant>=0&&variant<HP_SKY_PALETTES)?variant:0;
     x=HPClamp(isfinite(x)?x:.5,0,1);y=HPClamp(isfinite(y)?y:.5,0,1);
-    // Warm-blue fields occupy the centre; lavender, lilac and pink drape the
-    // periphery. Every sky palette stays inside blue -> purple -> pink.
-    // No green, cyan, teal, navy, amber or orange anywhere in these programs.
+    // Hekla Aurora-inspired warm blue centre, natural green ribbons confined
+    // to the outer mapped lights. Other programs favour lilac and soft pink.
+    // Darkness is low output with unlit wall, not a simulated black bulb.
     double leftEdge=pow(HPClamp((.36-x)/.36,0,1),1.65);
     double rightEdge=pow(HPClamp((x-.64)/.36,0,1),1.65);
     double bend=.075*sin(4.1*y+phase/165.)+.032*sin(8.7*y-phase/240.);
