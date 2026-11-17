@@ -89,9 +89,9 @@ static inline HPColor HPSkyEmeraldRibbon(HPColor base,double loop,double phase,
     double crest=HPClamp(.70*body+.30*shape,0,1);
     // Left wall and raised ceiling are prominent. Centre and right still
     // receive ribbon movement; only TV is replaced with neutral bias later.
-    double geography=.76+.20*(1.-x)+.04*sin(y*4.2+u*.31);
+    double geography=.76+.20*(1.-x)+.04*sin(y*4.2+6.283185307179586*loop+phase/225.);
     double strength=HPClamp(crest*geography*(personality==2?1.12:personality==1?.94:1.02),0,.97);
-    double emerald=.368+.022*sin(u*.31+y*2.1+personality*.7);
+    double emerald=.368+.022*sin(6.283185307179586*2.*loop+phase/224.+y*2.1+personality*.7);
     base.hue=(float)HPSkyHueMix(base.hue,emerald,strength);
     // A real saturated green should look green, not greyed-out teal.
     base.saturation=(float)HPClamp(HPSkyMix(base.saturation,.98,strength*.92),0,1);
