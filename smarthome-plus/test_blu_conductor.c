@@ -73,6 +73,18 @@ int main(void){
     for(int i=0;i<12;i++)for(int j=i+1;j<12;j++)
         if(hdist(values[i],values[j])>.04)distinct++;
     assert(distinct>15);
+    // L6 is a primary ceiling wash. It must explore original Blu blues
+    // and teals even when no green donor is paired directly with it.
+    for(int j=45;j<56;j++){
+        double lowest=1,highest=0;
+        for(int frame=0;frame<120;frame++){
+            HPColor c=HPBluTarget(&stage,5,j,0,frame*24.,18,.48,1,.95,0);
+            if(c.hue<lowest)lowest=c.hue;
+            if(c.hue>highest)highest=c.hue;
+            assert(c.hue>=.475&&c.hue<=.72); // never adds a second green
+        }
+        assert(highest-lowest>.018);
+    }
     // Blu. modes run for several minutes; a small Motion setting still
     // advances them even when no Journey clock is active.
     HPColor a=HPBluTarget(&stage,0,-1,43,0,0,.48,1,.85,0);
