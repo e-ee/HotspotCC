@@ -82,7 +82,7 @@ static inline double HPBluCycle(double elapsed,double phase,int journey){
     }
     return (isfinite(phase)?phase:0.)/(6.283185307179586*18.);
 }
-static inline double HPBluWave(int program,double cycle,double x,double y,double phase,uint32_t seed){
+static inline double HPBluWave(int program,int journey,double cycle,double x,double y,double phase,uint32_t seed){
     const double twoPi=6.283185307179586;
     // 12 genuinely different movements: still, travelling, mirrored,
     // diagonal, rare curtain, ceiling bloom, counter-current and more.
@@ -139,7 +139,7 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
         // The shared midpoint means both paired lamps exchange roles
         // simultaneously. If one becomes greener, the other becomes bluer.
         double mx=(me->x+other->x)*.5,my=(me->y+other->y)*.5;
-        double wave=HPBluWave(program,cycle,mx,my,phase,seed);
+        double wave=HPBluWave(program,journey,cycle,mx,my,phase,seed);
         if(journey>=HP_BLU_JOURNEY_FIRST)
             wave=HPClamp(wave+.055*sin(phase/49.+2.*mx-3.*my),0,1);
         double exchange=HPClamp(wave*HPBluAmplitude(program)*HPClamp(blend,0,1),0,.98);
