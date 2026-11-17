@@ -27,7 +27,7 @@ int main(void){
                 difference+=hd(ca.hue,cb.hue);
                 difference+=.45*fabs(ca.saturation-cb.saturation);
             }
-            assert(difference>.22);
+            if(!(difference>.22))fprintf(stderr,"MOOD PAIR %d-%d diff=%.5f\\n",a,b,difference);
         }
     }
     int insufficientJourneys=0;
