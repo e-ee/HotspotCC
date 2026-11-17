@@ -58,7 +58,7 @@
     self.canvas.moved=^(NSDictionary *light,CGPoint point){
         NSString *mesh=HPMeshUUID()?:@"current";NSMutableDictionary *layouts=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.LightLayout"]mutableCopy]?:[NSMutableDictionary new];layouts[mesh]=[HPSpatialLayout layout:layouts[mesh]moving:light[@"id"]x:point.x y:point.y];[NSUserDefaults.standardUserDefaults setObject:layouts forKey:@"HP.LightLayout"];[NSUserDefaults.standardUserDefaults synchronize];weakSelf.status.text=[NSString stringWithFormat:@"Placed %@",light[@"name"]];[NSNotificationCenter.defaultCenter postNotificationName:@"HP.LayoutChanged" object:nil];
         HPLightEngine *engine=HPLightEngine.shared;
-        if(engine.mode>=0){[engine reloadLights];[engine requestRetarget];}
+        if(engine.mode>=0){[engine reloadLights];if(HPBluIsAurora((int)engine.lastMode,(int)engine.journey))[engine loadBluScene];[engine requestRetarget];}
     };
     self.canvas.picked=^(NSDictionary *light){HPSpatialEditor *editor=weakSelf;if(!editor||HPIdentifying)return;editor.selected=[editor.canvas.lights indexOfObject:light];[editor identify];};
     UIStackView *actions=[UIStackView new];actions.axis=UILayoutConstraintAxisHorizontal;actions.spacing=12;actions.distribution=UIStackViewDistributionFillEqually;
