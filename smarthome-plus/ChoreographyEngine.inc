@@ -83,11 +83,19 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  double x=[light[@"x"]doubleValue],y=[light[@"y"]doubleValue],u,v;HPDirectedPoint(x,y,self.waveAngle,&u,&v);double phase=self.waveReverse?-self.phase:self.phase;if(self.lastMode==32&&self.variation){phase+=(self.variation%997)*.73;if(self.variation&1)u=1-u;if(self.variation&2)v=1-v;}
  HPColor c;
  if(self.journey>=6&&self.journey<HP_JOURNEY_COUNT){
-     // Use unchanged room-map coordinates; rotating the field would move
-     // natural-green edge lighting into the central TV area.
-     c=HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyShuffleSeed);
+     NSString *lamp=light[@"name"]?:@"";
+     // L6 Lamp is the raised ceiling fixture (#6). The wall pair 1.2 and
+     // 1.3 shares the same moving aurora curtain with a spatial offset.
+     int role=-1;
+     if([lamp hasPrefix:@"L6 Lamp"])role=0;
+     else if([lamp hasPrefix:@"1.2-"])role=1;
+     else if([lamp hasPrefix:@"1.3-"])role=2;
+     if(role>=0)c=HPSkyMappedAuroraLamp(role,(int)self.journey,self.journeyElapsed,phase,self.brightness,self.depth,self.journeyShuffleSeed);
+     else c=HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyShuffleSeed);
      if(self.journeyShuffling){
-         HPColor previous=HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyPreviousSeed);
+         HPColor previous=role>=0?
+             HPSkyMappedAuroraLamp(role,(int)self.journey,self.journeyElapsed,phase,self.brightness,self.depth,self.journeyPreviousSeed):
+             HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyPreviousSeed);
          c=HPBlendColour(previous,c,HPEase(self.journeyShuffleElapsed/18.));
      }
  }else if(self.lastMode>=34&&self.lastMode<HP_MODE_COUNT&&self.journey<0){
@@ -110,14 +118,12 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  if(self.creativeKind){c.lightness=HPClamp(c.lightness*self.brightness/MAX(.08,self.creativeBrightness),0,1);c.saturation=HPHeldDepth(c.saturation,self.creativeDepth?:self.depth,self.depth);}
  if(self.rippleAge<19){double d=hypot(x-self.rippleOrigin.x,y-self.rippleOrigin.y);HPColor glow=c;glow.hue=HPWrap(c.hue+.055);glow.lightness=HPClamp(c.lightness+.08,0,1);c=HPBlendColour(c,glow,.85*HPRippleWeight(d,self.rippleAge,self.rippleInward));}
  if(self.sleepActive){double t=HPEase(self.sleepElapsed/MAX(1,self.sleepDuration));HPColor warm={.075,.50,c.lightness};c=HPBlendColour(c,warm,t);c.lightness*=pow(1-t,1.4);}
- // In every built-in journey, keep the actual named TV lamp low regardless
- // of palette, playback rate, duration, shuffle, or brightness slider.
- // The map's TV light is named "L7 TV"; match the functional label rather
- // than a changeable mesh address or numbered drawing position (TV 11).
+ // TV 11 is a dedicated, near-neutral bias light during journeys,
+ // not a saturated blue aurora bulb. User brightness still controls it.
  if(self.journey>=0){
      NSString *lampName=light[@"name"];
      if([lampName isKindOfClass:NSString.class]&&[lampName rangeOfString:@"TV" options:NSCaseInsensitiveSearch].location!=NSNotFound){
-         c=HPSkyLimitTV(c,YES,YES);
+         c=HPSkyTVBias(self.brightness);
      }
  }
  return c;
