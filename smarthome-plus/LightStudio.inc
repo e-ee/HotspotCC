@@ -267,7 +267,7 @@ static NSString *HPBluCanonicalName(NSString *name){
     [self activate:[valid[@"mode"]integerValue] journey:[valid[@"journey"]integerValue] reset:NO retarget:YES];
     if(self.mode<0){if(error)*error=HPReadError(self.status);return NO;}return YES;
 }
-- (void)start:(NSInteger)mode{if(mode>=34&&mode<HP_MODE_COUNT){self.playbackRate=1;self.speed=.42;[NSUserDefaults.standardUserDefaults setDouble:1 forKey:@"HP.PlaybackRate"];[NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];}[self clearCreative];[self activate:mode journey:-1 reset:self.lastMode!=mode||self.journey!=-1 retarget:YES];}
+- (void)start:(NSInteger)mode{if(mode>=34&&mode<HP_MODE_COUNT){if(mode>=HP_BLU_MOOD_FIRST)self.brightness=.48;self.playbackRate=1;self.speed=.42;[NSUserDefaults.standardUserDefaults setDouble:1 forKey:@"HP.PlaybackRate"];[NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];}[self clearCreative];[self activate:mode journey:-1 reset:self.lastMode!=mode||self.journey!=-1 retarget:YES];}
 - (void)startJourney:(NSInteger)journey{
     if(journey<0||journey>=HP_JOURNEY_COUNT)return;
     if(journey>=6){
@@ -427,6 +427,8 @@ static NSString *HPBluCanonicalName(NSString *name){
     if([peripheral respondsToSelector:ready]&&!((BOOL(*)(id,SEL))objc_msgSend)(peripheral,ready))return;
     if(HPTransportBusy())return;
     NSUInteger index=(NSUInteger)self.cursor++%self.lights.count;NSDictionary *light=self.lights[index];NSString *key=light[@"id"];
+    // A Blu scene can omit a lamp. Do not invent a blue HSL target for it.
+    if(HPBluIsAurora((int)self.lastMode,(int)self.journey)&&!self.bluIndexByID[key])return;
     if(self.adjusting&&!self.heldTargets[key]){[self completeRetarget:key];return;}
     HPBulbMotion *state=self.states[key];if(!state){state=[HPBulbMotion new];self.states[key]=state;}
     if(!state.known){
