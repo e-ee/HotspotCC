@@ -604,7 +604,10 @@ static UIViewController *HPCreateStudioTools(void);
 @property(nonatomic,strong) UIButton *scopeButton,*pause,*save,*shuffleButton;
 @property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider,*playbackSlider,*journeyDurationSlider;
 @property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel,*playbackLabel,*journeyDurationLabel;
-@property(nonatomic,strong) UIStackView *journeyControlPanel;
+@property(nonatomic,strong) UIStackView *journeyControlPanel,*bluControlPanel;
+@property(nonatomic,strong) UILabel *bluSourceStatus,*bluBlendLabel;
+@property(nonatomic,strong) UISlider *bluBlendSlider;
+@property(nonatomic,strong) UISegmentedControl *bluSourceSelector;
 @property(nonatomic,strong) UIButton *journeyShuffleButton;
 @property(nonatomic,strong) UISegmentedControl *category;
 @property(nonatomic,strong) UIStackView *gallery;
@@ -676,12 +679,64 @@ static UIViewController *HPCreateStudioTools(void);
     [self.journeyControlPanel addArrangedSubview:journeyHint];
     self.journeyControlPanel.hidden=YES;
     [stack addArrangedSubview:self.journeyControlPanel];
-    self.gallery=[UIStackView new];self.gallery.axis=UILayoutConstraintAxisVertical;self.gallery.spacing=11;[stack addArrangedSubview:self.gallery];[self buildGallery];[self reloadPreview];
+    // Blu Lab: all colours are read from the original saved Blu. routine.
+    // At 0 percent exchange each lamp remains in its exact original colour.
+    self.bluControlPanel=[UIStackView new];
+    self.bluControlPanel.axis=UILayoutConstraintAxisVertical;
+    self.bluControlPanel.spacing=6;
+    self.bluBlendLabel=[self text:@"Blu colour exchange 78%" size:13];
+    self.bluBlendLabel.textColor=[UIColor colorWithRed:.55 green:.88 blue:.89 alpha:1];
+    [self.bluControlPanel addArrangedSubview:self.bluBlendLabel];
+    self.bluBlendSlider=[UISlider new];self.bluBlendSlider.minimumValue=0;
+    self.bluBlendSlider.maximumValue=1;
+    self.bluBlendSlider.value=HPLightEngine.shared.bluMix;
+    self.bluBlendSlider.continuous=YES;
+    self.bluBlendSlider.minimumTrackTintColor=[UIColor colorWithRed:.20 green:.78 blue:.84 alpha:1];
+    self.bluBlendSlider.accessibilityLabel=@"Blu colour-role exchange strength";
+    [self.bluBlendSlider addTarget:self action:@selector(bluBlend:) forControlEvents:UIControlEventValueChanged];
+    [self.bluControlPanel addArrangedSubview:self.bluBlendSlider];
+    UIStackView *sourceRow=[UIStackView new];sourceRow.axis=UILayoutConstraintAxisHorizontal;
+    sourceRow.spacing=8;sourceRow.alignment=UIStackViewAlignmentCenter;
+    self.bluSourceSelector=[[UISegmentedControl alloc]initWithItems:@[@"blu.",@"blu.2"]];
+    self.bluSourceSelector.selectedSegmentIndex=[HPLightEngine.shared.bluSceneName isEqualToString:@"blu.2"]?1:0;
+    [self.bluSourceSelector addTarget:self action:@selector(bluSource:) forControlEvents:UIControlEventValueChanged];
+    [sourceRow addArrangedSubview:self.bluSourceSelector];
+    UIButton *inspect=[self button:@"Inspect Blu" action:@selector(inspectBlu:) filled:NO];
+    [inspect.widthAnchor constraintEqualToConstant:102].active=YES;
+    [sourceRow addArrangedSubview:inspect];
+    [self.bluControlPanel addArrangedSubview:sourceRow];
+    self.bluSourceStatus=[self text:@"Uses the exact saved bulb colours from Blu." size:11];
+    self.bluSourceStatus.font=[UIFont systemFontOfSize:11];
+    self.bluSourceStatus.textColor=[UIColor colorWithWhite:.70 alpha:1];
+    [self.bluControlPanel addArrangedSubview:self.bluSourceStatus];
+    self.bluControlPanel.hidden=YES;
+    [stack addArrangedSubview:self.bluControlPanel];
+    self.gallery=[UIStackView new];self.gallery.axis=UILayoutConstraintAxisVertical;self.gallery.spacing=11;[stack addArrangedSubview:self.gallery];
+    [self reloadPreview];[HPLightEngine.shared loadBluScene];[self buildGallery];
 }
 - (void)reloadPreview{[HPLightEngine.shared reloadLights];self.preview.lights=[HPLightEngine.shared.lights copy];}
 - (HPModeCard *)card:(NSString *)name detail:(NSString *)detail mode:(int)mode journey:(int)journey{
     HPModeCard *button=[[HPModeCard alloc]initWithFrame:CGRectZero];NSMutableArray *colors=[NSMutableArray new];
-    for(int n=0;n<3;n++){HPColor sample=mode==32?HPLivingAurora(45,n*.5,.35,.8,1):HPStudioTarget(mode==33?30:mode,journey,0,45,n*.5,.35,.8,1,0);[colors addObject:(id)[UIColor colorWithHue:sample.hue saturation:sample.saturation brightness:.22+.05*n alpha:1].CGColor];}
+    for(int n=0;n<3;n++){
+        HPColor sample;
+        if(HPBluIsAurora(mode,journey)){
+            HPBluStage stage=HPLightEngine.shared.bluStage;
+            int sampleIndex=-1,found=0;
+            // Original palette swatches are real active scene bulb colours.
+            for(int i=0;i<stage.count;i++){
+                if(stage.bulb[i].valid&&!stage.bulb[i].tv){
+                    if(found==n){sampleIndex=i;break;}found++;
+                }
+            }
+            sample=sampleIndex>=0?HPBluTarget(&stage,sampleIndex,journey,mode,
+                n*370.,n*41.,.48,1,.80,0):(HPColor){(float)(.45+.07*n),.75,.45};
+        }else{
+            sample=mode==32?HPLivingAurora(45,n*.5,.35,.8,1):
+                HPStudioTarget(mode==33?30:mode,journey,0,45,n*.5,.35,.8,1,0);
+        }
+        [colors addObject:(id)[UIColor colorWithHue:sample.hue
+                 saturation:sample.saturation brightness:.22+.05*n alpha:1].CGColor];
+    }
     button.palette.colors=colors;button.palette.startPoint=CGPointMake(0,0);button.palette.endPoint=CGPointMake(1,1);button.layer.cornerRadius=17;button.layer.masksToBounds=YES;button.layer.borderWidth=.5;button.layer.borderColor=[UIColor colorWithWhite:1 alpha:.13].CGColor;[button.heightAnchor constraintEqualToConstant:96].active=YES;
     NSMutableAttributedString *title=[[NSMutableAttributedString alloc]initWithString:[NSString stringWithFormat:@"%@\n%@",name,detail]attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,NSFontAttributeName:[UIFont systemFontOfSize:12]}];[title addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]range:NSMakeRange(0,name.length)];button.caption=[UILabel new];button.caption.attributedText=title;button.caption.numberOfLines=3;button.caption.textAlignment=NSTextAlignmentCenter;button.caption.userInteractionEnabled=NO;button.caption.isAccessibilityElement=NO;[button addSubview:button.caption];button.opaque=NO;button.isAccessibilityElement=YES;button.accessibilityTraits=UIAccessibilityTraitButton;button.accessibilityLabel=[NSString stringWithFormat:@"%@, %@",name,detail];return button;
 }
@@ -689,18 +744,20 @@ static UIViewController *HPCreateStudioTools(void);
     for(UIView *view in [self.gallery.arrangedSubviews copy]){[self.gallery removeArrangedSubview:view];[view removeFromSuperview];}
     NSInteger category=self.category.selectedSegmentIndex;
     self.journeyControlPanel.hidden=category!=1;
+    HPLightEngine *engine=HPLightEngine.shared;
+    self.bluControlPanel.hidden=!HPBluIsAurora((int)engine.lastMode,(int)engine.journey);
     if(category==0){for(int row=0;row<HP_MODE_COUNT/2;row++){
         UIStackView *pair=[UIStackView new];pair.axis=UILayoutConstraintAxisHorizontal;pair.spacing=11;pair.distribution=UIStackViewDistributionFillEqually;
         for(int col=0;col<2;col++){int mode=[HPThemeOrder()[row*2+col]intValue];HPModeCard *card=[self card:HPThemeNames()[mode]detail:HPThemeDetails()[mode]mode:mode journey:-1];card.tag=mode;card.accessibilityIdentifier=[@"HP.Mood."stringByAppendingString:HPThemeNames()[mode]];[card addTarget:self action:@selector(selectTheme:)forControlEvents:UIControlEventTouchUpInside];[pair addArrangedSubview:card];}[self.gallery addArrangedSubview:pair];
     }}else if(category==1){
-        UILabel *hint=[self text:@"Hekla Aurora restores vivid natural green. All new journeys repeat in 2 to 48 minutes with eight colour chapters per cycle." size:12];hint.textColor=[UIColor colorWithWhite:.62 alpha:1];[self.gallery addArrangedSubview:hint];
+        UILabel *hint=[self text:@"Blu Conductor journeys are built from your original blu. scene. Greens exchange with neighbouring blues rather than colouring the whole room. Change the 2–48 minute duration above." size:12];hint.textColor=[UIColor colorWithWhite:.62 alpha:1];[self.gallery addArrangedSubview:hint];
         for(NSNumber *entry in HPJourneyOrder()){int n=entry.intValue;HPModeCard *card=[self card:HPJourneyNames()[n]detail:HPJourneyDetails()[n]mode:0 journey:n];card.tag=n;card.accessibilityIdentifier=[@"HP.Journey."stringByAppendingString:HPJourneyNames()[n]];[card addTarget:self action:@selector(selectJourney:)forControlEvents:UIControlEventTouchUpInside];[self.gallery addArrangedSubview:card];}
     }else{
         NSArray *recipes=HPSavedMoods();UILabel *hint=[self text:recipes.count?@"Tap to play. Touch and hold a mood to delete it.":@"Find a look you love. Use More, then Save moving mood to keep its colours, motion and starting point."size:13];hint.textColor=[UIColor colorWithWhite:.65 alpha:1];[self.gallery addArrangedSubview:hint];
         for(NSDictionary *recipe in recipes){NSString *detail=[NSString stringWithFormat:@"%@ · %@",[recipe[@"journey"]integerValue]>=0?HPJourneyNames()[[recipe[@"journey"]integerValue]]:HPThemeNames()[[recipe[@"mode"]integerValue]],recipe[@"scope"]];HPModeCard *card=[self card:recipe[@"name"]detail:detail mode:[recipe[@"mode"]intValue]journey:[recipe[@"journey"]intValue]];card.recipeID=recipe[@"id"];[card addTarget:self action:@selector(playSaved:)forControlEvents:UIControlEventTouchUpInside];[card addGestureRecognizer:[[UILongPressGestureRecognizer alloc]initWithTarget:self action:@selector(holdSaved:)]];[self.gallery addArrangedSubview:card];}
     }
 }
-- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;self.playbackSlider.value=HPLightEngine.shared.playbackRate;self.journeyDurationSlider.value=HPLightEngine.shared.journeyDurationMinutes;}
+- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;self.playbackSlider.value=HPLightEngine.shared.playbackRate;self.journeyDurationSlider.value=HPLightEngine.shared.journeyDurationMinutes;self.bluBlendSlider.value=HPLightEngine.shared.bluMix;}
 - (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
@@ -721,8 +778,8 @@ static UIViewController *HPCreateStudioTools(void);
     for(UIView *row in self.gallery.arrangedSubviews){NSArray *cards=[row isKindOfClass:UIStackView.class]?[(UIStackView *)row arrangedSubviews]:@[row];for(UIView *view in cards)if([view isKindOfClass:HPModeCard.class]){HPModeCard *card=(id)view;BOOL selected=self.category.selectedSegmentIndex==0?engine.journey<0&&card.tag==engine.lastMode:self.category.selectedSegmentIndex==1&&card.tag==engine.journey;card.layer.borderWidth=selected?2:.5;card.layer.borderColor=[UIColor colorWithWhite:1 alpha:selected?.68:.13].CGColor;card.accessibilityTraits=UIAccessibilityTraitButton|(selected?UIAccessibilityTraitSelected:0);}}
     [self.preview setNeedsDisplay];
 }
-- (void)selectTheme:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared start:button.tag];[self refresh];}
-- (void)selectJourney:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared startJourney:button.tag];[self refresh];}
+- (void)selectTheme:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared start:button.tag];[self buildGallery];[self refresh];}
+- (void)selectJourney:(UIControl *)button{if(self.captureReader)return;[HPLightEngine.shared startJourney:button.tag];[self buildGallery];[self refresh];}
 - (void)brightness:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeBrightness:slider.value];[self refresh];}
 - (void)speed:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeMotion:slider.value];[self refresh];}
 - (void)depth:(UISlider *)slider{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared changeDepth:slider.value];[self refresh];}
@@ -737,6 +794,35 @@ static UIViewController *HPCreateStudioTools(void);
     if(self.captureReader||HPIdentifying)return;
     [HPLightEngine.shared shuffleJourney];
     [self refresh];
+}
+- (void)bluBlend:(UISlider *)slider{
+    if(self.captureReader||HPIdentifying)return;
+    [HPLightEngine.shared changeBluMix:slider.value];[self refresh];
+}
+- (void)bluSource:(UISegmentedControl *)control{
+    if(self.captureReader||HPIdentifying)return;
+    [HPLightEngine.shared selectBluScene:control.selectedSegmentIndex==1?@"blu.2":@"blu."];
+    self.bluSourceSelector.selectedSegmentIndex=[HPLightEngine.shared.bluSceneName isEqualToString:@"blu.2"]?1:0;
+    [self buildGallery];[self refresh];
+}
+- (void)inspectBlu:(UIButton *)sender{
+    HPLightEngine *engine=HPLightEngine.shared;
+    if(![engine loadBluScene]){HPAlert(self,@"Blu source",engine.status);return;}
+    HPBluStage stage=engine.bluStage;
+    NSMutableString *message=[NSMutableString stringWithString:engine.bluSceneStatus?:@""];
+    for(int i=0;i<stage.count;i++){
+        HPBluBulb *bulb=&stage.bulb[i];if(!bulb->valid)continue;
+        NSString *name=engine.lights[i][@"name"]?:@"Bulb";
+        [message appendFormat:@"\n%@  %d° · %d%% sat · %d%% brightness%@",
+            name,(int)round(bulb->anchor.hue*360.),
+            (int)round(bulb->anchor.saturation*100.),
+            (int)round(bulb->anchor.lightness*100.),
+            bulb->partner>=0?@" · paired":@""];
+    }
+    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Original Blu per-bulb colours"
+       message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Done" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 - (void)shuffleColours{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared shuffleColours];[self refresh];}
 - (void)stop{[HPLightEngine.shared stop];[self refresh];}
