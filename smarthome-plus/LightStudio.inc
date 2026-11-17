@@ -117,6 +117,16 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)beginSleep:(double)seconds;
 - (void)cancelSleep;
 @end
+static NSString *HPBluCanonicalName(NSString *name){
+    if(![name isKindOfClass:NSString.class])return @"";
+    NSString *value=[[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]lowercaseString];
+    // Node display names contain a changeable -Mxxxx device suffix.
+    // Scene data may contain the full native name or only the short name.
+    NSRange suffix=[value rangeOfString:@"-m" options:NSBackwardsSearch];
+    if(suffix.location!=NSNotFound && value.length-suffix.location>=4)
+        value=[value substringToIndex:suffix.location];
+    return value;
+}
 @implementation HPLightEngine
 + (instancetype)shared {static HPLightEngine *engine;static dispatch_once_t once;dispatch_once(&once,^{
     engine=[HPLightEngine new];engine.mode=-1;engine.lastMode=0;engine.journey=-1;
@@ -140,16 +150,6 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     for(NSDictionary *node in mesh[@"nodes"])for(NSDictionary *element in node[@"elements"])for(NSDictionary *model in element[@"models"])
         for(id subscription in model[@"subscribe"])if([subscription isKindOfClass:NSString.class]&&[[subscription uppercaseString]isEqual:groupAddress])[members addObject:node[@"UUID"]];
     NSMutableArray *selected=[NSMutableArray new];for(NSDictionary *light in all)if([members containsObject:light[@"id"]])[selected addObject:light];self.lights=selected;
-}
-static NSString *HPBluCanonicalName(NSString *name){
-    if(![name isKindOfClass:NSString.class])return @"";
-    NSString *value=[[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]lowercaseString];
-    // Node display names contain a changeable -Mxxxx device suffix.
-    // Scene data may contain the full native name or only the short name.
-    NSRange suffix=[value rangeOfString:@"-m" options:NSBackwardsSearch];
-    if(suffix.location!=NSNotFound && value.length-suffix.location>=4)
-        value=[value substringToIndex:suffix.location];
-    return value;
 }
 - (BOOL)loadBluScene{
     @try {
