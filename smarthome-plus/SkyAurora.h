@@ -5,30 +5,23 @@
 #define HP_SKY_PALETTES 36
 #define HP_SKY_PROGRAMS 35
 static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double y,double brightness,double depth){
-    static const double blue[HP_SKY_PALETTES]={0.592,0.588,0.614,0.580,0.603,0.625,0.601,0.617,0.579,0.601,0.592,0.647,0.583,0.617,0.652,0.632,0.585,0.602,0.577,0.611,0.624,0.571,0.600,0.629,0.085,0.098,0.052,0.106,0.948,0.895,0.070,0.093,0.112,0.063,0.970,0.090};
-    static const double left[HP_SKY_PALETTES]={0.404,0.438,0.466,0.398,0.449,0.457,0.404,0.421,0.416,0.442,0.438,0.440,0.409,0.450,0.469,0.442,0.425,0.434,0.401,0.432,0.439,0.403,0.442,0.453,0.075,0.080,0.045,0.091,0.936,0.872,0.065,0.075,0.092,0.051,0.957,0.073};
-    static const double right[HP_SKY_PALETTES]={0.466,0.486,0.500,0.457,0.496,0.481,0.471,0.483,0.466,0.494,0.490,0.488,0.472,0.499,0.498,0.487,0.480,0.490,0.467,0.488,0.486,0.473,0.500,0.493,0.120,0.138,0.077,0.140,0.975,0.929,0.110,0.130,0.150,0.089,0.990,0.120};
-    static const double level[HP_SKY_PALETTES]={1.000,0.960,0.920,1.010,0.950,0.660,0.740,0.710,0.720,0.740,0.780,0.650,0.760,0.750,0.670,0.710,0.750,0.770,0.760,0.670,0.700,0.770,0.720,0.660,0.750,0.720,0.690,0.730,0.640,0.600,0.630,0.670,0.660,0.650,0.590,0.580};
+    static const double blue[HP_SKY_PALETTES]={0.620,0.622,0.654,0.634,0.669,0.710,0.612,0.656,0.623,0.681,0.643,0.718,0.608,0.663,0.700,0.618,0.674,0.635,0.650,0.716,0.624,0.688,0.657,0.728,0.742,0.762,0.787,0.806,0.823,0.850,0.758,0.774,0.812,0.782,0.835,0.795};
+    static const double left[HP_SKY_PALETTES]={0.745,0.721,0.760,0.784,0.762,0.820,0.738,0.758,0.718,0.792,0.752,0.802,0.726,0.798,0.813,0.742,0.800,0.738,0.777,0.829,0.746,0.814,0.759,0.836,0.840,0.868,0.886,0.899,0.913,0.914,0.847,0.874,0.909,0.878,0.916,0.889};
+    static const double right[HP_SKY_PALETTES]={0.845,0.785,0.864,0.896,0.824,0.895,0.855,0.878,0.825,0.902,0.869,0.895,0.817,0.903,0.890,0.870,0.919,0.835,0.891,0.916,0.868,0.913,0.856,0.913,0.918,0.944,0.952,0.946,0.959,0.960,0.942,0.955,0.967,0.936,0.959,0.947};
+    static const double level[HP_SKY_PALETTES]={0.920,0.870,0.880,0.930,0.900,0.840,0.900,0.860,0.890,0.880,0.860,0.850,0.850,0.890,0.840,0.860,0.840,0.880,0.850,0.830,0.880,0.870,0.860,0.830,0.880,0.870,0.880,0.860,0.860,0.850,0.880,0.850,0.840,0.870,0.850,0.860};
     variant=(variant>=0&&variant<HP_SKY_PALETTES)?variant:0;
     x=HPClamp(isfinite(x)?x:.5,0,1);y=HPClamp(isfinite(y)?y:.5,0,1);
-    // For cool palettes: centre remains blue, green and teal occupy outer edges.
-    // Warm palettes have warm edges only, never green through the central TV wall.
+    // Warm-blue fields occupy the centre; lavender, lilac and pink drape the
+    // periphery. Every sky palette stays inside blue -> purple -> pink.
+    // No green, cyan, teal, navy, amber or orange anywhere in these programs.
     double leftEdge=pow(HPClamp((.36-x)/.36,0,1),1.65);
     double rightEdge=pow(HPClamp((x-.64)/.36,0,1),1.65);
     double bend=.075*sin(4.1*y+phase/165.)+.032*sin(8.7*y-phase/240.);
     double veil=.5+.5*sin((x+bend)*5.7-phase/92.);
     double second=.5+.5*sin(x*3.8-y*4.2+phase/133.);
     double h=blue[variant]+.014*(veil-.5)+.010*(second-.5);
-    // Warm pinks can straddle hue zero. Keep hues together before wrapping.
-    double l=left[variant],r=right[variant];
-    if(variant>=24){
-        if(h>.8&&l<.2)l+=1.;
-        if(h>.8&&r<.2)r+=1.;
-        if(h<.2&&l>.8)l-=1.;
-        if(h<.2&&r>.8)r-=1.;
-    }
-    h=h*(1-leftEdge)+l*leftEdge;
-    h=h*(1-rightEdge)+r*rightEdge;
+    h=h*(1-leftEdge)+left[variant]*leftEdge;
+    h=h*(1-rightEdge)+right[variant]*rightEdge;
     double saturation=.77+.09*veil+.04*(leftEdge+rightEdge);
     if(variant==2||variant==4||variant==14||variant==19||variant>=24)saturation-=.13;
     double lightness=(.49+.052*veil+.022*second)*level[variant]*HPClamp(brightness,0,1);
