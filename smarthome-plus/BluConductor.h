@@ -80,7 +80,7 @@ static inline double HPBluCycle(double elapsed,double phase,int journey){
         double t=fmod(fmax(0,isfinite(elapsed)?elapsed:0),2880.);
         return t/2880.;
     }
-    return (isfinite(phase)?phase:0.)/(6.283185307179586*110.);
+    return (isfinite(phase)?phase:0.)/(6.283185307179586*18.);
 }
 static inline double HPBluWave(int program,double cycle,double x,double y,double phase,uint32_t seed){
     const double twoPi=6.283185307179586;
@@ -123,7 +123,10 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
     const int program=journey>=HP_BLU_JOURNEY_FIRST?
         journey-HP_BLU_JOURNEY_FIRST:mode-HP_BLU_MOOD_FIRST;
     double cycle=HPBluCycle(elapsed,phase,journey);
-    if(me->tv){
+    if(me->tv&&blend<=.0001){
+        // A true zero-strength look reproduces the original Blu HSL.
+        c=me->anchor;
+    }else if(me->tv){
         // Blu TV remains ONE colour at any instant, not a gradient between
         // fixtures. Trust the Blu source if already soft teal. Suppress
         // painfully saturated pure blue and overpowering green.
@@ -137,6 +140,8 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
         // simultaneously. If one becomes greener, the other becomes bluer.
         double mx=(me->x+other->x)*.5,my=(me->y+other->y)*.5;
         double wave=HPBluWave(program,cycle,mx,my,phase,seed);
+        if(journey>=HP_BLU_JOURNEY_FIRST)
+            wave=HPClamp(wave+.055*sin(phase/49.+2.*mx-3.*my),0,1);
         double exchange=HPClamp(wave*HPBluAmplitude(program)*HPClamp(blend,0,1),0,.98);
         // The same exchange factor is used on BOTH sides.
         c=HPBluLerp(me->anchor,other->anchor,exchange);
@@ -153,7 +158,7 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
                  me->corner9||me->corner12)){
         double wave=sin(6.283185307179586*(cycle*(program%3+1)+
             (me->wall13?.05:me->corner12?.11:me->ceiling?.17:.0)));
-        double amount=program==0?.014:.047;
+        double amount=(program==0?.014:.047)*HPClamp(blend,0,1);
         c.lightness=(float)HPClamp(c.lightness*(1+amount*wave),0,1);
     }
     // The saved scene defines each bulb's physical brightness ratio.
