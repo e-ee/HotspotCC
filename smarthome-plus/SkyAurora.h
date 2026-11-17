@@ -22,6 +22,15 @@ static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double 
     double h=blue[variant]+.014*(veil-.5)+.010*(second-.5);
     h=h*(1-leftEdge)+left[variant]*leftEdge;
     h=h*(1-rightEdge)+right[variant]*rightEdge;
+    // L6 Lamp is at (0.00, 0.309) in the saved room map. At x=0,
+    // leftEdge==1 previously replaced the animated hue with a nearly
+    // static palette endpoint. Restore a moving ribbon in that small
+    // neighbourhood, interpolating between its edge colour and the
+    // journey's warm-blue centre. The Gaussian keeps the other edge
+    // lamps and central TV region essentially unaffected.
+    double l6Envelope=exp(-pow((y-.309)/.115,2.))*pow(HPClamp((.18-x)/.18,0,1),2.);
+    double ribbon=.5+.5*sin(phase/68.+6.4*y+.30*sin(phase/207.-y*5.));
+    h+=(blue[variant]-h)*l6Envelope*(.05+.84*ribbon);
     double saturation=.77+.09*veil+.04*(leftEdge+rightEdge);
     if(variant==2||variant==4||variant==14||variant==19||variant>=24)saturation-=.13;
     double lightness=(.49+.052*veil+.022*second)*level[variant]*HPClamp(brightness,0,1);
