@@ -51,6 +51,8 @@ int main(void){
                     double boundary=n*2880./HP_SKY_CHAPTERS;
                     HPColor before=HPSkyAuroraJourneyShuffled(journey,boundary-.001,43,x,y,.52,1,seed);
                     HPColor after=HPSkyAuroraJourneyShuffled(journey,boundary+.001,43,x,y,.52,1,seed);
+                    if(hd(before.hue,after.hue)>=.004||fabs(before.lightness-after.lightness)>=.004)
+                        fprintf(stderr,"LOOP DISCONTINUITY journey=%d seed=%u spot=%d boundary=%.3f dh=%.5f dl=%.5f\\n",journey,seed,spot,boundary,hd(before.hue,after.hue),fabs(before.lightness-after.lightness));
                     assert(hd(before.hue,after.hue)<.004);
                     assert(fabs(before.lightness-after.lightness)<.004);
                 }
@@ -104,6 +106,25 @@ int main(void){
         }
         assert(greenCount>25);
     }
+    // 1.1 (#9) and L8 Corner2 (#12) blend along the SAME moving aurora,
+    // maintaining a distinct green-teal / blue gradient across the pair.
+    int gradientMoments=0,greenMoments=0;
+    for(int i=0;i<320;i++){
+        double t=i*9.;
+        HPColor c9=HPSkyCornerAuroraPair(0,41,t,t*.25,.55,1,0);
+        HPColor c12=HPSkyCornerAuroraPair(1,41,t,t*.25,.55,1,0);
+        valid(c9);valid(c12);
+        if(hd(c9.hue,c12.hue)>.04)gradientMoments++;
+        if(c9.hue>.31&&c9.hue<.46&&c9.saturation>.75)greenMoments++;
+    }
+    assert(gradientMoments>100&&greenMoments>70);
+    for(int m=0;m<3;m++){
+        const int modes[3]={34,40,41};
+        HPColor a=HPSkyCornerAuroraMood(0,m,150,.50,1);
+        HPColor b=HPSkyCornerAuroraMood(1,m,150,.50,1);
+        valid(a);valid(b);
+        assert(hd(a.hue,b.hue)>.02);
+    }
     // No accidental emerald injection into the non-aurora programmes.
     assert(HPSkyEmeraldProgram(0)&&HPSkyEmeraldProgram(35));
     assert(!HPSkyEmeraldProgram(1)&&!HPSkyEmeraldProgram(23)&&!HPSkyEmeraldProgram(34));
@@ -123,8 +144,22 @@ int main(void){
     // The TV never receives a pure blue target, and its brightness follows
     // the user's slider without an arbitrary 10 percent limit.
     HPColor tv=HPSkyTVBias(.68);
-    valid(tv);assert(tv.saturation<.10&&fabs(tv.lightness-.68)<.00001);
+    valid(tv);assert(tv.saturation>.40&&tv.saturation<.62);
+    assert(tv.hue>.42&&tv.hue<.54);
+    assert(fabs(tv.lightness-.68)<.00001);
     assert(HPSkyTVBias(.2).lightness<HPSkyTVBias(.8).lightness);
+    // One TV bulb carries a single teal colour at each instant, with
+    // gentle emerald and blue over a slow real-time 12-minute cycle.
+    double mintv=1.,maxtv=0.;
+    for(int t=0;t<=720;t+=5){
+        HPColor c=HPSkyTVBiasDrift(.60,t);
+        valid(c);
+        if(c.hue<mintv)mintv=c.hue;
+        if(c.hue>maxtv)maxtv=c.hue;
+        assert(c.saturation>=.4&&c.saturation<=.62);
+        assert(fabs(c.lightness-.60)<.00001);
+    }
+    assert(mintv<.46&&maxtv>.51);
     // 2 minute colour changes cannot be smothered by an old 1-degree/s
     // ambient cap. Fast journeys still move continuously and never jump.
     HPColor old={.34,.60,.25},goal={.75,.85,.48},fast=old,slow=old;
