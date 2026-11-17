@@ -1,7 +1,7 @@
 name: Blue Sky Aurora quick prototype
 on:
   push:
-    branches: [blue-sky-aurora-v406, astro-l6-ribbon-v421, astro-ceiling-wallpair-tv-bias-v422]
+    branches: [blue-sky-aurora-v406, astro-l6-ribbon-v421, astro-ceiling-wallpair-tv-bias-v422, astro-expressive-journeys-v430]
     paths:
       - '.github/workflows/sky-aurora-quick.yml'
       - 'smarthome-plus/LightStudio.inc'
