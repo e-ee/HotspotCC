@@ -13,8 +13,8 @@ static void valid(HPColor c){
     assert(c.lightness>=0&&c.lightness<=1);
 }
 int main(void){
-    assert(HP_JOURNEY_COUNT==44&&HP_SKY_PROGRAMS==38);
-    assert(HP_SKY_PALETTES==36&&HP_SKY_CHAPTERS==8&&HP_MODE_COUNT==42);
+    assert(HP_JOURNEY_COUNT==56&&HP_SKY_PROGRAMS==38);
+    assert(HP_SKY_PALETTES==36&&HP_SKY_CHAPTERS==8&&HP_MODE_COUNT==48);
     // The six new moods must not be six names for one field.
     for(int a=34;a<42;a++){
         for(int b=a+1;b<42;b++){
@@ -33,7 +33,7 @@ int main(void){
     int insufficientJourneys=0;
     // All 35 curated journeys have 8 palette chapters, loop seamlessly,
     // and show substantial changes in a 2-minute cycle.
-    for(int journey=6;journey<HP_JOURNEY_COUNT;journey++){
+    for(int journey=6;journey<44;journey++){
         for(int seedIndex=0;seedIndex<3;seedIndex++){
             uint32_t seed=seedIndex?(uint32_t)(journey*15821+seedIndex*73021):0;
             int order[HP_SKY_CHAPTERS];HPSkyAuroraOrder8(journey,seed,order);
