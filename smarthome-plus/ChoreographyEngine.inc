@@ -81,7 +81,20 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
 }
 - (HPColor)creativeTarget:(NSDictionary *)light{
  double x=[light[@"x"]doubleValue],y=[light[@"y"]doubleValue],u,v;HPDirectedPoint(x,y,self.waveAngle,&u,&v);double phase=self.waveReverse?-self.phase:self.phase;if(self.lastMode==32&&self.variation){phase+=(self.variation%997)*.73;if(self.variation&1)u=1-u;if(self.variation&2)v=1-v;}
- HPColor c=self.lastMode==32?HPLivingAurora(phase,u,v,self.brightness,self.depth):self.lastMode==33?HPStudioTarget(30,-1,0,phase,u,v,self.brightness,self.depth,self.variation):HPStudioTarget((int)self.lastMode,(int)self.journey,self.journeyElapsed,phase,u,v,self.brightness,self.depth,self.variation);
+ HPColor c;
+ if(self.journey>=6&&self.journey<HP_JOURNEY_COUNT){
+     // Use unchanged room-map coordinates; rotating the field would move
+     // natural-green edge lighting into the central TV area.
+     c=HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyShuffleSeed);
+     if(self.journeyShuffling){
+         HPColor previous=HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyPreviousSeed);
+         c=HPBlendColour(previous,c,HPEase(self.journeyShuffleElapsed/18.));
+     }
+ }else if(self.lastMode>=34&&self.lastMode<HP_MODE_COUNT&&self.journey<0){
+     c=HPStudioTarget((int)self.lastMode,-1,0,phase,x,y,self.brightness,self.depth,self.variation);
+ }else{
+     c=self.lastMode==32?HPLivingAurora(phase,u,v,self.brightness,self.depth):self.lastMode==33?HPStudioTarget(30,-1,0,phase,u,v,self.brightness,self.depth,self.variation):HPStudioTarget((int)self.lastMode,(int)self.journey,self.journeyElapsed,phase,u,v,self.brightness,self.depth,self.variation);
+ }
  // Preserve aurora greens; other palettes favour blues, warm tones and violet.
  if(self.lastMode!=0&&self.lastMode!=24&&self.lastMode!=32&&self.lastMode<34&&c.hue>.23&&c.hue<.45)c.hue=.48+(c.hue-.23)*.25;
  NSString *key=light[@"id"];
@@ -97,6 +110,16 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  if(self.creativeKind){c.lightness=HPClamp(c.lightness*self.brightness/MAX(.08,self.creativeBrightness),0,1);c.saturation=HPHeldDepth(c.saturation,self.creativeDepth?:self.depth,self.depth);}
  if(self.rippleAge<19){double d=hypot(x-self.rippleOrigin.x,y-self.rippleOrigin.y);HPColor glow=c;glow.hue=HPWrap(c.hue+.055);glow.lightness=HPClamp(c.lightness+.08,0,1);c=HPBlendColour(c,glow,.85*HPRippleWeight(d,self.rippleAge,self.rippleInward));}
  if(self.sleepActive){double t=HPEase(self.sleepElapsed/MAX(1,self.sleepDuration));HPColor warm={.075,.50,c.lightness};c=HPBlendColour(c,warm,t);c.lightness*=pow(1-t,1.4);}
+ // In every built-in journey, keep the actual named TV lamp low regardless
+ // of palette, playback rate, duration, shuffle, or brightness slider.
+ // The map's TV light is named "L7 TV"; match the functional label rather
+ // than a changeable mesh address or numbered drawing position (TV 11).
+ if(self.journey>=0){
+     NSString *lampName=light[@"name"];
+     if([lampName isKindOfClass:NSString.class]&&[lampName rangeOfString:@"TV" options:NSCaseInsensitiveSearch].location!=NSNotFound){
+         c.lightness=(float)MIN(c.lightness,.10);
+     }
+ }
  return c;
 }
 - (void)advanceCreative:(double)elapsed{
