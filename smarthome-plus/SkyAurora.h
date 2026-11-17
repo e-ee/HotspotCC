@@ -28,17 +28,33 @@ static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double 
 }
 // 4 x 12-minute chapters, with a 3-minute ease between related colour fields.
 // Each boundary uses the same shared phase, including the looping boundary.
-static inline HPColor HPSkyAuroraJourney(int journey,double elapsed,double phase,double x,double y,double brightness,double depth){
-    static const int chapter[3][4]={{1,0,3,2},{2,4,1,3},{5,1,0,5}};
+// Zero seed follows the original curated order. Nonzero seeds permute only
+// the same four blue-to-teal chapters. No arbitrary hues or green centre.
+static inline void HPSkyAuroraOrder(int journey,uint32_t seed,int order[4]){
+    static const int chapters[3][4]={{1,0,3,2},{2,4,1,3},{5,1,0,5}};
     int program=(journey>=6&&journey<=8)?journey-6:0;
+    for(int i=0;i<4;i++)order[i]=chapters[program][i];
+    if(!seed)return;
+    uint32_t state=seed^(uint32_t)((program+1)*0x9e3779b9U);
+    for(int i=3;i>0;i--){
+        state=state*1664525U+1013904223U;
+        int j=(int)((state>>8)%(uint32_t)(i+1));
+        int tmp=order[i];order[i]=order[j];order[j]=tmp;
+    }
+}
+static inline HPColor HPSkyAuroraJourneyShuffled(int journey,double elapsed,double phase,double x,double y,double brightness,double depth,uint32_t seed){
+    int chapter[4];HPSkyAuroraOrder(journey,seed,chapter);
     double t=fmod(fmax(0,isfinite(elapsed)?elapsed:0),4.*720.);
     int index=(int)(t/720.);double section=fmod(t,720.);
     double amount=HPClamp((section-540.)/180.,0,1);amount=amount*amount*(3-2*amount);
-    HPColor a=HPSkyAuroraField(chapter[program][index],phase,x,y,brightness,depth);
-    HPColor b=HPSkyAuroraField(chapter[program][(index+1)%4],phase,x,y,brightness,depth);
+    HPColor a=HPSkyAuroraField(chapter[index],phase,x,y,brightness,depth);
+    HPColor b=HPSkyAuroraField(chapter[(index+1)%4],phase,x,y,brightness,depth);
     // These palettes all occupy a short, contiguous blue-to-teal hue arc.
     return (HPColor){(float)(a.hue+(b.hue-a.hue)*amount),
                      (float)(a.saturation+(b.saturation-a.saturation)*amount),
                      (float)(a.lightness+(b.lightness-a.lightness)*amount)};
+}
+static inline HPColor HPSkyAuroraJourney(int journey,double elapsed,double phase,double x,double y,double brightness,double depth){
+    return HPSkyAuroraJourneyShuffled(journey,elapsed,phase,x,y,brightness,depth,0);
 }
 #endif
