@@ -149,8 +149,34 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
         // A ceiling lamp and a wall lamp should not trade brightness.
         c.lightness=me->anchor.lightness;
     }else{
-        // Ineligible/non-green bulbs stay in their Blu colour family.
-        // They subtly modulate lightness, never turn unrelated bulbs green.
+        // A blue/teal fixture that is not in a green pair still needs to
+        // MOVE. Select another ACTUAL blue/teal from the Blu scene (never
+        // a green donor or TV), then sweep through those original colours.
+        // This keeps L6's ceiling lively without making an extra green LED.
+        if(HPBluIsBlue(me->anchor)){
+            int peer=-1;double best=1e6;
+            for(int i=0;i<stage->count;i++){
+                const HPBluBulb *other=&stage->bulb[i];
+                if(i==index||!other->valid||other->tv||
+                   !HPBluIsBlue(other->anchor))continue;
+                double contrast=HPBluHueDistance(me->anchor.hue,other->anchor.hue);
+                if(contrast<.035||contrast>.23)continue;
+                double dx=me->x-other->x,dy=me->y-other->y;
+                double score=dx*dx+dy*dy-.7*contrast;
+                if(score<best){best=score;peer=i;}
+            }
+            if(peer>=0){
+                HPColor other=stage->bulb[peer].anchor;
+                double wave=HPBluWave(program,journey,cycle,
+                     .5*(me->x+stage->bulb[peer].x),
+                     .5*(me->y+stage->bulb[peer].y),phase,seed);
+                double movement=HPClamp(blend,0,1)*
+                      (program==0?.13:me->ceiling?.88:.66)*wave;
+                c.hue=(float)HPSkyHueMix(c.hue,other.hue,movement);
+                c.saturation=(float)HPSkyMix(c.saturation,other.saturation,movement);
+            }
+        }
+        // Original scene-relative brightness, with gentle correlated waves.
         double wave=sin(6.283185307179586*(cycle*(1+program%3)+.12*me->x-.06*me->y));
         double amp=(program==0?.015:program%5==0?.10:.05)*HPClamp(blend,0,1);
         c.lightness=(float)HPClamp(c.lightness*(1+amp*wave),0,1);
