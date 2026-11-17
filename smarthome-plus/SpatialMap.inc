@@ -47,16 +47,18 @@
     UILabel *label=[UILabel new];label.text=text;label.textColor=UIColor.whiteColor;label.numberOfLines=0;label.font=[UIFont systemFontOfSize:size weight:UIFontWeightMedium];return label;
 }
 - (void)viewDidLoad{
-    [super viewDidLoad];[HPLightEngine.shared stop];self.title=@"Apartment map";self.view.backgroundColor=[UIColor colorWithRed:.035 green:.045 blue:.065 alpha:1];
+    [super viewDidLoad];self.title=@"Apartment map";self.view.backgroundColor=[UIColor colorWithRed:.035 green:.045 blue:.065 alpha:1];
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(done)];
     UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=14;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:18],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:20],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-20],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-40]]];
     UILabel *hint=[self label:@"Drag each numbered light to its place around your apartment. Tap to show a bright amber or cyan marker for a few seconds. Its previous colour returns afterward." size:13];hint.textColor=[UIColor colorWithWhite:.67 alpha:1];[stack addArrangedSubview:hint];
-    self.status=[self label:@"Studio is paused while you map. Positions save automatically." size:13];[stack addArrangedSubview:self.status];
+    self.status=[self label:@"Studio animation continues while you map. Positions save automatically." size:13];[stack addArrangedSubview:self.status];
     self.canvas=[HPRoomCanvas new];self.canvas.backgroundColor=[UIColor colorWithRed:.065 green:.08 blue:.11 alpha:1];self.canvas.layer.cornerRadius=22;self.canvas.clipsToBounds=YES;self.canvas.lights=HPLightRecords();[self.canvas.heightAnchor constraintEqualToConstant:MIN(620,MAX(350,UIScreen.mainScreen.bounds.size.height*.5))].active=YES;[stack addArrangedSubview:self.canvas];
     __weak HPSpatialEditor *weakSelf=self;
     self.canvas.moved=^(NSDictionary *light,CGPoint point){
         NSString *mesh=HPMeshUUID()?:@"current";NSMutableDictionary *layouts=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.LightLayout"]mutableCopy]?:[NSMutableDictionary new];layouts[mesh]=[HPSpatialLayout layout:layouts[mesh]moving:light[@"id"]x:point.x y:point.y];[NSUserDefaults.standardUserDefaults setObject:layouts forKey:@"HP.LightLayout"];[NSUserDefaults.standardUserDefaults synchronize];weakSelf.status.text=[NSString stringWithFormat:@"Placed %@",light[@"name"]];[NSNotificationCenter.defaultCenter postNotificationName:@"HP.LayoutChanged" object:nil];
+        HPLightEngine *engine=HPLightEngine.shared;
+        if(engine.mode>=0){[engine reloadLights];[engine requestRetarget];}
     };
     self.canvas.picked=^(NSDictionary *light){HPSpatialEditor *editor=weakSelf;if(!editor||HPIdentifying)return;editor.selected=[editor.canvas.lights indexOfObject:light];[editor identify];};
     UIStackView *actions=[UIStackView new];actions.axis=UILayoutConstraintAxisHorizontal;actions.spacing=12;actions.distribution=UIStackViewDistributionFillEqually;
@@ -64,15 +66,21 @@
     for(UIButton *button in @[self.identifyButton,self.nextButton]){button.backgroundColor=[UIColor colorWithRed:.18 green:.19 blue:.27 alpha:1];button.layer.cornerRadius=13;[button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:44].active=YES;[actions addArrangedSubview:button];}[stack insertArrangedSubview:actions atIndex:3];
     [stack addArrangedSubview:[self label:@"Your lights" size:16]];
     for(NSUInteger i=0;i<self.canvas.lights.count;i++){NSDictionary *light=self.canvas.lights[i];UIButton *name=[UIButton buttonWithType:UIButtonTypeSystem];name.tag=i;[name setTitle:[NSString stringWithFormat:@"%lu   %@",(unsigned long)i+1,light[@"name"]]forState:UIControlStateNormal];name.contentHorizontalAlignment=UIControlContentHorizontalAlignmentLeft;[name addTarget:self action:@selector(selectNamed:)forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:name];}
-    UILabel *note=[self label:@"The starting grid is a guide. Your placements drive the direction and distance of spatial effects. Returning to Studio keeps the lights paused until you tap Resume or choose a mood." size:12];note.textColor=[UIColor colorWithWhite:.55 alpha:1];[stack addArrangedSubview:note];
+    UILabel *note=[self label:@"Your map controls the spatial effects. Journeys continue while browsing; identifying one bulb briefly pauses the sender, then automatically resumes." size:12];note.textColor=[UIColor colorWithWhite:.55 alpha:1];[stack addArrangedSubview:note];
 }
 - (void)selectNamed:(UIButton *)button{if(HPIdentifying)return;self.selected=button.tag;[self identify];}
 - (void)nextLight{if(HPIdentifying||!self.canvas.lights.count)return;self.selected=(self.selected+1)%self.canvas.lights.count;[self identify];}
 - (void)identify{
-    if(HPIdentifying||self.selected>=self.canvas.lights.count)return;NSDictionary *light=self.canvas.lights[self.selected];[HPLightEngine.shared stop];
+    if(HPIdentifying||self.selected>=self.canvas.lights.count)return;NSDictionary *light=self.canvas.lights[self.selected];
+    // Identification briefly needs exclusive ownership of the mesh:
+    // resume the same running journey when the identifying command returns.
+    HPLightEngine *engine=HPLightEngine.shared;BOOL resumePlayback=engine.mode>=0;
+    if(resumePlayback)[engine stop];
     for(UIButton *pin in self.canvas.pins)pin.layer.borderWidth=pin.tag==(NSInteger)self.selected?3:1;[self.canvas bringSubviewToFront:self.canvas.pins[self.selected]];
     self.status.text=[NSString stringWithFormat:@"%lu · %@ · look for amber or cyan",(unsigned long)self.selected+1,light[@"name"]];self.identifyButton.enabled=NO;self.nextButton.enabled=NO;
-    __weak HPSpatialEditor *weakSelf=self;HPIdentifyLight(light,^(NSError *error){HPSpatialEditor *editor=weakSelf;if(!editor)return;editor.status.text=error.localizedDescription?:[NSString stringWithFormat:@"%lu · %@ · colour restored",(unsigned long)editor.selected+1,light[@"name"]];editor.identifyButton.enabled=YES;editor.nextButton.enabled=YES;});
+    __weak HPSpatialEditor *weakSelf=self;HPIdentifyLight(light,^(NSError *error){HPSpatialEditor *editor=weakSelf;if(!editor)return;editor.status.text=error.localizedDescription?:[NSString stringWithFormat:@"%lu · %@ · colour restored",(unsigned long)editor.selected+1,light[@"name"]];editor.identifyButton.enabled=YES;editor.nextButton.enabled=YES;
+        if(resumePlayback)[HPLightEngine.shared resume];
+    });
 }
 - (void)done{if(self.navigationController.viewControllers.count>1)[self.navigationController popViewControllerAnimated:YES];else[self dismissViewControllerAnimated:YES completion:nil];}
 @end
