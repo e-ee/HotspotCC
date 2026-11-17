@@ -120,8 +120,8 @@ int main(void){
     assert(gradientMoments>100&&greenMoments>70);
     for(int m=0;m<3;m++){
         const int modes[3]={34,40,41};
-        HPColor a=HPSkyCornerAuroraMood(0,m,150,.50,1);
-        HPColor b=HPSkyCornerAuroraMood(1,m,150,.50,1);
+        HPColor a=HPSkyCornerAuroraMood(0,modes[m],150,.50,1);
+        HPColor b=HPSkyCornerAuroraMood(1,modes[m],150,.50,1);
         valid(a);valid(b);
         assert(hd(a.hue,b.hue)>.02);
     }
