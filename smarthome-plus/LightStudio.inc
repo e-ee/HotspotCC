@@ -267,31 +267,43 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 }
 - (void)tick {
     if((self.mode<0&&!self.adjusting)||!self.lights.count)return;
-    double now=NSProcessInfo.processInfo.systemUptime,gap=now-self.lastTick,elapsed=HPClamp(gap,0,.25);self.lastTick=now;
-    if(gap>4){self.needsRead=YES;elapsed=0;}
+    double now=NSProcessInfo.processInfo.systemUptime;
+    double gap=HPClamp(now-self.lastTick,0,86400);self.lastTick=now;
+    double sendElapsed=HPClamp(gap,0,.25);
+    BOOL foreground=UIApplication.sharedApplication.applicationState!=UIApplicationStateBackground;
+    double clockElapsed=foreground?HPClamp(gap,0,120):0;
+    // UI navigation and nested presentation can delay the main run loop.
+    // Keep the animation on a MONOTONIC CLOCK, not a count of timer ticks.
+    // Reconcile native bulb state only for genuinely long suspensions.
+    if(gap>30||!foreground){self.needsRead=YES;sendElapsed=0;}
+    if(self.mode>=0){
+        self.phase+=clockElapsed*HPMotionRate(self.speed)*self.playbackRate*
+           (self.sleepActive?1-.9*HPEase(self.sleepElapsed/MAX(1,self.sleepDuration)):1);
+        if(self.journey>=0){
+            double canonical=HPJourneyCycleSeconds((int)self.journey);
+            double rate=canonical/(HPClamp(self.journeyDurationMinutes,2,48)*60.);
+            self.journeyElapsed=fmod(self.journeyElapsed+clockElapsed*rate,canonical);
+        }else self.journeyElapsed+=clockElapsed*self.playbackRate;
+        if(self.journeyShuffling){
+            self.journeyShuffleElapsed+=clockElapsed;
+            if(self.journeyShuffleElapsed>=18){
+                self.journeyShuffling=NO;
+                self.journeyPreviousSeed=self.journeyShuffleSeed;
+            }
+        }
+        [self advanceCreative:clockElapsed];if(self.mode<0)return;
+    }
+    // The playback clock above advances EVEN WHEN the mesh is reconnecting.
+    // Otherwise visiting menus during a short disconnection looks like Pause.
     if(!HPTransportOpen()){
         self.needsRead=YES;
-        self.status=@"Reconnecting to your lights";
+        self.status=@"Reconnecting to your lights · animation clock running";
         if(!self.connecting&&now-self.lastConnectAttempt>8){self.connecting=YES;self.lastConnectAttempt=now;
             id bearer=HPGet(NSClassFromString(@"SigBearer"),@"share");SEL connect=NSSelectorFromString(@"startMeshConnectWithComplete:");
             if([bearer respondsToSelector:connect])((void(*)(id,SEL,id))objc_msgSend)(bearer,connect,^(BOOL ok){dispatch_async(dispatch_get_main_queue(),^{self.connecting=NO;});});else self.connecting=NO;
         }return;
     }
-    if(self.needsRead){self.generation++;[self.states removeAllObjects];[self.sent removeAllObjects];[HPCommandColours removeAllObjects];self.needsRead=NO;self.status=@"Resuming from the light controls";elapsed=0;}
-    if(self.mode>=0){
-        self.phase+=elapsed*HPMotionRate(self.speed)*self.playbackRate*(self.sleepActive?1-.9*HPEase(self.sleepElapsed/MAX(1,self.sleepDuration)):1);
-        if(self.journey>=0){
-            // Full cycle in 2..48 REAL minutes, regardless of the Speed slider.
-            double canonical=HPJourneyCycleSeconds((int)self.journey);
-            self.journeyElapsed+=elapsed*canonical/(HPClamp(self.journeyDurationMinutes,2,48)*60.);
-            if(self.journeyElapsed>=canonical)self.journeyElapsed=fmod(self.journeyElapsed,canonical);
-        }else self.journeyElapsed+=elapsed*self.playbackRate;
-        if(self.journeyShuffling){
-            self.journeyShuffleElapsed+=elapsed;
-            if(self.journeyShuffleElapsed>=18){self.journeyShuffling=NO;self.journeyPreviousSeed=self.journeyShuffleSeed;}
-        }
-        [self advanceCreative:elapsed];if(self.mode<0)return;
-    }
+    if(self.needsRead){self.generation++;[self.states removeAllObjects];[self.sent removeAllObjects];[HPCommandColours removeAllObjects];self.needsRead=NO;self.status=@"Resuming from the light controls";sendElapsed=0;}
     id peripheral=HPGet(HPGet(NSClassFromString(@"SigBearer"),@"share"),@"getCurrentPeripheral");SEL ready=NSSelectorFromString(@"canSendWriteWithoutResponse");
     if([peripheral respondsToSelector:ready]&&!((BOOL(*)(id,SEL))objc_msgSend)(peripheral,ready))return;
     if(HPTransportBusy())return;
