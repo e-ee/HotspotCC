@@ -3,7 +3,7 @@
 #include <math.h>
 #include <stdint.h>
 #define HP_MODE_COUNT 40
-#define HP_JOURNEY_COUNT 9
+#define HP_JOURNEY_COUNT 41
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
@@ -107,7 +107,7 @@ static inline double HPHeldDepth(double saturation,double startingDepth,double d
 // Native cycle durations for built-in journeys; the UI scales virtual time.
 static inline double HPJourneyCycleSeconds(int journey){
     static const int chapterCounts[6]={5,6,5,5,6,6};
-    if(journey>=6&&journey<=8)return 2880.;
+    if(journey>=6&&journey<HP_JOURNEY_COUNT)return 2880.;
     if(journey>=0&&journey<6)return chapterCounts[journey]*360.;
     return 2880.;
 }
@@ -117,7 +117,7 @@ static inline double HPJourneyCycleSeconds(int journey){
 static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,double phase,double x,double y,double brightness,double depth,uint32_t variation){
     phase=isfinite(phase)?phase:0;
     x=isfinite(x)?HPClamp(x,0,1):.5;y=isfinite(y)?HPClamp(y,0,1):.5;
-    const int skyMode=(mode>=34&&mode<=39),skyJourney=(journey>=6&&journey<=8),sky=skyMode||skyJourney;
+    const int skyMode=(mode>=34&&mode<=39),skyJourney=(journey>=6&&journey<HP_JOURNEY_COUNT),sky=skyMode||skyJourney;
     // Never rotate the physical room map for sky effects: greens stay peripheral.
     if(sky&&variation)phase+=(variation%997)*.11;
     if(variation&&!sky){
