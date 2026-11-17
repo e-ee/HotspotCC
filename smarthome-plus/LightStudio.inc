@@ -302,10 +302,20 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     // A user's choice must reach the sender on the next visit to this bulb,
     // rather than spending minutes behind the 1-degree/sec ambient limiter.
     // The explicit native fade below provides the physical interpolation.
-    BOOL requested=[self.retargets containsObject:key];state.color=requested?target:HPChoreographyDrift(state.color,target,now-state.updatedAt);state.updatedAt=now;
+    BOOL requested=[self.retargets containsObject:key];
+    if(requested)state.color=target;
+    else if(self.journey>=6&&self.journey<HP_JOURNEY_COUNT)
+        state.color=HPSkyAdaptiveDrift(state.color,target,now-state.updatedAt,self.journeyDurationMinutes);
+    else state.color=HPChoreographyDrift(state.color,target,now-state.updatedAt);
+    state.updatedAt=now;
     HPWireColor wire=HPVendorColor(state.color);NSArray *previous=self.sent[key];
     if(previous&&[previous[0]unsignedShortValue]==wire.lightness&&[previous[1]unsignedShortValue]==wire.hue&&[previous[2]unsignedShortValue]==wire.saturation){[self completeRetarget:key];return;}
     uint8_t steps=HPSmoothTransitionSteps((unsigned)self.lights.count);
+    // At 2 min the eight chapters each last just 15 seconds. A fixed
+    // 4-6 second bulb fade hides most of that variation. Use a shorter,
+    // still-native interpolation only for the rapid aurora programmes.
+    if(self.journey>=6&&self.journey<HP_JOURNEY_COUNT&&self.journeyDurationMinutes<=8)
+        steps=(uint8_t)HPClamp(ceil(22.+self.journeyDurationMinutes*2.3),26,40);
     id transition=((id(*)(id,SEL))objc_msgSend)(NSClassFromString(@"SigTransitionTime"),@selector(alloc));
     transition=((id(*)(id,SEL,uint8_t))objc_msgSend)(transition,NSSelectorFromString(@"initWithRawValue:"),steps);
     SEL set=NSSelectorFromString(@"lightHSLSetWithDestination:HSLLight:HSLHue:HSLSaturation:transitionTime:delay:retryCount:responseMaxCount:ack:successCallback:resultCallback:");Class sdk=NSClassFromString(@"SDKLibCommand");
@@ -523,7 +533,7 @@ static UIViewController *HPCreateStudioTools(void);
     [self.journeyShuffleButton.widthAnchor constraintEqualToConstant:92].active=YES;
     [journeyRow addArrangedSubview:self.journeyShuffleButton];
     [self.journeyControlPanel addArrangedSubview:journeyRow];
-    UILabel *journeyHint=[self text:@"Cycles continuously. Changes take effect live without restarting." size:11];
+    UILabel *journeyHint=[self text:@"8 distinct colour chapters in every loop. Timing changes live." size:11];
     journeyHint.font=[UIFont systemFontOfSize:11];
     journeyHint.textColor=[UIColor colorWithWhite:.65 alpha:1];
     [self.journeyControlPanel addArrangedSubview:journeyHint];
@@ -546,7 +556,7 @@ static UIViewController *HPCreateStudioTools(void);
         UIStackView *pair=[UIStackView new];pair.axis=UILayoutConstraintAxisHorizontal;pair.spacing=11;pair.distribution=UIStackViewDistributionFillEqually;
         for(int col=0;col<2;col++){int mode=[HPThemeOrder()[row*2+col]intValue];HPModeCard *card=[self card:HPThemeNames()[mode]detail:HPThemeDetails()[mode]mode:mode journey:-1];card.tag=mode;card.accessibilityIdentifier=[@"HP.Mood."stringByAppendingString:HPThemeNames()[mode]];[card addTarget:self action:@selector(selectTheme:)forControlEvents:UIControlEventTouchUpInside];[pair addArrangedSubview:card];}[self.gallery addArrangedSubview:pair];
     }}else if(category==1){
-        UILabel *hint=[self text:@"Blue Sky auroral journeys unfold over 48 minutes with gentle dissolves. Other journeys retain their original timing. All repeat."size:12];hint.textColor=[UIColor colorWithWhite:.62 alpha:1];[self.gallery addArrangedSubview:hint];
+        UILabel *hint=[self text:@"Choose your colour story. The duration slider above makes each journey repeat in 2 to 48 minutes. Eight distinct scenes per cycle." size:12];hint.textColor=[UIColor colorWithWhite:.62 alpha:1];[self.gallery addArrangedSubview:hint];
         for(int i=0;i<HP_JOURNEY_COUNT;i++){int n=i<3?i+6:i-3;HPModeCard *card=[self card:HPJourneyNames()[n]detail:HPJourneyDetails()[n]mode:0 journey:n];card.tag=n;card.accessibilityIdentifier=[@"HP.Journey."stringByAppendingString:HPJourneyNames()[n]];[card addTarget:self action:@selector(selectJourney:)forControlEvents:UIControlEventTouchUpInside];[self.gallery addArrangedSubview:card];}
     }else{
         NSArray *recipes=HPSavedMoods();UILabel *hint=[self text:recipes.count?@"Tap to play. Touch and hold a mood to delete it.":@"Find a look you love. Use More, then Save moving mood to keep its colours, motion and starting point."size:13];hint.textColor=[UIColor colorWithWhite:.65 alpha:1];[self.gallery addArrangedSubview:hint];
@@ -561,7 +571,13 @@ static UIViewController *HPCreateStudioTools(void);
     BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.playbackSlider.enabled=enabled;self.playbackLabel.text=[NSString stringWithFormat:@"Speed %.1f×",engine.playbackRate];
     self.journeyDurationSlider.enabled=enabled;
     self.journeyShuffleButton.enabled=enabled;
-    self.journeyDurationLabel.text=[NSString stringWithFormat:@"Journey duration · %.0f min · Repeat on",engine.journeyDurationMinutes];
+    if(engine.journey>=6&&engine.journey<HP_JOURNEY_COUNT){
+        double canonical=HPJourneyCycleSeconds((int)engine.journey);
+        double t=fmod(engine.journeyElapsed,canonical);
+        int chapter=(int)(t/(canonical/HP_SKY_CHAPTERS))+1;
+        double realTime=t/canonical*engine.journeyDurationMinutes*60.;
+        self.journeyDurationLabel.text=[NSString stringWithFormat:@"Journey %.0f min · scene %d/8 · %02d:%02d elapsed · Repeat",engine.journeyDurationMinutes,chapter,(int)realTime/60,(int)realTime%60];
+    }else self.journeyDurationLabel.text=[NSString stringWithFormat:@"Journey %.0f min · repeats",engine.journeyDurationMinutes];
     self.journeyDurationSlider.accessibilityValue=[NSString stringWithFormat:@"%.0f minutes",engine.journeyDurationMinutes];self.shuffleButton.enabled=enabled&&engine.lights.count>0;
     self.brightnessLabel.text=[NSString stringWithFormat:@"Brightness %.0f%%",engine.brightness*100];self.motionLabel.text=[NSString stringWithFormat:@"Motion %.1f×",HPMotionRate(engine.speed)];self.depthLabel.text=[NSString stringWithFormat:@"Colour depth %.0f%%",engine.depth*100];
     // Do not assign slider.value on the refresh timer; the user's thumb owns it.
