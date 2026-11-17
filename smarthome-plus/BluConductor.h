@@ -145,6 +145,9 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
         double exchange=HPClamp(wave*HPBluAmplitude(program)*HPClamp(blend,0,1),0,.98);
         // The same exchange factor is used on BOTH sides.
         c=HPBluLerp(me->anchor,other->anchor,exchange);
+        // Exchange HUE and SATURATION, never the fixture's own saved level.
+        // A ceiling lamp and a wall lamp should not trade brightness.
+        c.lightness=me->anchor.lightness;
     }else{
         // Ineligible/non-green bulbs stay in their Blu colour family.
         // They subtly modulate lightness, never turn unrelated bulbs green.
@@ -165,7 +168,10 @@ static inline HPColor HPBluTarget(const HPBluStage *stage,int index,int journey,
     // .48 is the Blu-era master level in the supplied Home backup.
     double multiplier=HPClamp(brightness/.48,.18,2.05);
     c.lightness=(float)HPClamp(c.lightness*multiplier,0,1);
-    c.saturation=HPColourDepth(c.saturation,depth);
+    // Exact scene fidelity at depth=1. The generic HPColourDepth would
+    // force ALL bulbs to 100% saturation at that value, destroying the
+    // nuanced Blu gradient and causing the harsh RGB look the user rejects.
+    c.saturation=(float)HPClamp(c.saturation*HPClamp(depth,.25,1),0,1);
     return c;
 }
 #endif
