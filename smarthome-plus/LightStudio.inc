@@ -7,14 +7,14 @@
 
 static NSArray *HPThemeNames(void){return @[@"Aurora",@"Comet",@"Ocean",@"Embers",@"Neon",@"Prism",@"Breathe",@"Velvet",@"Sunset",@"Moonlight",@"Fireflies",@"Tide",@"Silk",@"Rain",@"Dawn",@"Orbit",@"Forest Mist",@"Lagoon",@"Heather",@"Opal",@"Blue Hour",@"Coast",@"Rose Dusk",@"Polar Mist",@"Emerald Sky",@"Fjord",@"Cherry Blossom",@"Solstice",@"Nebula",@"Sea Glass",@"Candle Garden",@"Kaleidoscope",@"Living Aurora",@"Cabin",@"Blue Sky Aurora",@"Blu Drift",@"Polar Silk",@"Rose Horizon",@"Glacial Cloud",@"Violet Flight",@"Hekla Aurora",@"Emerald Veils",@"Blu Original",@"Blu Silk",@"Blu Canopy",@"Blu Crossing",@"Blu Waterfall",@"Blu Starlight"];}
 static NSArray *HPThemeDetails(void){return @[@"Original jade, blue and violet ribbons",@"A soft glow drifting through home",@"Long, quiet teal swells",@"A steady, living amber glow",@"Soft rose and turquoise drift",@"A slow journey through colour",@"Gentle, warm breathing light",@"Quiet plum and indigo",@"Honey and peach across home",@"Soft silver-blue moonlight",@"Warm pools wandering nearby",@"Quiet rings through your space",@"Rose and lilac ribbons",@"Cool light drifting downward",@"A slow wash of warm morning",@"Colour circling the apartment",@"Sage and eucalyptus in the mist",@"Still turquoise, deepening blue",@"Lilac hills under a quiet sky",@"Pearl, sea glass and lavender",@"The sky just after sunset",@"Pale blue meeting soft green",@"Dusty rose fading into mauve",@"Jade and ice-blue veils",@"Deep greens in layered ribbons",@"Blue water flowing between cliffs",@"Rose and lilac petals drifting",@"Amber and gold flowing softly",@"Violet clouds in deep blue",@"Jade and turquoise crossing gently",@"Wandering pools of candlelight",@"Mirrored colour fields turning slowly",@"Layered jade curtains, indigo and violet",@"Amber firelight and warm rose shadows",@"Warm blue centre, lilac and pink at the edges",@"Your Blu look with drifting lavender",@"Soft warm blue with pale lilac fringes",@"Blue sky touched by pastel rose",@"Periwinkle and softly drifting lilac",@"Violet-blue with restrained pink edges",@"Vivid Icelandic emerald through warm blue and violet",@"Natural oxygen-green curtains crossing blue and pink",@"Your real Blu scene, moving almost imperceptibly",@"Green and blue gently exchange across neighbouring bulbs",@"L6 canopy leads a spacious blue-green ceiling gradient",@"Green travels only between original paired scene bulbs",@"Wall-to-ceiling sea-glass light moving together",@"Quiet blue sky with rare teal and green ribbons"];}
-static NSArray *HPThemeOrder(void){return @[@42,@43,@44,@45,@46,@47,@40,@41,@34,@35,@36,@37,@38,@39,@32,@0,@33,@24,@25,@26,@27,@28,@29,@30,@31,@16,@17,@18,@19,@20,@21,@22,@23,@2,@8,@9,@11,@12,@13,@14,@3,@6,@7,@1,@4,@5,@10,@15];}
+static NSArray *HPThemeOrder(void){return @[@42,@34,@24,@43,@8,@32,@44,@29,@40,@35,@45,@12,@33,@46,@17,@36,@47,@41,@37,@38,@39,@0,@25,@26,@27,@28,@30,@31,@16,@18,@19,@20,@21,@22,@23,@2,@9,@11,@13,@14,@3,@6,@7,@1,@4,@5,@10,@15];}
 static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening",@"Forest after rain",@"Velvet night",@"Golden hour",@"Blue Sky Aurora",@"Lavender Veils",@"Rose Cabin",@"Airliner Blue",@"Aurora Lilac",@"Blu Afterglow",@"Cabin Clouds",@"Skywalk",@"Periwinkle Sky",@"Polar Lavender",@"Rose Horizon",@"Violet Altitude",@"Blush Above",@"Quiet Lilac",@"Ice Silk",@"Coastal Violet",@"Moonlit Rose",@"Soft Cerulean",@"Warm Blue Breeze",@"Periwinkle Glow",@"Silver Lilac",@"Blue Violet Bloom",@"Aurora Ribbon",@"Pink Cabin",@"Rose Quartz",@"Soft Lavender",@"Lilac Twilight",@"Rose Cloud",@"Lavender Dusk",@"Pink Horizon",@"Petal Veil",@"Blush Glow",@"Pink Silk",@"Rosy Twilight",@"Soft Rose Night",@"Hekla Aurora",@"Emerald Curtains",@"Polar Crown",@"Blu Living",@"Blu Exchange",@"Aurora Boundary",@"Ceiling Canopy",@"Northlight Ribbons",@"Glacial Waterfall",@"Luminous Diagonal",@"Blu Constellations",@"Twin Wall Aurora",@"Quiet Sky",@"Ceiling Bloom",@"Crosswind Blue"];}
 static NSArray *HPJourneyDetails(void){return @[@"Jade ribbons, lilac and blue hour",@"Sea glass, deep water and moonlight",@"Peach, embers and quiet fireflies",@"Emerald, sea glass and fjord blue",@"Blossom, violet clouds and moonlight",@"Sunrise, golden skies and candlelight",@"Adjustable warm blue, lilac and pink aurora",@"Slow lavender and periwinkle curtains",@"Soft warm-blue and rosy cabin light",@"Boeing-inspired warm blue with lilac edges",@"Soft layered lavender over a blue ceiling",@"Your Blu mood carried into warm purple",@"Soft blue and pastel violet cabin veils",@"Airy blue fading into lavender and pink",@"Gentle periwinkle and lilac aurora",@"Blushed violet with blue at the centre",@"Rose pink at the periphery of a blue room",@"Warm blue with lilac ribbons",@"Soft blue fading into pale rose",@"A quiet blue and lilac glow",@"Cloud-blue, warm violet and subtle pink",@"Silky periwinkle veils with blush edges",@"Soft rose near the walls, blue overhead",@"Warm cerulean blended into pale lilac",@"Subtle blue-to-violet curtain movement",@"Periwinkle and pink in slow motion",@"Silver-lilac highlights over warm blue",@"Blue-violet and pink layered ribbons",@"Smooth ribbons of warm blue and lilac",@"Soft pastel pink around a lavender centre",@"Rose quartz and lilac, never bright",@"Silky lavender and soft pink waves",@"Lilac dusk drifting into rosy violet",@"Blush pink, lilac and periwinkle",@"Warm purple evenings with pale pink",@"Rose accents travelling along the edges",@"Pink and lilac in long ambient veils",@"Quiet pink with violet layers",@"Silky blue-purple with blush gradients",@"Warm lavender slowly deepening to pink",@"Extra gentle pink and periwinkle at night",@"Brilliant Icelandic green sweeping into blue and violet",@"Living emerald ribbons rising over the ceiling and wall",@"Layers of green, turquoise and polar lavender",@"Exact blu. bulb palette, gently animated",@"Green and blue gracefully trade places",@"The green-blue boundary moves across the room",@"L6 leads soft ceiling curtains over blue walls",@"Blue-green waves travel between the real matched bulbs",@"Overlapping sea-glass light flows downward",@"Diagonal colour gradients between mapped bulbs",@"Different blue and green constellations evolve in time",@"Linked wall pairs move together in complementary colours",@"Understated green against a spacious blue atmosphere",@"The ceiling leads and the room responds",@"Alternating currents move blue and green around the room"];}
 static NSArray *HPJourneyOrder(void){
     // Display genuinely emerald journeys first and never duplicate a card.
     // The old i<3 ? i+6 : i-3 expression duplicated 6..8 and hid the
     // final journeys whenever the catalogue was expanded.
-    NSMutableArray *result=[NSMutableArray arrayWithArray:@[@44,@45,@46,@47,@48,@49,@50,@51,@52,@53,@54,@55,@6,@28,@41,@42,@43,@10,@7,@8]];
+    NSMutableArray *result=[NSMutableArray arrayWithArray:@[@44,@6,@8,@45,@28,@41,@46,@15,@47,@7,@48,@29,@49,@18,@50,@32,@51,@42,@52,@16,@53,@25,@54,@43,@55,@10]];
     for(NSInteger n=0;n<HP_JOURNEY_COUNT;n++)if(![result containsObject:@(n)])[result addObject:@(n)];
     return result;
 }
@@ -84,7 +84,6 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)changeJourneyDuration:(double)minutes;
 - (BOOL)loadBluScene;
 - (void)changeBluMix:(double)value;
-- (void)selectBluScene:(NSString *)name;
 - (void)shuffleJourney;
 - (void)resume;
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget;
@@ -137,8 +136,7 @@ static NSString *HPBluCanonicalName(NSString *name){
     engine.playbackRate=[prefs objectForKey:@"HP.PlaybackRate"]?HPClamp([prefs doubleForKey:@"HP.PlaybackRate"],.1,100):1;
     engine.journeyDurationMinutes=[prefs objectForKey:@"HP.JourneyCycleMinutes"]?HPClamp([prefs doubleForKey:@"HP.JourneyCycleMinutes"],2,48):48;
     engine.bluMix=[prefs objectForKey:@"HP.BluBlend"]?HPClamp([prefs doubleForKey:@"HP.BluBlend"],0,1):.78;
-    NSString *savedBlu=[prefs stringForKey:@"HP.BluSource"];
-    engine.bluSceneName=[savedBlu isEqualToString:@"blu.2"]?@"blu.2":@"blu.";
+    engine.bluSceneName=@"blu."; // fixed reference for aurora presets
     engine.waveAngle=[prefs doubleForKey:@"HP.WaveAngle"];engine.waveReverse=[prefs boolForKey:@"HP.WaveReverse"];engine.rippleAge=100;engine.rippleOrigin=CGPointMake(.5,.5);engine.rippleInward=[prefs boolForKey:@"HP.RippleInward"];
     engine.scope=@"All lights";engine.status=@"Choose a slow drift";
 });return engine;}
@@ -152,13 +150,14 @@ static NSString *HPBluCanonicalName(NSString *name){
     NSMutableArray *selected=[NSMutableArray new];for(NSDictionary *light in all)if([members containsObject:light[@"id"]])[selected addObject:light];self.lights=selected;
 }
 - (BOOL)loadBluScene{
+    self.bluSceneName=@"blu.";
     @try {
         NSArray *routines=HPExportRoutines();
         NSDictionary *selected=nil;
         for(NSDictionary *scene in routines){
             NSString *name=scene[@"routineName"];
             if([name isKindOfClass:NSString.class]&&
-               [[name lowercaseString]isEqualToString:(self.bluSceneName?:@"blu.")]){
+               [[name lowercaseString]isEqualToString:@"blu."]){
                 selected=scene;break;
             }
         }
@@ -239,20 +238,11 @@ static NSString *HPBluCanonicalName(NSString *name){
     [NSUserDefaults.standardUserDefaults setDouble:self.bluMix forKey:@"HP.BluBlend"];
     self.status=[NSString stringWithFormat:@"Blu colour exchange %.0f%%",self.bluMix*100];
 }
-- (void)selectBluScene:(NSString *)name{
-    if(![name isEqualToString:@"blu."]&&![name isEqualToString:@"blu.2"])return;
-    NSString *old=self.bluSceneName;
-    self.bluSceneName=name;
-    BOOL active=HPBluIsAurora((int)self.lastMode,(int)self.journey);
-    if(active&&![self loadBluScene]){self.bluSceneName=old;[self loadBluScene];return;}
-    [NSUserDefaults.standardUserDefaults setObject:name forKey:@"HP.BluSource"];
-    if(active)[self requestRetarget];
-}
 - (NSString *)moodName{if(self.creativeKind)return self.creativeName?:@"Custom look";return self.journey>=0?HPJourneyNames()[self.journey]:HPThemeNames()[self.lastMode];}
 - (HPColor)targetForLight:(NSDictionary *)light{return [self creativeTarget:light];}
 
 - (NSDictionary *)recipeNamed:(NSString *)name{
-    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed),@"creativeBrightness":@((self.creativeKind==2||self.creativeKind==3)?self.brightness:(self.creativeBrightness?:self.brightness)),@"creativeDepth":@((self.creativeKind==2||self.creativeKind==3)?self.depth:(self.creativeDepth?:self.depth)),@"angle":@(self.waveAngle),@"reverse":@(self.waveReverse),@"playbackRate":@(self.playbackRate),@"creativeKind":@((self.creativeKind==2||self.creativeKind==3)?1:self.creativeKind),@"anchorLook":self.anchorLook?:@{},@"painted":(self.creativeKind==2||self.creativeKind==3)?[self snapshotLook]:(self.painted?:@{}),@"exploreVariant":@(self.exploreVariant),@"bluSource":self.bluSceneName?:@"blu.",@"bluBlend":@(self.bluMix)};
+    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed),@"creativeBrightness":@((self.creativeKind==2||self.creativeKind==3)?self.brightness:(self.creativeBrightness?:self.brightness)),@"creativeDepth":@((self.creativeKind==2||self.creativeKind==3)?self.depth:(self.creativeDepth?:self.depth)),@"angle":@(self.waveAngle),@"reverse":@(self.waveReverse),@"playbackRate":@(self.playbackRate),@"creativeKind":@((self.creativeKind==2||self.creativeKind==3)?1:self.creativeKind),@"anchorLook":self.anchorLook?:@{},@"painted":(self.creativeKind==2||self.creativeKind==3)?[self snapshotLook]:(self.painted?:@{}),@"exploreVariant":@(self.exploreVariant),@"bluSource":@"blu.",@"bluBlend":@(self.bluMix)};
 }
 - (BOOL)applyRecipe:(NSDictionary *)recipe error:(NSError **)error{
     NSDictionary *valid=[HPStudioPresets validatedRecipe:recipe error:error];if(!valid)return NO;
@@ -260,7 +250,7 @@ static NSString *HPBluCanonicalName(NSString *name){
     BOOL found=[valid[@"scope"]isEqual:@"All lights"];for(NSDictionary *group in HPMesh()[@"groups"])if([group[@"name"]isEqual:valid[@"scope"]])found=YES;
     if(!found){if(error)*error=HPReadError(@"The room saved in this mood is not in this Home.");return NO;}
     [self stop];[self clearCreative];self.scope=valid[@"scope"];self.brightness=[valid[@"brightness"]floatValue];self.speed=[valid[@"motion"]floatValue];self.depth=[valid[@"depth"]floatValue];self.variation=[valid[@"variation"]unsignedIntValue];self.phase=[valid[@"phase"]doubleValue];self.journeyElapsed=[valid[@"journeyElapsed"]doubleValue];self.waveAngle=[valid[@"angle"]doubleValue];self.waveReverse=[valid[@"reverse"]boolValue];self.playbackRate=[valid[@"playbackRate"]doubleValue]?:1;
-    self.bluSceneName=valid[@"bluSource"]?:@"blu.";
+    self.bluSceneName=@"blu.";
     self.bluMix=[valid[@"bluBlend"]doubleValue];
     NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;[prefs setFloat:self.brightness forKey:@"HP.StudioBrightness"];[prefs setFloat:self.speed forKey:@"HP.StudioMotion"];[prefs setFloat:self.depth forKey:@"HP.StudioDepth"];
     self.creativeKind=[valid[@"creativeKind"]integerValue];self.anchorLook=valid[@"anchorLook"];self.painted=[valid[@"painted"]mutableCopy];self.exploreVariant=[valid[@"exploreVariant"]integerValue];self.creativeName=valid[@"name"];self.creativeBrightness=[valid[@"creativeBrightness"]doubleValue];self.creativeDepth=[valid[@"creativeDepth"]doubleValue];
@@ -616,10 +606,7 @@ static UIViewController *HPCreateStudioTools(void);
 @property(nonatomic,strong) UIButton *scopeButton,*pause,*save,*shuffleButton;
 @property(nonatomic,strong) UISlider *brightnessSlider,*motionSlider,*depthSlider,*playbackSlider,*journeyDurationSlider;
 @property(nonatomic,strong) UILabel *brightnessLabel,*motionLabel,*depthLabel,*playbackLabel,*journeyDurationLabel;
-@property(nonatomic,strong) UIStackView *journeyControlPanel,*bluControlPanel;
-@property(nonatomic,strong) UILabel *bluSourceStatus,*bluBlendLabel;
-@property(nonatomic,strong) UISlider *bluBlendSlider;
-@property(nonatomic,strong) UISegmentedControl *bluSourceSelector;
+@property(nonatomic,strong) UIStackView *journeyControlPanel;
 @property(nonatomic,strong) UIButton *journeyShuffleButton;
 @property(nonatomic,strong) UISegmentedControl *category;
 @property(nonatomic,strong) UIStackView *gallery;
@@ -691,38 +678,6 @@ static UIViewController *HPCreateStudioTools(void);
     [self.journeyControlPanel addArrangedSubview:journeyHint];
     self.journeyControlPanel.hidden=YES;
     [stack addArrangedSubview:self.journeyControlPanel];
-    // Blu Lab: all colours are read from the original saved Blu. routine.
-    // At 0 percent exchange each lamp remains in its exact original colour.
-    self.bluControlPanel=[UIStackView new];
-    self.bluControlPanel.axis=UILayoutConstraintAxisVertical;
-    self.bluControlPanel.spacing=6;
-    self.bluBlendLabel=[self text:@"Blu colour exchange 78%" size:13];
-    self.bluBlendLabel.textColor=[UIColor colorWithRed:.55 green:.88 blue:.89 alpha:1];
-    [self.bluControlPanel addArrangedSubview:self.bluBlendLabel];
-    self.bluBlendSlider=[UISlider new];self.bluBlendSlider.minimumValue=0;
-    self.bluBlendSlider.maximumValue=1;
-    self.bluBlendSlider.value=HPLightEngine.shared.bluMix;
-    self.bluBlendSlider.continuous=YES;
-    self.bluBlendSlider.minimumTrackTintColor=[UIColor colorWithRed:.20 green:.78 blue:.84 alpha:1];
-    self.bluBlendSlider.accessibilityLabel=@"Blu colour-role exchange strength";
-    [self.bluBlendSlider addTarget:self action:@selector(bluBlend:) forControlEvents:UIControlEventValueChanged];
-    [self.bluControlPanel addArrangedSubview:self.bluBlendSlider];
-    UIStackView *sourceRow=[UIStackView new];sourceRow.axis=UILayoutConstraintAxisHorizontal;
-    sourceRow.spacing=8;sourceRow.alignment=UIStackViewAlignmentCenter;
-    self.bluSourceSelector=[[UISegmentedControl alloc]initWithItems:@[@"blu.",@"blu.2"]];
-    self.bluSourceSelector.selectedSegmentIndex=[HPLightEngine.shared.bluSceneName isEqualToString:@"blu.2"]?1:0;
-    [self.bluSourceSelector addTarget:self action:@selector(bluSource:) forControlEvents:UIControlEventValueChanged];
-    [sourceRow addArrangedSubview:self.bluSourceSelector];
-    UIButton *inspect=[self button:@"Inspect Blu" action:@selector(inspectBlu:) filled:NO];
-    [inspect.widthAnchor constraintEqualToConstant:102].active=YES;
-    [sourceRow addArrangedSubview:inspect];
-    [self.bluControlPanel addArrangedSubview:sourceRow];
-    self.bluSourceStatus=[self text:@"Uses the exact saved bulb colours from Blu." size:11];
-    self.bluSourceStatus.font=[UIFont systemFontOfSize:11];
-    self.bluSourceStatus.textColor=[UIColor colorWithWhite:.70 alpha:1];
-    [self.bluControlPanel addArrangedSubview:self.bluSourceStatus];
-    self.bluControlPanel.hidden=YES;
-    [stack addArrangedSubview:self.bluControlPanel];
     self.gallery=[UIStackView new];self.gallery.axis=UILayoutConstraintAxisVertical;self.gallery.spacing=11;[stack addArrangedSubview:self.gallery];
     [self reloadPreview];[HPLightEngine.shared loadBluScene];[self buildGallery];
 }
@@ -757,7 +712,6 @@ static UIViewController *HPCreateStudioTools(void);
     NSInteger category=self.category.selectedSegmentIndex;
     self.journeyControlPanel.hidden=category!=1;
     HPLightEngine *engine=HPLightEngine.shared;
-    self.bluControlPanel.hidden=!HPBluIsAurora((int)engine.lastMode,(int)engine.journey);
     if(category==0){for(int row=0;row<HP_MODE_COUNT/2;row++){
         UIStackView *pair=[UIStackView new];pair.axis=UILayoutConstraintAxisHorizontal;pair.spacing=11;pair.distribution=UIStackViewDistributionFillEqually;
         for(int col=0;col<2;col++){int mode=[HPThemeOrder()[row*2+col]intValue];HPModeCard *card=[self card:HPThemeNames()[mode]detail:HPThemeDetails()[mode]mode:mode journey:-1];card.tag=mode;card.accessibilityIdentifier=[@"HP.Mood."stringByAppendingString:HPThemeNames()[mode]];[card addTarget:self action:@selector(selectTheme:)forControlEvents:UIControlEventTouchUpInside];[pair addArrangedSubview:card];}[self.gallery addArrangedSubview:pair];
@@ -769,7 +723,7 @@ static UIViewController *HPCreateStudioTools(void);
         for(NSDictionary *recipe in recipes){NSString *detail=[NSString stringWithFormat:@"%@ · %@",[recipe[@"journey"]integerValue]>=0?HPJourneyNames()[[recipe[@"journey"]integerValue]]:HPThemeNames()[[recipe[@"mode"]integerValue]],recipe[@"scope"]];HPModeCard *card=[self card:recipe[@"name"]detail:detail mode:[recipe[@"mode"]intValue]journey:[recipe[@"journey"]intValue]];card.recipeID=recipe[@"id"];[card addTarget:self action:@selector(playSaved:)forControlEvents:UIControlEventTouchUpInside];[card addGestureRecognizer:[[UILongPressGestureRecognizer alloc]initWithTarget:self action:@selector(holdSaved:)]];[self.gallery addArrangedSubview:card];}
     }
 }
-- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;self.playbackSlider.value=HPLightEngine.shared.playbackRate;self.journeyDurationSlider.value=HPLightEngine.shared.journeyDurationMinutes;self.bluBlendSlider.value=HPLightEngine.shared.bluMix;}
+- (void)syncSliders{self.brightnessSlider.value=HPLightEngine.shared.brightness;self.motionSlider.value=HPLightEngine.shared.speed;self.depthSlider.value=HPLightEngine.shared.depth;self.playbackSlider.value=HPLightEngine.shared.playbackRate;self.journeyDurationSlider.value=HPLightEngine.shared.journeyDurationMinutes;}
 - (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadPreview];[self syncSliders];[self refresh];[self.previewTimer invalidate];self.previewTimer=[NSTimer timerWithTimeInterval:.2 target:self selector:@selector(refresh)userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:self.previewTimer forMode:NSRunLoopCommonModes];}
 - (void)viewDidDisappear:(BOOL)animated{[super viewDidDisappear:animated];[self.previewTimer invalidate];self.previewTimer=nil;}
 - (void)refresh{
@@ -777,11 +731,6 @@ static UIViewController *HPCreateStudioTools(void);
     BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.playbackSlider.enabled=enabled;self.playbackLabel.text=[NSString stringWithFormat:@"Speed %.1f×",engine.playbackRate];
     self.journeyDurationSlider.enabled=enabled;
     self.journeyShuffleButton.enabled=enabled;
-    self.bluControlPanel.hidden=!HPBluIsAurora((int)engine.lastMode,(int)engine.journey);
-    self.bluBlendSlider.enabled=enabled;
-    self.bluSourceSelector.enabled=enabled;
-    self.bluBlendLabel.text=[NSString stringWithFormat:@"Blu colour exchange %.0f%% · 0%% = original scene",engine.bluMix*100];
-    self.bluSourceStatus.text=engine.bluSceneStatus?:@"Blu source available after loading your saved Home.";
     if(engine.journey>=6&&engine.journey<HP_JOURNEY_COUNT){
         double canonical=HPJourneyCycleSeconds((int)engine.journey);
         double t=fmod(engine.journeyElapsed,canonical);
@@ -811,35 +760,6 @@ static UIViewController *HPCreateStudioTools(void);
     if(self.captureReader||HPIdentifying)return;
     [HPLightEngine.shared shuffleJourney];
     [self refresh];
-}
-- (void)bluBlend:(UISlider *)slider{
-    if(self.captureReader||HPIdentifying)return;
-    [HPLightEngine.shared changeBluMix:slider.value];[self refresh];
-}
-- (void)bluSource:(UISegmentedControl *)control{
-    if(self.captureReader||HPIdentifying)return;
-    [HPLightEngine.shared selectBluScene:control.selectedSegmentIndex==1?@"blu.2":@"blu."];
-    self.bluSourceSelector.selectedSegmentIndex=[HPLightEngine.shared.bluSceneName isEqualToString:@"blu.2"]?1:0;
-    [self buildGallery];[self refresh];
-}
-- (void)inspectBlu:(UIButton *)sender{
-    HPLightEngine *engine=HPLightEngine.shared;
-    if(![engine loadBluScene]){HPAlert(self,@"Blu source",engine.status);return;}
-    HPBluStage stage=engine.bluStage;
-    NSMutableString *message=[NSMutableString stringWithString:engine.bluSceneStatus?:@""];
-    for(int i=0;i<stage.count;i++){
-        HPBluBulb *bulb=&stage.bulb[i];if(!bulb->valid)continue;
-        NSString *name=engine.lights[i][@"name"]?:@"Bulb";
-        [message appendFormat:@"\n%@  %d° · %d%% sat · %d%% brightness%@",
-            name,(int)round(bulb->anchor.hue*360.),
-            (int)round(bulb->anchor.saturation*100.),
-            (int)round(bulb->anchor.lightness*100.),
-            bulb->partner>=0?@" · paired":@""];
-    }
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Original Blu per-bulb colours"
-       message:message preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Done" style:UIAlertActionStyleDefault handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
 }
 - (void)shuffleColours{if(self.captureReader||HPIdentifying)return;[HPLightEngine.shared shuffleColours];[self refresh];}
 - (void)stop{[HPLightEngine.shared stop];[self refresh];}
