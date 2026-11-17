@@ -30,6 +30,7 @@ int main(void){
             assert(difference>.22);
         }
     }
+    int insufficientJourneys=0;
     // All 35 curated journeys have 8 palette chapters, loop seamlessly,
     // and show substantial changes in a 2-minute cycle.
     for(int journey=6;journey<HP_JOURNEY_COUNT;journey++){
@@ -64,10 +65,13 @@ int main(void){
                     fabs(c.saturation-previous.saturation)>.20)bigChanges++;
                 previous=c;
             }
-            if(bigChanges<3)fprintf(stderr,"Journey %d seed %u has only %d major changes\\n",journey,seed,bigChanges);
-            assert(bigChanges>=3);
+            if(bigChanges<3){
+                fprintf(stderr,"Journey %d seed %u has only %d major changes\\n",journey,seed,bigChanges);
+                insufficientJourneys++;
+            }
         }
     }
+    assert(insufficientJourneys==0);
     // L6 ceiling travels across the whole journey, while the wall pair
     // shares phase but samples different locations on the SAME aurora.
     double minHue=1,maxHue=0;int gradients=0;
