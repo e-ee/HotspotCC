@@ -1,8 +1,8 @@
 name: SYLVANIA Plus creative studio
 on:
   push:
-    branches: [smarthome-plus]
-    paths: ['.github/workflows/homeplus-creative.yml', 'smarthome-plus/ChoreographyEngine.inc', 'smarthome-plus/ChoreographyUI.inc', 'smarthome-plus/ChoreographyMath.h', 'smarthome-plus/LightStudio.inc', 'smarthome-plus/StudioPresets.m']
+    branches: [smarthome-plus, blue-sky-aurora-v406]
+    paths: ['.github/workflows/homeplus-creative.yml', 'smarthome-plus/ChoreographyEngine.inc', 'smarthome-plus/ChoreographyUI.inc', 'smarthome-plus/ChoreographyMath.h', 'smarthome-plus/LightStudio.inc', 'smarthome-plus/StudioPresets.m', 'smarthome-plus/EffectPatterns.h', 'smarthome-plus/SkyAurora.h', 'smarthome-plus/test_sky_aurora.c']
   workflow_dispatch:
 concurrency:
   group: homeplus-creative
@@ -19,6 +19,8 @@ jobs:
           mkdir -p build
           clang -std=c11 smarthome-plus/test_choreography.c -lm -o build/test-choreography
           ./build/test-choreography
+          clang -std=c11 -Wall -Wextra -Werror smarthome-plus/test_sky_aurora.c -lm -o build/test-sky-aurora
+          ./build/test-sky-aurora
           clang -fobjc-arc -fblocks smarthome-plus/StudioPresets.m smarthome-plus/test_studio_presets.m -framework Foundation -o build/test-presets
           ./build/test-presets
       - name: Compile iOS 14 add-on and launch screen
