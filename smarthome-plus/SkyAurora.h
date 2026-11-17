@@ -277,6 +277,21 @@ static inline HPColor HPSkyCornerAuroraPair(int role,int journey,double elapsed,
     c.lightness=(float)HPClamp(c.lightness*(role==0?1.12:.98),0,1);
     return c;
 }
+// Companion for the same #9/#12 pair while an animated aurora mood
+// (rather than a Journey) plays. Motion comes from the shared phase.
+static inline HPColor HPSkyCornerAuroraMood(int role,int mode,double phase,
+                                            double brightness,double depth){
+    double x=role==0?.70:.94,y=role==0?.80:.91;
+    HPColor c=HPSkyAuroraMood(mode,phase,x,y,brightness,depth);
+    double wave=.5+.5*sin(phase/53.+.2);
+    double green=HPSkyEase(HPClamp((wave-.15)/.72,0,1));
+    double h=role==0?HPSkyHueMix(.535,.364,green):
+                      HPSkyHueMix(.590,.465,green);
+    c.hue=(float)HPSkyHueMix(c.hue,h,.84);
+    c.saturation=(float)HPClamp(HPSkyMix(c.saturation,role==0?.9:.79,.75),0,1);
+    c.lightness=(float)HPClamp(c.lightness*(role==0?1.12:.98),0,1);
+    return c;
+}
 // Fast chapters need a faster but STILL smooth chase. This is used only
 // for Journeys with short durations, never static scenes or other moods.
 static inline HPColor HPSkyAdaptiveDrift(HPColor old,HPColor target,double elapsed,double minutes){
