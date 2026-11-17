@@ -64,6 +64,7 @@ int main(void){
                     fabs(c.saturation-previous.saturation)>.20)bigChanges++;
                 previous=c;
             }
+            if(bigChanges<3)fprintf(stderr,"Journey %d seed %u has only %d major changes\\n",journey,seed,bigChanges);
             assert(bigChanges>=3);
         }
     }
