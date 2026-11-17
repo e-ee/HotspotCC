@@ -8,8 +8,8 @@
 static NSArray *HPThemeNames(void){return @[@"Aurora",@"Comet",@"Ocean",@"Embers",@"Neon",@"Prism",@"Breathe",@"Velvet",@"Sunset",@"Moonlight",@"Fireflies",@"Tide",@"Silk",@"Rain",@"Dawn",@"Orbit",@"Forest Mist",@"Lagoon",@"Heather",@"Opal",@"Blue Hour",@"Coast",@"Rose Dusk",@"Polar Mist",@"Emerald Sky",@"Fjord",@"Cherry Blossom",@"Solstice",@"Nebula",@"Sea Glass",@"Candle Garden",@"Kaleidoscope",@"Living Aurora",@"Cabin",@"Blue Sky Aurora",@"Blu Drift",@"Polar Silk",@"Teal Horizon",@"Glacial Cloud",@"Midnight Flight"];}
 static NSArray *HPThemeDetails(void){return @[@"Original jade, blue and violet ribbons",@"A soft glow drifting through home",@"Long, quiet teal swells",@"A steady, living amber glow",@"Soft rose and turquoise drift",@"A slow journey through colour",@"Gentle, warm breathing light",@"Quiet plum and indigo",@"Honey and peach across home",@"Soft silver-blue moonlight",@"Warm pools wandering nearby",@"Quiet rings through your space",@"Rose and lilac ribbons",@"Cool light drifting downward",@"A slow wash of warm morning",@"Colour circling the apartment",@"Sage and eucalyptus in the mist",@"Still turquoise, deepening blue",@"Lilac hills under a quiet sky",@"Pearl, sea glass and lavender",@"The sky just after sunset",@"Pale blue meeting soft green",@"Dusty rose fading into mauve",@"Jade and ice-blue veils",@"Deep greens in layered ribbons",@"Blue water flowing between cliffs",@"Rose and lilac petals drifting",@"Amber and gold flowing softly",@"Violet clouds in deep blue",@"Jade and turquoise crossing gently",@"Wandering pools of candlelight",@"Mirrored colour fields turning slowly",@"Layered jade curtains, indigo and violet",@"Amber firelight and warm rose shadows",@"Boeing-inspired blue centre, green only at edges",@"Your Blu look with delicate, drifting teal",@"Soft polar blue with very pale cyan fringes",@"Calm blue sky above a brighter teal edge",@"Icy blue curtains with a gentle side glow",@"Dim cobalt blue, restrained blue-green edges"];}
 static NSArray *HPThemeOrder(void){return @[@34,@35,@36,@37,@38,@39,@32,@0,@33,@24,@25,@26,@27,@28,@29,@30,@31,@16,@17,@18,@19,@20,@21,@22,@23,@2,@8,@9,@11,@12,@13,@14,@3,@6,@7,@1,@4,@5,@10,@15];}
-static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening",@"Forest after rain",@"Velvet night",@"Golden hour",@"Blue Sky Aurora",@"Coastal Veils",@"Night Cabin"];}
-static NSArray *HPJourneyDetails(void){return @[@"Jade ribbons, lilac and blue hour",@"Sea glass, deep water and moonlight",@"Peach, embers and quiet fireflies",@"Emerald, sea glass and fjord blue",@"Blossom, violet clouds and moonlight",@"Sunrise, golden skies and candlelight",@"48-minute blue, teal and edge-green auroral drift",@"Glacial blue and silky sea-glass waves",@"Low-light Boeing blue sky, slow night aurora"];}
+static NSArray *HPJourneyNames(void){return @[@"Northern skies",@"Coastal drift",@"Warm evening",@"Forest after rain",@"Velvet night",@"Golden hour",@"Blue Sky Aurora",@"Coastal Veils",@"Night Cabin",@"Airliner Blue",@"Arctic Canopy",@"Blu After Dark",@"Cabin Clouds",@"Skywalk",@"Midnight Ocean",@"Polar Horizon",@"Blue Lagoon",@"Violet Altitude",@"Dusk Above",@"Quiet Fjord",@"Ice Silk",@"Coastal Night",@"Moonlit Teal",@"Soft Cerulean",@"Nordic Breeze",@"Periwinkle Sky",@"Silver Blue",@"Deep Atlantic",@"Aurora Drift",@"Amber Cabin",@"Golden Hourglass",@"Soft Sunset",@"Peach Twilight",@"Rose Cloud",@"Lavender Dusk",@"Candlelight Cabin",@"Apricot Veil",@"Sundown Glow",@"Copper Silk",@"Blush Horizon",@"Nightlight Warm"];}
+static NSArray *HPJourneyDetails(void){return @[@"Jade ribbons, lilac and blue hour",@"Sea glass, deep water and moonlight",@"Peach, embers and quiet fireflies",@"Emerald, sea glass and fjord blue",@"Blossom, violet clouds and moonlight",@"Sunrise, golden skies and candlelight",@"Adjustable blue, teal and edge-green drift",@"Glacial blue and silky sea-glass waves",@"Low-light blue sky, slow night aurora",@"Airliner blue with periphery sea glass",@"Cool blue ceiling, teal veils at the edges",@"Deeper Blu with discreet aqua motion",@"Soft cobalt curtains across a quiet cabin",@"A high-altitude blue with slow aurora waves",@"Dark marine blue with distant teal",@"Faint polar green at the outer edge",@"Sea-glass silhouettes against deep blue",@"Subtle indigo in a dark blue atmosphere",@"Blue dusk fading toward silver-blue",@"Blue fjord light, softly breathing at the edges",@"Pale blue drifting through icy cyan",@"Understated coastal blue after dark",@"Muted teal on the perimeter, navy blue ahead",@"Gentle cerulean sky without bright spots",@"A cooler blue cabin with soft motion",@"Blue with faint periwinkle ribbons",@"Silvered blue in a quiet night sky",@"Dark Atlantic blue with subtle teal",@"Layered blue and teal, continuous and slow",@"Muted amber cabin light, never glaring",@"Warm gold through shadowed amber",@"Peach and warm indigo evening clouds",@"Golden peach drifting into dusk",@"Dusty rose and peach-colored curtains",@"Soft mauve and warm lilac veils",@"Dim amber glow like a candlelit cabin",@"Apricot and champagne in slow waves",@"Deep honey and soft dusk gold",@"Copper pink and amber curtains",@"Rose-gold drifting through deep twilight",@"Very dim warm cabin light for late night"];}
 static NSString *HPMoodStorageKey(void){return HPMeshUUID()?:@"current";}
 static NSArray *HPSavedMoods(void){return [HPStudioPresets validRecipes:[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"][HPMoodStorageKey()]];}
 static void HPStoreMoods(NSArray *moods){NSMutableDictionary *homes=[[NSUserDefaults.standardUserDefaults dictionaryForKey:@"HP.StudioMoods"]mutableCopy]?:[NSMutableDictionary new];homes[HPMoodStorageKey()]=moods;[NSUserDefaults.standardUserDefaults setObject:homes forKey:@"HP.StudioMoods"];}
@@ -58,6 +58,9 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 @property(nonatomic,strong) NSArray *customSteps;
 @property(nonatomic,strong) NSString *creativeName;
 @property(nonatomic) double lastSent,phase,lastTick,lastConnectAttempt,settleUntil,journeyElapsed;
+@property(nonatomic) double journeyDurationMinutes,journeyShuffleElapsed;
+@property(nonatomic) uint32_t journeyShuffleSeed,journeyPreviousSeed;
+@property(nonatomic) BOOL journeyShuffling;
 @property(nonatomic) BOOL oldIdle,backgroundReady,connecting,needsRead,adjusting;
 @property(nonatomic,strong) NSString *scope,*status;
 + (instancetype)shared;
@@ -66,6 +69,8 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)tick;
 - (void)reloadLights;
 - (void)startJourney:(NSInteger)journey;
+- (void)changeJourneyDuration:(double)minutes;
+- (void)shuffleJourney;
 - (void)resume;
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget;
 - (void)changeBrightness:(float)value;
@@ -105,6 +110,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     engine.speed=[prefs objectForKey:@"HP.StudioMotion"]?HPClamp([prefs floatForKey:@"HP.StudioMotion"],.15,1):.5;
     engine.depth=[prefs objectForKey:@"HP.StudioDepth"]?HPClamp([prefs floatForKey:@"HP.StudioDepth"],.25,1):1;
     engine.playbackRate=[prefs objectForKey:@"HP.PlaybackRate"]?HPClamp([prefs doubleForKey:@"HP.PlaybackRate"],.1,100):1;
+    engine.journeyDurationMinutes=[prefs objectForKey:@"HP.JourneyCycleMinutes"]?HPClamp([prefs doubleForKey:@"HP.JourneyCycleMinutes"],2,48):48;
     engine.waveAngle=[prefs doubleForKey:@"HP.WaveAngle"];engine.waveReverse=[prefs boolForKey:@"HP.WaveReverse"];engine.rippleAge=100;engine.rippleOrigin=CGPointMake(.5,.5);engine.rippleInward=[prefs boolForKey:@"HP.RippleInward"];
     engine.scope=@"All lights";engine.status=@"Choose a slow drift";
 });return engine;}
@@ -135,7 +141,46 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(self.mode<0){if(error)*error=HPReadError(self.status);return NO;}return YES;
 }
 - (void)start:(NSInteger)mode{if(mode>=34&&mode<=39){self.playbackRate=1;self.speed=.42;[NSUserDefaults.standardUserDefaults setDouble:1 forKey:@"HP.PlaybackRate"];[NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];}[self clearCreative];[self activate:mode journey:-1 reset:self.lastMode!=mode||self.journey!=-1 retarget:YES];}
-- (void)startJourney:(NSInteger)journey{if(journey<0||journey>=HP_JOURNEY_COUNT)return;if(journey>=6){self.playbackRate=1;self.speed=.42;[NSUserDefaults.standardUserDefaults setDouble:1 forKey:@"HP.PlaybackRate"];[NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];}[self clearCreative];[self activate:0 journey:journey reset:self.journey!=journey retarget:YES];}
+- (void)startJourney:(NSInteger)journey{
+    if(journey<0||journey>=HP_JOURNEY_COUNT)return;
+    if(journey>=6){
+        self.playbackRate=1;self.speed=.42;
+        // New ambient programs start comfortable in darkness. The master
+        // brightness slider remains adjustable, but TV lamps are hard-capped.
+        self.brightness=(journey==8||journey>=26)?.38:.48;
+        [NSUserDefaults.standardUserDefaults setDouble:1 forKey:@"HP.PlaybackRate"];
+        [NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];
+        [NSUserDefaults.standardUserDefaults setFloat:self.brightness forKey:@"HP.StudioBrightness"];
+    }
+    self.journeyShuffleSeed=0;self.journeyPreviousSeed=0;
+    self.journeyShuffling=NO;self.journeyShuffleElapsed=0;
+    [self clearCreative];[self activate:0 journey:journey reset:self.journey!=journey retarget:YES];
+}
+- (void)changeJourneyDuration:(double)minutes{
+    if(!isfinite(minutes))return;
+    self.journeyDurationMinutes=HPClamp(minutes,2,48);
+    [NSUserDefaults.standardUserDefaults setDouble:self.journeyDurationMinutes forKey:@"HP.JourneyCycleMinutes"];
+    // Canonical journeyElapsed is untouched: changing duration alters the
+    // remaining playback slope without resetting the active chapter or colour.
+}
+- (void)shuffleJourney{
+    if(self.journeyShuffling)return;
+    if(self.journey<6||self.journey>=HP_JOURNEY_COUNT){
+        [self startJourney:6+(NSInteger)arc4random_uniform(HP_JOURNEY_COUNT-6)];
+    }
+    int previous[4];HPSkyAuroraOrder((int)self.journey,self.journeyShuffleSeed,previous);
+    uint32_t seed=0;
+    for(int attempt=0;attempt<16;attempt++){
+        seed=arc4random();if(!seed)seed=1;
+        int next[4];HPSkyAuroraOrder((int)self.journey,seed,next);
+        BOOL distinct=NO;for(int i=0;i<4;i++)if(previous[i]!=next[i])distinct=YES;
+        if(distinct)break;
+    }
+    self.journeyPreviousSeed=self.journeyShuffleSeed;
+    self.journeyShuffleSeed=seed;
+    self.journeyShuffleElapsed=0;self.journeyShuffling=YES;
+    self.status=@"Shuffling the journey · gently dissolving";
+}
 - (void)resume{[self activate:self.lastMode journey:self.journey reset:NO retarget:NO];}
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget {
     if(mode<0||mode>=HP_MODE_COUNT)return;
@@ -225,7 +270,20 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
         }return;
     }
     if(self.needsRead){self.generation++;[self.states removeAllObjects];[self.sent removeAllObjects];[HPCommandColours removeAllObjects];self.needsRead=NO;self.status=@"Resuming from the light controls";elapsed=0;}
-    if(self.mode>=0){self.phase+=elapsed*HPMotionRate(self.speed)*self.playbackRate*(self.sleepActive?1-.9*HPEase(self.sleepElapsed/MAX(1,self.sleepDuration)):1);self.journeyElapsed+=elapsed*self.playbackRate;[self advanceCreative:elapsed];if(self.mode<0)return;}
+    if(self.mode>=0){
+        self.phase+=elapsed*HPMotionRate(self.speed)*self.playbackRate*(self.sleepActive?1-.9*HPEase(self.sleepElapsed/MAX(1,self.sleepDuration)):1);
+        if(self.journey>=0){
+            // Full cycle in 2..48 REAL minutes, regardless of the Speed slider.
+            double canonical=HPJourneyCycleSeconds((int)self.journey);
+            self.journeyElapsed+=elapsed*canonical/(HPClamp(self.journeyDurationMinutes,2,48)*60.);
+            if(self.journeyElapsed>=canonical)self.journeyElapsed=fmod(self.journeyElapsed,canonical);
+        }else self.journeyElapsed+=elapsed*self.playbackRate;
+        if(self.journeyShuffling){
+            self.journeyShuffleElapsed+=elapsed;
+            if(self.journeyShuffleElapsed>=18){self.journeyShuffling=NO;self.journeyPreviousSeed=self.journeyShuffleSeed;}
+        }
+        [self advanceCreative:elapsed];if(self.mode<0)return;
+    }
     id peripheral=HPGet(HPGet(NSClassFromString(@"SigBearer"),@"share"),@"getCurrentPeripheral");SEL ready=NSSelectorFromString(@"canSendWriteWithoutResponse");
     if([peripheral respondsToSelector:ready]&&!((BOOL(*)(id,SEL))objc_msgSend)(peripheral,ready))return;
     if(HPTransportBusy())return;
