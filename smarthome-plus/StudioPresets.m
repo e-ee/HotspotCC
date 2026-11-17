@@ -5,6 +5,16 @@ static NSDictionary *HPExtendedRecipe(NSDictionary *recipe,NSError **error){
  NSDictionary *defaults=@{@"creativeBrightness":recipe[@"brightness"],@"creativeDepth":recipe[@"depth"],@"angle":@0,@"reverse":@NO,@"playbackRate":@1,@"creativeKind":@0,@"exploreVariant":@0};
  NSDictionary *limits=@{@"creativeBrightness":@[@.08,@1],@"creativeDepth":@[@.25,@1],@"angle":@[@0,@360],@"reverse":@[@0,@1],@"playbackRate":@[@.1,@100],@"creativeKind":@[@0,@4],@"exploreVariant":@[@0,@5]};
  for(NSString *key in defaults){id n=recipe[key]?:defaults[key];NSArray *range=limits[key];if(![n isKindOfClass:NSNumber.class]||!isfinite([n doubleValue])||[n doubleValue]<[range[0]doubleValue]||[n doubleValue]>[range[1]doubleValue]){if(error)*error=[NSError errorWithDomain:@"HP.StudioPresets"code:2 userInfo:@{NSLocalizedDescriptionKey:@"This variation has invalid controls."}];return nil;}result[key]=n;}
+ // Blu Conductor settings are optional so saved moods from every older
+ // version continue to load without changes. No mesh IDs are persisted.
+ id source=recipe[@"bluSource"]?:@"blu.";
+ if(![source isKindOfClass:NSString.class]||
+    (![(NSString *)source isEqualToString:@"blu."]&&
+     ![(NSString *)source isEqualToString:@"blu.2"]))return nil;
+ id blend=recipe[@"bluBlend"]?:@.78;
+ if(![blend isKindOfClass:NSNumber.class]||!isfinite([blend doubleValue])||
+     [blend doubleValue]<0||[blend doubleValue]>1)return nil;
+ result[@"bluSource"]=source;result[@"bluBlend"]=blend;
  NSInteger kind=[result[@"creativeKind"]integerValue];if(kind!=0&&kind!=1&&kind!=4)return nil;
  for(NSString *key in @[@"anchorLook",@"painted"]){id look=recipe[key]?:@{};if(![look isKindOfClass:NSDictionary.class]||[look count]>4096)return nil;
  for(id uid in look){id a=look[uid];if(![uid isKindOfClass:NSString.class]||![a isKindOfClass:NSArray.class]||[a count]!=3)return nil;for(id n in a)if(![n isKindOfClass:NSNumber.class]||!isfinite([n doubleValue])||[n doubleValue]<0||[n doubleValue]>1)return nil;}result[key]=look;}
