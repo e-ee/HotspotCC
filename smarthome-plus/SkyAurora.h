@@ -22,15 +22,6 @@ static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double 
     double h=blue[variant]+.014*(veil-.5)+.010*(second-.5);
     h=h*(1-leftEdge)+left[variant]*leftEdge;
     h=h*(1-rightEdge)+right[variant]*rightEdge;
-    // L6 Lamp is at (0.00, 0.309) in the saved room map. At x=0,
-    // leftEdge==1 previously replaced the animated hue with a nearly
-    // static palette endpoint. Restore a moving ribbon in that small
-    // neighbourhood, interpolating between its edge colour and the
-    // journey's warm-blue centre. The Gaussian keeps the other edge
-    // lamps and central TV region essentially unaffected.
-    double l6Envelope=exp(-pow((y-.309)/.115,2.))*pow(HPClamp((.18-x)/.18,0,1),2.);
-    double ribbon=.5+.5*sin(phase/68.+6.4*y+.30*sin(phase/207.-y*5.));
-    h+=(blue[variant]-h)*l6Envelope*(.05+.84*ribbon);
     double saturation=.77+.09*veil+.04*(leftEdge+rightEdge);
     if(variant==2||variant==4||variant==14||variant==19||variant>=24)saturation-=.13;
     double lightness=(.49+.052*veil+.022*second)*level[variant]*HPClamp(brightness,0,1);
@@ -109,6 +100,35 @@ static inline HPColor HPSkyAuroraJourney(int journey,double elapsed,double phase
     return HPSkyAuroraJourneyShuffled(journey,elapsed,phase,x,y,brightness,depth,0);
 }
 
+// The mapped L6 Lamp is ceiling-high, not the far-left wall lamp. Moving
+// its virtual position through each journey's existing palette produces
+// changing green, teal, blue, lavender and pink without off-theme colours.
+// The 1.2 and 1.3 wall lamps use the SAME wave with a small phase-offset:
+// one auroral curtain with a visible gradient, not separate independent chases.
+static inline double HPSkySharedCurtainPosition(double elapsed,double phase){
+    double cycle=fmod(fmax(0,isfinite(elapsed)?elapsed:0),2880.)/720.;
+    double bend=.13*sin(phase/125.);
+    return .5+.46*sin(6.283185307179586*(cycle+bend));
+}
+static inline HPColor HPSkyMappedAuroraLamp(int role,int journey,double elapsed,double phase,
+                                             double brightness,double depth,uint32_t seed){
+    double sweep=HPSkySharedCurtainPosition(elapsed,phase);
+    // 0 = L6 ceiling, 1 = wall lamp 1.2, 2 = wall lamp 1.3.
+    double x=HPClamp(sweep+(role==1?-.16:role==2?.16:0.),0,1);
+    double y=role==0?.12:role==1?.36:.59;
+    HPColor c=HPSkyAuroraJourneyShuffled(journey,elapsed,phase,x,y,brightness,depth,seed);
+    // L6 is the primary ceiling bounce; the wall pair is subordinate.
+    double factor=role==0?1.10:role==1?.91:.86;
+    c.lightness=(float)HPClamp(c.lightness*factor,0,1);
+    return c;
+}
+// TV bias is different from an aurora: nearly neutral, stationary, soft
+// white, and calibrated visually to the wall. No pure blue and no mandatory
+// 10% cap. Saturation near zero yields a near-neutral RGB mixture rather
+// than a single short-wavelength blue LED. Does not imply true D65 calibration.
+static inline HPColor HPSkyTVBias(double userBrightness){
+    return (HPColor){.57f,.065f,(float)HPClamp(userBrightness*.70,.13,.46)};
+}
 static inline HPColor HPSkyLimitTV(HPColor colour,int tvLamp,int isJourney){
     if(tvLamp&&isJourney)colour.lightness=(float)HPClamp(colour.lightness,0,.10);
     return colour;
