@@ -91,6 +91,13 @@ static inline HPColor HPSkyEmeraldRibbon(HPColor base,double loop,double phase,
     // receive ribbon movement; only TV is replaced with neutral bias later.
     double geography=.76+.20*(1.-x)+.04*sin(y*4.2+6.283185307179586*loop+phase/225.);
     double strength=HPClamp(crest*geography*(personality==2?1.12:personality==1?.94:1.02),0,.97);
+    // When an emerald curtain lifts, reveal an unmistakable sky-blue or
+    // violet section underneath. Without this, the old left-edge green
+    // pigment stays green for several chapters and makes the 2-min
+    // journey feel stuck on a single hue.
+    double lift=HPSkyEase(HPClamp((.53-sweep)/.44,0,1));
+    double revealed=personality==2?.665:personality==1?.730:.635;
+    base.hue=(float)HPSkyHueMix(base.hue,revealed,lift*.78);
     double emerald=.368+.022*sin(6.283185307179586*2.*loop+phase/224.+y*2.1+personality*.7);
     base.hue=(float)HPSkyHueMix(base.hue,emerald,strength);
     // A real saturated green should look green, not greyed-out teal.
@@ -104,7 +111,7 @@ static inline int HPSkyEmeraldProgram(int program){
     // 0 Blue Sky Aurora, 4 Aurora Lilac, 5 Blu Afterglow,
     // 22 Aurora Ribbon, 35 Hekla Aurora, 36 Emerald Curtains,
     // 37 Polar Crown. Other 31 journeys are unchanged.
-    return program==0||program==4||program==5||program==22||
+    return program==0||program==4||program==22||
            program==35||program==36||program==37;
 }
 static inline HPColor HPSkyAuroraMood(int mode,double phase,double x,double y,
