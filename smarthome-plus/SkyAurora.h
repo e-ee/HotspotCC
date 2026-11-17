@@ -34,9 +34,9 @@ static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double 
 // three minutes dissolve into the next chapter, including across the loop.
 static inline void HPSkyAuroraOrder(int journey,uint32_t seed,int order[4]){
     static const uint8_t chapters[HP_SKY_PROGRAMS][4]={
-        {1,0,3,2},
-        {2,4,1,3},
-        {5,1,0,5},
+        {1,0,3,2},   // Hekla-style green edges and warm-blue centre
+        {16,17,18,20}, // lavender/blue auroral curtains
+        {24,27,25,29}, // rosy cabin and pink-periwinkle veils
         {6,0,7,3},
         {7,13,6,2},
         {8,1,4,9},
