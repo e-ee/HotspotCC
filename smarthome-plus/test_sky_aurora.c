@@ -67,7 +67,8 @@ int main(void){
   // not forcibly reduced to 10 percent brightness.
   HPColor tv=HPSkyTVBias(.65);
   assert(tv.saturation<=.10);
-  assert(tv.lightness>.20 && tv.lightness<.47);
+  assert(tv.lightness>.60 && tv.lightness<.70);
+  assert(HPSkyTVBias(1).lightness>.98);
   assert(HPSkyTVBias(.2).lightness<HPSkyTVBias(.8).lightness);
   // 2-minute and 48-minute controls change virtual speed, not palette phase.
   for(double duration=2;duration<=48;duration+=23){
