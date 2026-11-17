@@ -83,7 +83,7 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  double x=[light[@"x"]doubleValue],y=[light[@"y"]doubleValue],u,v;HPDirectedPoint(x,y,self.waveAngle,&u,&v);double phase=self.waveReverse?-self.phase:self.phase;if(self.lastMode==32&&self.variation){phase+=(self.variation%997)*.73;if(self.variation&1)u=1-u;if(self.variation&2)v=1-v;}
  HPColor c=self.lastMode==32?HPLivingAurora(phase,u,v,self.brightness,self.depth):self.lastMode==33?HPStudioTarget(30,-1,0,phase,u,v,self.brightness,self.depth,self.variation):HPStudioTarget((int)self.lastMode,(int)self.journey,self.journeyElapsed,phase,u,v,self.brightness,self.depth,self.variation);
  // Preserve aurora greens; other palettes favour blues, warm tones and violet.
- if(self.lastMode!=0&&self.lastMode!=24&&self.lastMode!=32&&c.hue>.23&&c.hue<.45)c.hue=.48+(c.hue-.23)*.25;
+ if(self.lastMode!=0&&self.lastMode!=24&&self.lastMode!=32&&self.lastMode<34&&c.hue>.23&&c.hue<.45)c.hue=.48+(c.hue-.23)*.25;
  NSString *key=light[@"id"];
  if(self.creativeKind==1&&self.painted[key])c=HPArrayColour(self.painted[key]);
  if(self.creativeKind==2){double position=u;if(self.waveReverse)position=1-position;double t=(self.creativeElapsed/self.creativeDuration-position*self.morphStagger)/(1-self.morphStagger);c=HPBlendColour(HPArrayColour(self.morphFrom[key]),HPArrayColour(self.morphTo[key]),HPEase(t));}
