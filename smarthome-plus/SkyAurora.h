@@ -81,7 +81,9 @@ static inline HPColor HPSkyEmeraldRibbon(HPColor base,double loop,double phase,
     // Space offsets move the veil across mapped lights, not all in sync.
     double u=twopi*(4.*loop+.12*y-.16*x)+phase/185.;
     double sweep=.5+.5*sin(u+.85);
-    double fine=.5+.5*sin(u*.52+2.7*x-1.8*y+.9);
+    // A separate integer-cycle overtone avoids a visible snap when the
+    // 2-48 minute journey wraps back to its first chapter.
+    double fine=.5+.5*sin(6.283185307179586*(2.*loop+.19*x-.14*y)+phase/335.+.9);
     double body=HPSkyEase(HPClamp((sweep-.16)/.67,0,1));
     double shape=HPSkyEase(HPClamp((fine-.10)/.75,0,1));
     double crest=HPClamp(.70*body+.30*shape,0,1);
