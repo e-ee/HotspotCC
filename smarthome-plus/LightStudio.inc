@@ -69,6 +69,10 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 @property(nonatomic) double journeyDurationMinutes,journeyShuffleElapsed;
 @property(nonatomic) uint32_t journeyShuffleSeed,journeyPreviousSeed;
 @property(nonatomic) BOOL journeyShuffling;
+@property(nonatomic) HPBluStage bluStage;
+@property(nonatomic,strong) NSDictionary *bluIndexByID;
+@property(nonatomic,strong) NSString *bluSceneName,*bluSceneStatus;
+@property(nonatomic) double bluMix;
 @property(nonatomic) BOOL oldIdle,backgroundReady,connecting,needsRead,adjusting;
 @property(nonatomic,strong) NSString *scope,*status;
 + (instancetype)shared;
@@ -78,6 +82,9 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
 - (void)reloadLights;
 - (void)startJourney:(NSInteger)journey;
 - (void)changeJourneyDuration:(double)minutes;
+- (BOOL)loadBluScene;
+- (void)changeBluMix:(double)value;
+- (void)selectBluScene:(NSString *)name;
 - (void)shuffleJourney;
 - (void)resume;
 - (void)activate:(NSInteger)mode journey:(NSInteger)journey reset:(BOOL)reset retarget:(BOOL)retarget;
@@ -119,6 +126,9 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     engine.depth=[prefs objectForKey:@"HP.StudioDepth"]?HPClamp([prefs floatForKey:@"HP.StudioDepth"],.25,1):1;
     engine.playbackRate=[prefs objectForKey:@"HP.PlaybackRate"]?HPClamp([prefs doubleForKey:@"HP.PlaybackRate"],.1,100):1;
     engine.journeyDurationMinutes=[prefs objectForKey:@"HP.JourneyCycleMinutes"]?HPClamp([prefs doubleForKey:@"HP.JourneyCycleMinutes"],2,48):48;
+    engine.bluMix=[prefs objectForKey:@"HP.BluBlend"]?HPClamp([prefs doubleForKey:@"HP.BluBlend"],0,1):.78;
+    NSString *savedBlu=[prefs stringForKey:@"HP.BluSource"];
+    engine.bluSceneName=[savedBlu isEqualToString:@"blu.2"]?@"blu.2":@"blu.";
     engine.waveAngle=[prefs doubleForKey:@"HP.WaveAngle"];engine.waveReverse=[prefs boolForKey:@"HP.WaveReverse"];engine.rippleAge=100;engine.rippleOrigin=CGPointMake(.5,.5);engine.rippleInward=[prefs boolForKey:@"HP.RippleInward"];
     engine.scope=@"All lights";engine.status=@"Choose a slow drift";
 });return engine;}
@@ -130,6 +140,113 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     for(NSDictionary *node in mesh[@"nodes"])for(NSDictionary *element in node[@"elements"])for(NSDictionary *model in element[@"models"])
         for(id subscription in model[@"subscribe"])if([subscription isKindOfClass:NSString.class]&&[[subscription uppercaseString]isEqual:groupAddress])[members addObject:node[@"UUID"]];
     NSMutableArray *selected=[NSMutableArray new];for(NSDictionary *light in all)if([members containsObject:light[@"id"]])[selected addObject:light];self.lights=selected;
+}
+static NSString *HPBluCanonicalName(NSString *name){
+    if(![name isKindOfClass:NSString.class])return @"";
+    NSString *value=[[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]lowercaseString];
+    // Node display names contain a changeable -Mxxxx device suffix.
+    // Scene data may contain the full native name or only the short name.
+    NSRange suffix=[value rangeOfString:@"-m" options:NSBackwardsSearch];
+    if(suffix.location!=NSNotFound && value.length-suffix.location>=4)
+        value=[value substringToIndex:suffix.location];
+    return value;
+}
+- (BOOL)loadBluScene{
+    @try {
+        NSArray *routines=HPExportRoutines();
+        NSDictionary *selected=nil;
+        for(NSDictionary *scene in routines){
+            NSString *name=scene[@"routineName"];
+            if([name isKindOfClass:NSString.class]&&
+               [[name lowercaseString]isEqualToString:(self.bluSceneName?:@"blu.")]){
+                selected=scene;break;
+            }
+        }
+        if(!selected){
+            self.bluSceneStatus=[NSString stringWithFormat:@"%@ not in this Home",self.bluSceneName?:@"blu."];
+            self.status=@"Blu scene is unavailable. Import your Home backup first.";
+            return NO;
+        }
+        NSMutableDictionary *commands=[NSMutableDictionary new];
+        for(NSDictionary *entry in selected[@"routineList"]){
+            if(![entry isKindOfClass:NSDictionary.class]||[entry[@"isGroup"] boolValue])continue;
+            NSString *name=HPBluCanonicalName(entry[@"deviceName"]);
+            if(!name.length)continue;
+            NSInteger hue=[entry[@"color"]integerValue],sat=[entry[@"saturation"]integerValue];
+            NSInteger lightness=[entry[@"lightness"]integerValue];
+            // Native scene HSL fields: degrees, percent, percent.
+            // Ignore CTL(-1) and malformed commands rather than guessing.
+            if(hue<0||hue>360||sat<0||sat>100||lightness<0||lightness>100)continue;
+            commands[name]=entry;
+        }
+        HPBluStage stage={0};
+        NSUInteger count=MIN(self.lights.count,(NSUInteger)HP_BLU_MAX);
+        stage.count=(int)count;
+        NSMutableDictionary *indexes=[NSMutableDictionary new];
+        for(NSUInteger i=0;i<count;i++){
+            NSDictionary *light=self.lights[i];
+            NSString *name=light[@"name"]?:@"";
+            NSString *canonical=HPBluCanonicalName(name);
+            NSDictionary *entry=commands[canonical];
+            if(!entry){
+                // A scene saved with older firmware can have an abbreviated
+                // name, but ambiguous substring matches are never accepted.
+                NSMutableArray *matches=[NSMutableArray new];
+                for(NSString *key in commands)
+                    if([canonical hasPrefix:key]||[key hasPrefix:canonical])
+                        [matches addObject:commands[key]];
+                if(matches.count==1)entry=matches[0];
+            }
+            HPBluBulb *b=&stage.bulb[i];
+            b->x=HPClamp([light[@"x"]doubleValue],0,1);
+            b->y=HPClamp([light[@"y"]doubleValue],0,1);
+            b->partner=-1;
+            b->tv=[canonical containsString:@"tv"];
+            b->ceiling=[canonical hasPrefix:@"l6 lamp"];
+            b->wall12=[canonical hasPrefix:@"1.2"];
+            b->wall13=[canonical hasPrefix:@"1.3"];
+            b->corner9=[canonical hasPrefix:@"1.1"];
+            b->corner12=[canonical hasPrefix:@"l8 corner2"];
+            if(entry){
+                b->anchor=(HPColor){(float)([entry[@"color"]doubleValue]/360.),
+                   (float)([entry[@"saturation"]doubleValue]/100.),
+                   (float)([entry[@"lightness"]doubleValue]/100.)};
+                b->valid=YES;
+                indexes[light[@"id"]]=@(i);
+            }
+        }
+        HPBluPair(&stage);
+        if(stage.validCount<4){
+            self.bluSceneStatus=@"Blu has fewer than four usable colour bulbs";
+            self.status=@"Blu scene colours could not be matched to this Home.";
+            return NO;
+        }
+        self.bluStage=stage;
+        self.bluIndexByID=indexes;
+        self.bluSceneStatus=[NSString stringWithFormat:@"%@ · %d bulbs · %d green · %d blue · %d linked pairs",
+            self.bluSceneName,stage.validCount,stage.greenCount,stage.blueCount,stage.pairCount];
+        self.status=[self.bluSceneStatus stringByAppendingString:@" · living gradients"];
+        return YES;
+    }@catch(NSException *exception){
+        self.bluSceneStatus=@"Blu scene database unavailable";
+        self.status=@"Open your saved Home to use Blu Conductor.";
+        return NO;
+    }
+}
+- (void)changeBluMix:(double)value{
+    if(!isfinite(value))return;
+    self.bluMix=HPClamp(value,0,1);
+    [NSUserDefaults.standardUserDefaults setDouble:self.bluMix forKey:@"HP.BluBlend"];
+    self.status=[NSString stringWithFormat:@"Blu colour exchange %.0f%%",self.bluMix*100];
+}
+- (void)selectBluScene:(NSString *)name{
+    if(![name isEqualToString:@"blu."]&&![name isEqualToString:@"blu.2"])return;
+    NSString *old=self.bluSceneName;
+    self.bluSceneName=name;
+    BOOL active=HPBluIsAurora((int)self.lastMode,(int)self.journey);
+    if(active&&![self loadBluScene]){self.bluSceneName=old;[self loadBluScene];return;}
+    [NSUserDefaults.standardUserDefaults setObject:name forKey:@"HP.BluSource"];
+    if(active)[self requestRetarget];
 }
 - (NSString *)moodName{if(self.creativeKind)return self.creativeName?:@"Custom look";return self.journey>=0?HPJourneyNames()[self.journey]:HPThemeNames()[self.lastMode];}
 - (HPColor)targetForLight:(NSDictionary *)light{return [self creativeTarget:light];}
@@ -155,7 +272,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
         self.playbackRate=1;self.speed=.42;
         // New ambient programs start comfortable in darkness. The master
         // brightness slider remains adjustable, but TV lamps are hard-capped.
-        self.brightness=journey>=41?.56:(journey==8||journey>=26)?.38:.48;
+        self.brightness=journey>=HP_BLU_JOURNEY_FIRST?.48:journey>=41?.56:(journey==8||journey>=26)?.38:.48;
         [NSUserDefaults.standardUserDefaults setDouble:1 forKey:@"HP.PlaybackRate"];
         [NSUserDefaults.standardUserDefaults setFloat:self.speed forKey:@"HP.StudioMotion"];
         [NSUserDefaults.standardUserDefaults setFloat:self.brightness forKey:@"HP.StudioBrightness"];
@@ -194,6 +311,7 @@ static NSDictionary *HPMesh(void){NSData *data=[NSUserDefaults.standardUserDefau
     if(mode<0||mode>=HP_MODE_COUNT)return;
     if(HPIdentifying){self.status=@"Finishing the light identification pulse";return;}
     [self reloadLights];if(!self.lights.count){[self stop];self.status=@"No colour lights in this room";return;}
+    if(HPBluIsAurora((int)mode,(int)journey)&&![self loadBluScene])return;
     if(self.adjusting){[self stop];retarget=YES;}
     self.mode=mode;self.lastMode=mode;self.journey=journey;if(retarget)[self requestRetarget];if(reset){self.phase=0;self.journeyElapsed=0;}
     // Explicit choices get a native fade immediately; ambient evolution keeps its limiter.
