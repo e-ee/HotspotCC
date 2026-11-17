@@ -527,7 +527,15 @@ static NSString *HPBluCanonicalName(NSString *name){
     NSMutableArray *ids=[NSMutableArray new];for(NSDictionary *item in self.items)[ids addObject:item[self.scenes?@"uuid":@"id"]];
     [NSUserDefaults.standardUserDefaults setObject:ids forKey:self.scenes?@"HP.SceneOrder":@"HP.LightOrder"];
     [NSUserDefaults.standardUserDefaults synchronize];
-    if(!self.scenes&&HPLightEngine.shared.mode>=0)[HPLightEngine.shared start:HPLightEngine.shared.mode];
+    if(!self.scenes&&HPLightEngine.shared.mode>=0){
+        // Reordering a travel path used to call start:mode, unintentionally
+        // replacing an active Journey with a Mood. Rebuild its light order
+        // in place, keeping scene selection, phase and duration untouched.
+        HPLightEngine *engine=HPLightEngine.shared;
+        [engine reloadLights];
+        if(HPBluIsAurora((int)engine.lastMode,(int)engine.journey))[engine loadBluScene];
+        [engine requestRetarget];
+    }
     [NSNotificationCenter.defaultCenter postNotificationName:@"HP.OrderChanged" object:nil];
     if(self.navigationController.viewControllers.count>1)[self.navigationController popViewControllerAnimated:YES];
     else [self dismissViewControllerAnimated:YES completion:nil];
