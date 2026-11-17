@@ -107,7 +107,7 @@ static inline int HPSkyEmeraldProgram(int program){
 }
 static inline HPColor HPSkyAuroraMood(int mode,double phase,double x,double y,
                                       double brightness,double depth){
-    int variant=(mode==40?0:mode==41?6:mode-34);
+    int variant=(mode==40?10:mode==41?7:mode-34);
     HPColor c=HPSkyAuroraField(variant,phase,x,y,brightness,depth);
     if(mode==34||mode==35||mode==40||mode==41){
         int personality=mode==40?2:mode==41?1:mode==34?2:0;
@@ -238,10 +238,44 @@ static inline HPColor HPSkyMappedAuroraLamp(int role,int journey,double elapsed,
     c.lightness=(float)HPClamp(c.lightness*(role==0?1.12:role==1?.92:.86),0,1);
     return c;
 }
-// TV 11 is dedicated neutral bias light: no saturated cobalt. This does
-// not claim calibrated D65; user brightness control remains authoritative.
+// L7 TV is ONE bulb, not a multi-colour gradient. It holds a calming
+// teal most of the time and changes one colour at a time toward gentle
+// emerald or softened sky-blue, using real elapsed time (not the Journey
+// 2-minute acceleration or playback Speed). Avoid saturated cobalt.
+static inline HPColor HPSkyTVBiasDrift(double userBrightness,double seconds){
+    double t=(isfinite(seconds)?seconds:0.)/720.;
+    double wave=sin(6.283185307179586*t);
+    double secondary=sin(12.56637061435917*t+.6);
+    double hue=.483+.042*wave+.010*secondary; // ~.43 emerald to .53 soft blue
+    double saturation=.52+.055*sin(6.283185307179586*t+.8);
+    HPColor c={(float)HPClamp(hue,.42,.54),
+               (float)HPClamp(saturation,.40,.62),
+               (float)HPClamp(userBrightness,.08,1)};
+    return c;
+}
 static inline HPColor HPSkyTVBias(double userBrightness){
-    return (HPColor){.57f,.065f,(float)HPClamp(userBrightness,.08,1)};
+    return HPSkyTVBiasDrift(userBrightness,0.);
+}
+// Pair 1.1 (#9) and L8 Corner2 (#12): photograph's teal/emerald wall
+// blended into soft luminous blue. The two lights share the same curtain
+// clock, with a fixed spatial offset to produce a coordinated gradient.
+// This role override is ONLY active for aurora journeys and moods.
+static inline HPColor HPSkyCornerAuroraPair(int role,int journey,double elapsed,
+                                             double phase,double brightness,
+                                             double depth,uint32_t seed){
+    double x=role==0?.70:.94;
+    double y=role==0?.80:.91;
+    HPColor c=HPSkyAuroraJourneyShuffled(journey,elapsed,phase,x,y,brightness,depth,seed);
+    double cycle=fmod(fmax(0.,isfinite(elapsed)?elapsed:0.),2880.)/2880.;
+    double curtain=sin(6.283185307179586*(3.*cycle)+phase/175.);
+    double wave=.5+.5*curtain;
+    double green=HPSkyEase(HPClamp((wave-.12)/.77,0,1));
+    double h=role==0?HPSkyHueMix(.535,.364,green):
+                      HPSkyHueMix(.590,.465,green);
+    c.hue=(float)HPSkyHueMix(c.hue,h,.83);
+    c.saturation=(float)HPClamp(HPSkyMix(c.saturation,role==0?.90:.79,.78),0,1);
+    c.lightness=(float)HPClamp(c.lightness*(role==0?1.12:.98),0,1);
+    return c;
 }
 // Fast chapters need a faster but STILL smooth chase. This is used only
 // for Journeys with short durations, never static scenes or other moods.
