@@ -90,16 +90,28 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
      if([lamp hasPrefix:@"L6 Lamp"])role=0;
      else if([lamp hasPrefix:@"1.2-"])role=1;
      else if([lamp hasPrefix:@"1.3-"])role=2;
+     int corner=-1; // 1.1 (#9) and L8 Corner2 (#12)
+     if([lamp hasPrefix:@"1.1-"])corner=0;
+     else if([lamp hasPrefix:@"L8 Corner2"])corner=1;
+     BOOL emerald=HPSkyEmeraldProgram((int)self.journey-6);
      if(role>=0)c=HPSkyMappedAuroraLamp(role,(int)self.journey,self.journeyElapsed,phase,self.brightness,self.depth,self.journeyShuffleSeed);
+     else if(emerald&&corner>=0)c=HPSkyCornerAuroraPair(corner,(int)self.journey,self.journeyElapsed,phase,self.brightness,self.depth,self.journeyShuffleSeed);
      else c=HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyShuffleSeed);
      if(self.journeyShuffling){
          HPColor previous=role>=0?
              HPSkyMappedAuroraLamp(role,(int)self.journey,self.journeyElapsed,phase,self.brightness,self.depth,self.journeyPreviousSeed):
+             emerald&&corner>=0?
+             HPSkyCornerAuroraPair(corner,(int)self.journey,self.journeyElapsed,phase,self.brightness,self.depth,self.journeyPreviousSeed):
              HPSkyAuroraJourneyShuffled((int)self.journey,self.journeyElapsed,phase,x,y,self.brightness,self.depth,self.journeyPreviousSeed);
          c=HPBlendColour(previous,c,HPEase(self.journeyShuffleElapsed/18.));
      }
  }else if(self.lastMode>=34&&self.lastMode<HP_MODE_COUNT&&self.journey<0){
-     c=HPStudioTarget((int)self.lastMode,-1,0,phase,x,y,self.brightness,self.depth,self.variation);
+     NSString *lamp=light[@"name"]?:@"";
+     BOOL emeraldMood=(self.lastMode==34||self.lastMode==35||self.lastMode==40||self.lastMode==41);
+     int corner=[lamp hasPrefix:@"1.1-"]?0:[lamp hasPrefix:@"L8 Corner2"]?1:-1;
+     c=(emeraldMood&&corner>=0)?
+         HPSkyCornerAuroraMood(corner,(int)self.lastMode,phase,self.brightness,self.depth):
+         HPStudioTarget((int)self.lastMode,-1,0,phase,x,y,self.brightness,self.depth,self.variation);
  }else{
      c=self.lastMode==32?HPLivingAurora(phase,u,v,self.brightness,self.depth):self.lastMode==33?HPStudioTarget(30,-1,0,phase,u,v,self.brightness,self.depth,self.variation):HPStudioTarget((int)self.lastMode,(int)self.journey,self.journeyElapsed,phase,u,v,self.brightness,self.depth,self.variation);
  }
@@ -124,7 +136,8 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  if(self.journey>=0||(self.mode>=34&&self.mode<HP_MODE_COUNT)){
      NSString *lampName=light[@"name"];
      if([lampName isKindOfClass:NSString.class]&&[lampName rangeOfString:@"TV" options:NSCaseInsensitiveSearch].location!=NSNotFound){
-         c=HPSkyTVBias(self.brightness);
+         // One slowly changing teal colour, never a simultaneous gradient.
+         c=HPSkyTVBiasDrift(self.brightness,NSProcessInfo.processInfo.systemUptime);
      }
  }
  return c;
