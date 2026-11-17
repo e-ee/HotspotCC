@@ -13,11 +13,11 @@ static void valid(HPColor c){
     assert(c.lightness>=0&&c.lightness<=1);
 }
 int main(void){
-    assert(HP_JOURNEY_COUNT==41&&HP_SKY_PROGRAMS==35);
-    assert(HP_SKY_PALETTES==36&&HP_SKY_CHAPTERS==8);
+    assert(HP_JOURNEY_COUNT==44&&HP_SKY_PROGRAMS==38);
+    assert(HP_SKY_PALETTES==36&&HP_SKY_CHAPTERS==8&&HP_MODE_COUNT==42);
     // The six new moods must not be six names for one field.
-    for(int a=34;a<40;a++){
-        for(int b=a+1;b<40;b++){
+    for(int a=34;a<42;a++){
+        for(int b=a+1;b<42;b++){
             double difference=0;
             for(int k=0;k<12;k++){
                 double x=(k%4+.5)/4.,y=(k/4+.5)/3.;
@@ -72,6 +72,41 @@ int main(void){
         }
     }
     assert(insufficientJourneys==0);
+    // Rich oxygen-green must be a substantial, VISIBLE part of the
+    // featured aurora, not a faint teal accent. At a 2-minute cycle,
+    // sample the L6 ceiling and walls every half-second of real time.
+    for(int journeyIndex=0;journeyIndex<5;journeyIndex++){
+        const int featured[5]={6,10,28,41,42};
+        int journey=featured[journeyIndex],emeraldSamples=0;
+        double lowestHue=1.,highestHue=0.;
+        for(int sample=0;sample<240;sample++){
+            double realSeconds=sample*.5;
+            double canonical=realSeconds*24.; // 2880 / 120
+            double phase=realSeconds*.5; // normal gentle motion setting
+            HPColor l6=HPSkyMappedAuroraLamp(0,journey,canonical,phase,.55,1,0);
+            valid(l6);
+            if(l6.hue>=.32&&l6.hue<=.46&&l6.saturation>.80)emeraldSamples++;
+            if(l6.hue<lowestHue)lowestHue=l6.hue;
+            if(l6.hue>highestHue)highestHue=l6.hue;
+        }
+        // Each featured aurora must have a distinct vivid green phase
+        // and continue into blue or violet within the same loop.
+        assert(emeraldSamples>20);
+        assert(highestHue-lowestHue>.15);
+    }
+    for(int modeIndex=0;modeIndex<3;modeIndex++){
+        int modes[3]={34,40,41};
+        int greenCount=0;
+        for(int i=0;i<300;i++){
+            HPColor c=HPSkyAuroraMood(modes[modeIndex],i*.8,.4,.15,.55,1);
+            valid(c);
+            if(c.hue>=.32&&c.hue<=.46&&c.saturation>.8)greenCount++;
+        }
+        assert(greenCount>25);
+    }
+    // No accidental emerald injection into the non-aurora programmes.
+    assert(HPSkyEmeraldProgram(0)&&HPSkyEmeraldProgram(35));
+    assert(!HPSkyEmeraldProgram(1)&&!HPSkyEmeraldProgram(23)&&!HPSkyEmeraldProgram(34));
     // L6 ceiling travels across the whole journey, while the wall pair
     // shares phase but samples different locations on the SAME aurora.
     double minHue=1,maxHue=0;int gradients=0;
