@@ -82,7 +82,19 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
 - (HPColor)creativeTarget:(NSDictionary *)light{
  double x=[light[@"x"]doubleValue],y=[light[@"y"]doubleValue],u,v;HPDirectedPoint(x,y,self.waveAngle,&u,&v);double phase=self.waveReverse?-self.phase:self.phase;if(self.lastMode==32&&self.variation){phase+=(self.variation%997)*.73;if(self.variation&1)u=1-u;if(self.variation&2)v=1-v;}
  HPColor c;
- if(self.journey>=6&&self.journey<HP_JOURNEY_COUNT){
+ if(HPBluIsAurora((int)self.lastMode,(int)self.journey)){
+     NSNumber *index=self.bluIndexByID[light[@"id"]];
+     HPBluStage stage=self.bluStage;
+     c=HPBluTarget(&stage,index?index.intValue:-1,(int)self.journey,
+          (int)self.lastMode,self.journeyElapsed,phase,
+          self.brightness,self.depth,self.bluMix,self.journeyShuffleSeed);
+     if(self.journeyShuffling){
+         HPColor previous=HPBluTarget(&stage,index?index.intValue:-1,
+          (int)self.journey,(int)self.lastMode,self.journeyElapsed,phase,
+          self.brightness,self.depth,self.bluMix,self.journeyPreviousSeed);
+         c=HPBlendColour(previous,c,HPEase(self.journeyShuffleElapsed/18.));
+     }
+ }else if(self.journey>=6&&self.journey<44){
      NSString *lamp=light[@"name"]?:@"";
      // L6 Lamp is the raised ceiling fixture (#6). The wall pair 1.2 and
      // 1.3 shares the same moving aurora curtain with a spatial offset.
@@ -133,7 +145,8 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  // TV 11 stays neutral during journeys AND new aurora moods:
  // saturated cobalt/emerald directly behind a TV is uncomfortable.
  // Brightness remains adjustable independently of the aurora.
- if(self.journey>=0||(self.mode>=34&&self.mode<HP_MODE_COUNT)){
+ if(!HPBluIsAurora((int)self.lastMode,(int)self.journey) &&
+     (self.journey>=0||(self.mode>=34&&self.mode<HP_MODE_COUNT))){
      NSString *lampName=light[@"name"];
      if([lampName isKindOfClass:NSString.class]&&[lampName rangeOfString:@"TV" options:NSCaseInsensitiveSearch].location!=NSNotFound){
          // One slowly changing teal colour, never a simultaneous gradient.
