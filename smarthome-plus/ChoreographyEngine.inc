@@ -118,9 +118,10 @@ static void HPStoreJourneys(NSArray *a){[NSUserDefaults.standardUserDefaults set
  if(self.creativeKind){c.lightness=HPClamp(c.lightness*self.brightness/MAX(.08,self.creativeBrightness),0,1);c.saturation=HPHeldDepth(c.saturation,self.creativeDepth?:self.depth,self.depth);}
  if(self.rippleAge<19){double d=hypot(x-self.rippleOrigin.x,y-self.rippleOrigin.y);HPColor glow=c;glow.hue=HPWrap(c.hue+.055);glow.lightness=HPClamp(c.lightness+.08,0,1);c=HPBlendColour(c,glow,.85*HPRippleWeight(d,self.rippleAge,self.rippleInward));}
  if(self.sleepActive){double t=HPEase(self.sleepElapsed/MAX(1,self.sleepDuration));HPColor warm={.075,.50,c.lightness};c=HPBlendColour(c,warm,t);c.lightness*=pow(1-t,1.4);}
- // TV 11 is a dedicated, near-neutral bias light during journeys,
- // not a saturated blue aurora bulb. User brightness still controls it.
- if(self.journey>=0){
+ // TV 11 stays neutral during journeys AND new aurora moods:
+ // saturated cobalt/emerald directly behind a TV is uncomfortable.
+ // Brightness remains adjustable independently of the aurora.
+ if(self.journey>=0||(self.mode>=34&&self.mode<HP_MODE_COUNT)){
      NSString *lampName=light[@"name"];
      if([lampName isKindOfClass:NSString.class]&&[lampName rangeOfString:@"TV" options:NSCaseInsensitiveSearch].location!=NSNotFound){
          c=HPSkyTVBias(self.brightness);
