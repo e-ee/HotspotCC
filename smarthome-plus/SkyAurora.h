@@ -99,4 +99,9 @@ static inline HPColor HPSkyAuroraJourneyShuffled(int journey,double elapsed,doub
 static inline HPColor HPSkyAuroraJourney(int journey,double elapsed,double phase,double x,double y,double brightness,double depth){
     return HPSkyAuroraJourneyShuffled(journey,elapsed,phase,x,y,brightness,depth,0);
 }
+
+static inline HPColor HPSkyLimitTV(HPColor colour,int tvLamp,int isJourney){
+    if(tvLamp&&isJourney)colour.lightness=(float)HPClamp(colour.lightness,0,.10);
+    return colour;
+}
 #endif
