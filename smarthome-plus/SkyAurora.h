@@ -3,7 +3,7 @@
 #ifndef HP_SKY_AURORA_H
 #define HP_SKY_AURORA_H
 #define HP_SKY_PALETTES 36
-#define HP_SKY_PROGRAMS 35
+#define HP_SKY_PROGRAMS 38
 #define HP_SKY_CHAPTERS 8
 
 static inline double HPSkyMix(double a,double b,double t){
@@ -65,6 +65,59 @@ static inline HPColor HPSkyAuroraField(int variant,double phase,double x,double 
     c.saturation=HPColourDepth(c.saturation,depth);
     return c;
 }
+// Dedicated emerald oxygen-green curtains. This effect is intentionally
+// applied ONLY to Hekla / aurora presets: other Boeing blues, pinks and
+// warm lounges retain their original distinct palettes.
+// Photo-derived reference: vivid #00c94d to #00ef70 green (approx HSV
+// hue .36-.41), often shifting through bright teal toward luminous blue.
+static inline HPColor HPSkyEmeraldRibbon(HPColor base,double loop,double phase,
+                                         double x,double y,int personality){
+    x=HPClamp(isfinite(x)?x:.5,0,1);
+    y=HPClamp(isfinite(y)?y:.5,0,1);
+    loop=loop-floor(loop);
+    const double twopi=6.283185307179586;
+    // Four broad curtain crossings per journey cycle; at two minutes,
+    // a different green/blue/violet composition arrives ~every 30 sec.
+    // Space offsets move the veil across mapped lights, not all in sync.
+    double u=twopi*(4.*loop+.12*y-.16*x)+phase/185.;
+    double sweep=.5+.5*sin(u+.85);
+    double fine=.5+.5*sin(u*.52+2.7*x-1.8*y+.9);
+    double body=HPSkyEase(HPClamp((sweep-.16)/.67,0,1));
+    double shape=HPSkyEase(HPClamp((fine-.10)/.75,0,1));
+    double crest=HPClamp(.70*body+.30*shape,0,1);
+    // Left wall and raised ceiling are prominent. Centre and right still
+    // receive ribbon movement; only TV is replaced with neutral bias later.
+    double geography=.76+.20*(1.-x)+.04*sin(y*4.2+u*.31);
+    double strength=HPClamp(crest*geography*(personality==2?1.12:personality==1?.94:1.02),0,.97);
+    double emerald=.368+.022*sin(u*.31+y*2.1+personality*.7);
+    base.hue=(float)HPSkyHueMix(base.hue,emerald,strength);
+    // A real saturated green should look green, not greyed-out teal.
+    base.saturation=(float)HPClamp(HPSkyMix(base.saturation,.98,strength*.92),0,1);
+    // Brighter-looking saturated green against the black room, not a white
+    // flash. Preserve the master brightness setting and native gradients.
+    base.lightness=(float)HPClamp(base.lightness*(1.+.23*strength),0,1);
+    return base;
+}
+static inline int HPSkyEmeraldProgram(int program){
+    // 0 Blue Sky Aurora, 4 Aurora Lilac, 5 Blu Afterglow,
+    // 22 Aurora Ribbon, 35 Hekla Aurora, 36 Emerald Curtains,
+    // 37 Polar Crown. Other 31 journeys are unchanged.
+    return program==0||program==4||program==5||program==22||
+           program==35||program==36||program==37;
+}
+static inline HPColor HPSkyAuroraMood(int mode,double phase,double x,double y,
+                                      double brightness,double depth){
+    int variant=(mode==40?0:mode==41?6:mode-34);
+    HPColor c=HPSkyAuroraField(variant,phase,x,y,brightness,depth);
+    if(mode==34||mode==35||mode==40||mode==41){
+        int personality=mode==40?2:mode==41?1:mode==34?2:0;
+        // Original motion slider still controls speed; moods have a
+        // slow evolving curtain instead of a discrete colour sequence.
+        c=HPSkyEmeraldRibbon(c,phase/(6.283185307179586*21.),
+                              phase,x,y,personality);
+    }
+    return c;
+}
 // Unique, curated eight-chapter colour stories for every journey. Each
 // 2-minute loop has eight 15-second chapters, not four near-identical swatches.
 static inline void HPSkyAuroraOrder8(int journey,uint32_t seed,int order[HP_SKY_CHAPTERS]){
@@ -103,7 +156,10 @@ static inline void HPSkyAuroraOrder8(int journey,uint32_t seed,int order[HP_SKY_
         {26,27,24,31,29,33,30,35},
         {21,30,28,34,19,26,18,24},
         {34,28,32,27,30,24,31,35},
-        {30,34,21,18,29,26,35,24}
+        {30,34,21,18,29,26,35,24},
+        {0,6,10,12,2,18,21,35}, // Hekla Aurora
+        {6,10,0,12,7,18,2,19}, // Emerald Curtains
+        {10,12,6,14,21,30,0,17} // Polar Crown
     };
     int program=(journey>=6&&journey<6+HP_SKY_PROGRAMS)?journey-6:0;
     for(int i=0;i<HP_SKY_CHAPTERS;i++)order[i]=chapters[program][i];
@@ -122,7 +178,7 @@ static inline void HPSkyAuroraOrder(int journey,uint32_t seed,int order[4]){
 }
 static inline HPColor HPSkyAuroraJourneyShuffled(int journey,double elapsed,double phase,double x,double y,double brightness,double depth,uint32_t seed){
     int order[HP_SKY_CHAPTERS];HPSkyAuroraOrder8(journey,seed,order);
-    int program=(journey>=6&&journey<41)?journey-6:0;
+    int program=(journey>=6&&journey<6+HP_SKY_PROGRAMS)?journey-6:0;
     double t=fmod(fmax(0,isfinite(elapsed)?elapsed:0),2880.);
     double chapterLength=2880./HP_SKY_CHAPTERS;
     int chapter=(int)(t/chapterLength);
@@ -158,6 +214,10 @@ static inline HPColor HPSkyAuroraJourneyShuffled(int journey,double elapsed,doub
     // Journey-specific gentle breathing, always nonzero and never a flash.
     double breath=.96+.04*sin(warp+(program%5)*.8);
     c.lightness=(float)HPClamp(c.lightness*breath,0,1);
+    if(HPSkyEmeraldProgram(program)){
+        int personality=program==35?2:program==36?1:program==37?0:program==0?2:program==22?1:0;
+        c=HPSkyEmeraldRibbon(c,t/2880.,phase,u,v,personality);
+    }
     return c;
 }
 static inline HPColor HPSkyAuroraJourney(int journey,double elapsed,double phase,double x,double y,double brightness,double depth){
