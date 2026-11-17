@@ -252,7 +252,7 @@ static NSString *HPBluCanonicalName(NSString *name){
 - (HPColor)targetForLight:(NSDictionary *)light{return [self creativeTarget:light];}
 
 - (NSDictionary *)recipeNamed:(NSString *)name{
-    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed),@"creativeBrightness":@((self.creativeKind==2||self.creativeKind==3)?self.brightness:(self.creativeBrightness?:self.brightness)),@"creativeDepth":@((self.creativeKind==2||self.creativeKind==3)?self.depth:(self.creativeDepth?:self.depth)),@"angle":@(self.waveAngle),@"reverse":@(self.waveReverse),@"playbackRate":@(self.playbackRate),@"creativeKind":@((self.creativeKind==2||self.creativeKind==3)?1:self.creativeKind),@"anchorLook":self.anchorLook?:@{},@"painted":(self.creativeKind==2||self.creativeKind==3)?[self snapshotLook]:(self.painted?:@{}),@"exploreVariant":@(self.exploreVariant)};
+    return @{@"id":NSUUID.UUID.UUIDString,@"name":[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]?:@"",@"scope":self.scope,@"mode":@(self.lastMode),@"journey":@(self.journey),@"brightness":@(self.brightness),@"motion":@(self.speed),@"depth":@(self.depth),@"variation":@(self.variation),@"phase":@(self.phase),@"journeyElapsed":@(self.journeyElapsed),@"creativeBrightness":@((self.creativeKind==2||self.creativeKind==3)?self.brightness:(self.creativeBrightness?:self.brightness)),@"creativeDepth":@((self.creativeKind==2||self.creativeKind==3)?self.depth:(self.creativeDepth?:self.depth)),@"angle":@(self.waveAngle),@"reverse":@(self.waveReverse),@"playbackRate":@(self.playbackRate),@"creativeKind":@((self.creativeKind==2||self.creativeKind==3)?1:self.creativeKind),@"anchorLook":self.anchorLook?:@{},@"painted":(self.creativeKind==2||self.creativeKind==3)?[self snapshotLook]:(self.painted?:@{}),@"exploreVariant":@(self.exploreVariant),@"bluSource":self.bluSceneName?:@"blu.",@"bluBlend":@(self.bluMix)};
 }
 - (BOOL)applyRecipe:(NSDictionary *)recipe error:(NSError **)error{
     NSDictionary *valid=[HPStudioPresets validatedRecipe:recipe error:error];if(!valid)return NO;
@@ -260,6 +260,8 @@ static NSString *HPBluCanonicalName(NSString *name){
     BOOL found=[valid[@"scope"]isEqual:@"All lights"];for(NSDictionary *group in HPMesh()[@"groups"])if([group[@"name"]isEqual:valid[@"scope"]])found=YES;
     if(!found){if(error)*error=HPReadError(@"The room saved in this mood is not in this Home.");return NO;}
     [self stop];[self clearCreative];self.scope=valid[@"scope"];self.brightness=[valid[@"brightness"]floatValue];self.speed=[valid[@"motion"]floatValue];self.depth=[valid[@"depth"]floatValue];self.variation=[valid[@"variation"]unsignedIntValue];self.phase=[valid[@"phase"]doubleValue];self.journeyElapsed=[valid[@"journeyElapsed"]doubleValue];self.waveAngle=[valid[@"angle"]doubleValue];self.waveReverse=[valid[@"reverse"]boolValue];self.playbackRate=[valid[@"playbackRate"]doubleValue]?:1;
+    self.bluSceneName=valid[@"bluSource"]?:@"blu.";
+    self.bluMix=[valid[@"bluBlend"]doubleValue];
     NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;[prefs setFloat:self.brightness forKey:@"HP.StudioBrightness"];[prefs setFloat:self.speed forKey:@"HP.StudioMotion"];[prefs setFloat:self.depth forKey:@"HP.StudioDepth"];
     self.creativeKind=[valid[@"creativeKind"]integerValue];self.anchorLook=valid[@"anchorLook"];self.painted=[valid[@"painted"]mutableCopy];self.exploreVariant=[valid[@"exploreVariant"]integerValue];self.creativeName=valid[@"name"];self.creativeBrightness=[valid[@"creativeBrightness"]doubleValue];self.creativeDepth=[valid[@"creativeDepth"]doubleValue];
     [self activate:[valid[@"mode"]integerValue] journey:[valid[@"journey"]integerValue] reset:NO retarget:YES];
@@ -765,6 +767,11 @@ static UIViewController *HPCreateStudioTools(void);
     BOOL enabled=!self.captureReader&&!HPIdentifying;self.brightnessSlider.enabled=enabled;self.motionSlider.enabled=enabled;self.depthSlider.enabled=enabled;self.playbackSlider.enabled=enabled;self.playbackLabel.text=[NSString stringWithFormat:@"Speed %.1f×",engine.playbackRate];
     self.journeyDurationSlider.enabled=enabled;
     self.journeyShuffleButton.enabled=enabled;
+    self.bluControlPanel.hidden=!HPBluIsAurora((int)engine.lastMode,(int)engine.journey);
+    self.bluBlendSlider.enabled=enabled;
+    self.bluSourceSelector.enabled=enabled;
+    self.bluBlendLabel.text=[NSString stringWithFormat:@"Blu colour exchange %.0f%% · 0%% = original scene",engine.bluMix*100];
+    self.bluSourceStatus.text=engine.bluSceneStatus?:@"Blu source available after loading your saved Home.";
     if(engine.journey>=6&&engine.journey<HP_JOURNEY_COUNT){
         double canonical=HPJourneyCycleSeconds((int)engine.journey);
         double t=fmod(engine.journeyElapsed,canonical);
