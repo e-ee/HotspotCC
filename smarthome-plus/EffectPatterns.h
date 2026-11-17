@@ -2,8 +2,8 @@
 #define HP_EFFECT_PATTERNS_H
 #include <math.h>
 #include <stdint.h>
-#define HP_MODE_COUNT 40
-#define HP_JOURNEY_COUNT 41
+#define HP_MODE_COUNT 42
+#define HP_JOURNEY_COUNT 44
 typedef struct {float hue,saturation,lightness;} HPColor;
 typedef struct {uint16_t hue,saturation,lightness;} HPWireColor;
 static inline double HPClamp(double x,double lo,double hi){return fmin(hi,fmax(lo,x));}
@@ -117,7 +117,7 @@ static inline double HPJourneyCycleSeconds(int journey){
 static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,double phase,double x,double y,double brightness,double depth,uint32_t variation){
     phase=isfinite(phase)?phase:0;
     x=isfinite(x)?HPClamp(x,0,1):.5;y=isfinite(y)?HPClamp(y,0,1):.5;
-    const int skyMode=(mode>=34&&mode<=39),skyJourney=(journey>=6&&journey<HP_JOURNEY_COUNT),sky=skyMode||skyJourney;
+    const int skyMode=(mode>=34&&mode<HP_MODE_COUNT),skyJourney=(journey>=6&&journey<HP_JOURNEY_COUNT),sky=skyMode||skyJourney;
     // Never rotate the physical room map for sky effects: greens stay peripheral.
     if(sky&&variation)phase+=(variation%997)*.11;
     if(variation&&!sky){
@@ -128,7 +128,7 @@ static inline HPColor HPStudioTarget(int mode,int journey,double journeySeconds,
     }
     HPColor result;
     if(skyJourney)result=HPSkyAuroraJourney(journey,journeySeconds,phase,x,y,brightness,depth);
-    else if(skyMode)result=HPSkyAuroraField(mode-34,phase,x,y,brightness,depth);
+    else if(skyMode)result=HPSkyAuroraMood(mode,phase,x,y,brightness,depth);
     else if(journey>=0&&journey<6){
         static const int chapters[6][6]={{0,23,18,19,20,0},{21,17,2,11,9,23},{14,8,3,6,10,14},{16,24,29,21,25,16},{26,18,28,7,20,9},{14,27,8,6,30,3}};
         static const int counts[6]={5,6,5,5,6,6};
