@@ -1,0 +1,38 @@
+name: Blue Sky Aurora quick prototype
+on:
+  push:
+    branches: [blue-sky-aurora-v406]
+    paths:
+      - '.github/workflows/sky-aurora-quick.yml'
+      - 'smarthome-plus/LightStudio.inc'
+      - 'smarthome-plus/EffectPatterns.h'
+      - 'smarthome-plus/SkyAurora.h'
+      - 'smarthome-plus/ChoreographyEngine.inc'
+      - 'smarthome-plus/StudioPresets.m'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sky-aurora-quick-prototype
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify aurora field, saved moods, and journeys
+        run: |
+          mkdir -p build
+          clang -std=c11 -Wall -Wextra -Werror smarthome-plus/test_sky_aurora.c -lm -o build/test-sky
+          ./build/test-sky
+          clang -fobjc-arc -fblocks smarthome-plus/StudioPresets.m smarthome-plus/test_studio_presets.m -framework Foundation -o build/test-presets
+          ./build/test-presets
+      - name: Compile and sign iOS 14+ lighting extension
+        run: |
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 -fobjc-arc -fblocks -dynamiclib smarthome-plus/HomePlus.m smarthome-plus/SceneTransfer.m smarthome-plus/HomeArchive.m smarthome-plus/SceneCapture.m smarthome-plus/SpatialLayout.m smarthome-plus/StudioPresets.m -o build/HomePlus.dylib -install_name '@executable_path/Frameworks/HomePlus.dylib' -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -lsqlite3 -Werror=unguarded-availability -Werror=unguarded-availability-new -Wno-deprecated-declarations -Wall -Wextra -Wno-unused-parameter -Wno-incompatible-pointer-types
+          codesign --force --sign - build/HomePlus.dylib
+          file build/HomePlus.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkyAurora-HomePlus-final
+          path: build/HomePlus.dylib
