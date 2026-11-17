@@ -3,7 +3,7 @@
 static NSDictionary *HPExtendedRecipe(NSDictionary *recipe,NSError **error){
  NSMutableDictionary *result=[[recipe dictionaryWithValuesForKeys:@[@"id",@"name",@"scope",@"mode",@"journey",@"brightness",@"motion",@"depth",@"variation",@"phase",@"journeyElapsed"]]mutableCopy];
  NSDictionary *defaults=@{@"creativeBrightness":recipe[@"brightness"],@"creativeDepth":recipe[@"depth"],@"angle":@0,@"reverse":@NO,@"playbackRate":@1,@"creativeKind":@0,@"exploreVariant":@0};
- NSDictionary *limits=@{@"creativeBrightness":@[@.08,@1],@"creativeDepth":@[@.25,@1],@"angle":@[@0,@360],@"reverse":@[@0,@1],@"playbackRate":@[@.1,@10],@"creativeKind":@[@0,@4],@"exploreVariant":@[@0,@5]};
+ NSDictionary *limits=@{@"creativeBrightness":@[@.08,@1],@"creativeDepth":@[@.25,@1],@"angle":@[@0,@360],@"reverse":@[@0,@1],@"playbackRate":@[@.1,@100],@"creativeKind":@[@0,@4],@"exploreVariant":@[@0,@5]};
  for(NSString *key in defaults){id n=recipe[key]?:defaults[key];NSArray *range=limits[key];if(![n isKindOfClass:NSNumber.class]||!isfinite([n doubleValue])||[n doubleValue]<[range[0]doubleValue]||[n doubleValue]>[range[1]doubleValue]){if(error)*error=[NSError errorWithDomain:@"HP.StudioPresets"code:2 userInfo:@{NSLocalizedDescriptionKey:@"This variation has invalid controls."}];return nil;}result[key]=n;}
  NSInteger kind=[result[@"creativeKind"]integerValue];if(kind!=0&&kind!=1&&kind!=4)return nil;
  for(NSString *key in @[@"anchorLook",@"painted"]){id look=recipe[key]?:@{};if(![look isKindOfClass:NSDictionary.class]||[look count]>4096)return nil;
