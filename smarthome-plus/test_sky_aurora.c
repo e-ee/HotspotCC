@@ -97,10 +97,10 @@ int main(void){
         assert(highestHue-lowestHue>.15);
     }
     for(int modeIndex=0;modeIndex<3;modeIndex++){
-        int modes[3]={34,40,41};
+        const int moodIDs[3]={34,40,41};
         int greenCount=0;
         for(int i=0;i<300;i++){
-            HPColor c=HPSkyAuroraMood(modes[modeIndex],i*.8,.4,.15,.55,1);
+            HPColor c=HPSkyAuroraMood(moodIDs[modeIndex],i*.8,.4,.15,.55,1);
             valid(c);
             if(c.hue>=.32&&c.hue<=.46&&c.saturation>.8)greenCount++;
         }
