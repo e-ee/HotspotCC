@@ -150,8 +150,8 @@ static inline HPColor HPSkyAuroraJourneyShuffled(int journey,double elapsed,doub
     // gradients. Others favour vivid natural aurora.
     double programDepth=depth;
     if(program%7==2||program%7==5)programDepth=HPClamp(depth*.77,.25,1);
-    HPColor a=HPSkyAuroraField(order[chapter],phase+loopAngle*19.,u,v,brightness,programDepth);
-    HPColor b=HPSkyAuroraField(order[(chapter+1)%HP_SKY_CHAPTERS],phase+loopAngle*19.,u,v,brightness,programDepth);
+    HPColor a=HPSkyAuroraField(order[chapter],phase,u,v,brightness,programDepth);
+    HPColor b=HPSkyAuroraField(order[(chapter+1)%HP_SKY_CHAPTERS],phase,u,v,brightness,programDepth);
     HPColor c={(float)HPSkyHueMix(a.hue,b.hue,blend),
         (float)HPSkyMix(a.saturation,b.saturation,blend),
         (float)HPSkyMix(a.lightness,b.lightness,blend)};
