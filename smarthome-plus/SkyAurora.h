@@ -129,8 +129,4 @@ static inline HPColor HPSkyMappedAuroraLamp(int role,int journey,double elapsed,
 static inline HPColor HPSkyTVBias(double userBrightness){
     return (HPColor){.57f,.065f,(float)HPClamp(userBrightness,.08,1)};
 }
-static inline HPColor HPSkyLimitTV(HPColor colour,int tvLamp,int isJourney){
-    if(tvLamp&&isJourney)colour.lightness=(float)HPClamp(colour.lightness,0,.10);
-    return colour;
-}
 #endif
