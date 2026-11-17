@@ -40,41 +40,40 @@ int main(void){
       }
     }
   }
-  // Regression: in the uploaded apartment map L6 is the far-left lamp
-  // at (0,.309). It must show continuous variation without lighting up TV 11.
-  // The neighbouring far-left lamp (0,.533) should retain its quiet gradient.
-  double l6Min=2,l6Max=-1,nearMin=2,nearMax=-1,prevHue=-1;
-  for(int step=0;step<=920;step++){
-    double phase=(double)step;
-    HPColor l6=HPSkyAuroraJourneyShuffled(6,80,phase,0,.309,.48,1,0);
-    HPColor neighbour=HPSkyAuroraJourneyShuffled(6,80,phase,0,.533,.48,1,0);
-    if(l6.hue<l6Min)l6Min=l6.hue;
-    if(l6.hue>l6Max)l6Max=l6.hue;
-    if(neighbour.hue<nearMin)nearMin=neighbour.hue;
-    if(neighbour.hue>nearMax)nearMax=neighbour.hue;
-    if(prevHue>=0)assert(fabs(l6.hue-prevHue)<.01);
-    prevHue=l6.hue;
+  // L6 is map #6, a high primary ceiling lamp. It must change through
+  // the selected journey's real palette, not remain an edge-green constant.
+  double minHue=2,maxHue=-1, maxStep=0;
+  double previous=-1; int pairDifferences=0;
+  for(int step=0;step<=2880;step+=2){
+    double elapsed=step,phase=step*.5;
+    HPColor ceiling=HPSkyMappedAuroraLamp(0,6,elapsed,phase,.5,1,0);
+    HPColor wall12=HPSkyMappedAuroraLamp(1,6,elapsed,phase,.5,1,0);
+    HPColor wall13=HPSkyMappedAuroraLamp(2,6,elapsed,phase,.5,1,0);
+    assert(isfinite(ceiling.hue)&&isfinite(wall12.hue)&&isfinite(wall13.hue));
+    if(ceiling.hue<minHue)minHue=ceiling.hue;
+    if(ceiling.hue>maxHue)maxHue=ceiling.hue;
+    if(previous>=0){
+      double jump=fabs(ceiling.hue-previous);
+      if(jump>maxStep)maxStep=jump;
+      assert(jump<.035);
+    }
+    previous=ceiling.hue;
+    if(fabs(wall12.hue-wall13.hue)>.018)pairDifferences++;
+    assert(ceiling.lightness>=wall12.lightness*.8);
   }
-  assert(l6Max-l6Min>.10);
-  assert(nearMax-nearMin<.015);
-  // No L6 motion amplification in the room's centre, where TV 11 lives.
-  for(int mood=0;mood<HP_SKY_PALETTES;mood++){
-    HPColor left=HPSkyAuroraField(mood,130,0,.309,.48,1);
-    HPColor tv=HPSkyAuroraField(mood,130,.493,.533,.48,1);
-    assert(isfinite(left.hue)&&isfinite(tv.hue));
-    assert(tv.hue>.54);
-    assert(HPSkyLimitTV(tv,1,1).lightness<=.10001);
-  }
+  assert(maxHue-minHue>.13); // visible green -> blue -> lilac ceiling travel
+  assert(pairDifferences>100); // two wall fixtures create a gradient
+  // TV 11: low-saturation neutral bias, not an intensely blue lamp and
+  // not forcibly reduced to 10 percent brightness.
+  HPColor tv=HPSkyTVBias(.65);
+  assert(tv.saturation<=.10);
+  assert(tv.lightness>.20 && tv.lightness<.47);
+  assert(HPSkyTVBias(.2).lightness<HPSkyTVBias(.8).lightness);
   // 2-minute and 48-minute controls change virtual speed, not palette phase.
   for(double duration=2;duration<=48;duration+=23){
     double canonical=HPJourneyCycleSeconds(6);
     double seconds=(duration*60.)*(canonical/(duration*60.));
     assert(fabs(seconds-canonical)<1e-7);
   }
-  HPColor bright={.61,.85,.96};
-  HPColor tv=HPSkyLimitTV(bright,1,1);
-  assert(fabs(tv.lightness-.10)<1e-6);
-  assert(fabs(HPSkyLimitTV(bright,0,1).lightness-bright.lightness)<1e-6);
-  assert(fabs(HPSkyLimitTV(bright,1,0).lightness-bright.lightness)<1e-6);
   return 0;
 }
