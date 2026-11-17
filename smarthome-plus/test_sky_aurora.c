@@ -40,6 +40,31 @@ int main(void){
       }
     }
   }
+  // Regression: in the uploaded apartment map L6 is the far-left lamp
+  // at (0,.309). It must show continuous variation without lighting up TV 11.
+  // The neighbouring far-left lamp (0,.533) should retain its quiet gradient.
+  double l6Min=2,l6Max=-1,nearMin=2,nearMax=-1,prevHue=-1;
+  for(int step=0;step<=920;step++){
+    double phase=(double)step;
+    HPColor l6=HPSkyAuroraJourneyShuffled(6,80,phase,0,.309,.48,1,0);
+    HPColor neighbour=HPSkyAuroraJourneyShuffled(6,80,phase,0,.533,.48,1,0);
+    if(l6.hue<l6Min)l6Min=l6.hue;
+    if(l6.hue>l6Max)l6Max=l6.hue;
+    if(neighbour.hue<nearMin)nearMin=neighbour.hue;
+    if(neighbour.hue>nearMax)nearMax=neighbour.hue;
+    if(prevHue>=0)assert(fabs(l6.hue-prevHue)<.01);
+    prevHue=l6.hue;
+  }
+  assert(l6Max-l6Min>.10);
+  assert(nearMax-nearMin<.015);
+  // No L6 motion amplification in the room's centre, where TV 11 lives.
+  for(int mood=0;mood<HP_SKY_PALETTES;mood++){
+    HPColor left=HPSkyAuroraField(mood,130,0,.309,.48,1);
+    HPColor tv=HPSkyAuroraField(mood,130,.493,.533,.48,1);
+    assert(isfinite(left.hue)&&isfinite(tv.hue));
+    assert(tv.hue>.54);
+    assert(HPSkyLimitTV(tv,1,1).lightness<=.10001);
+  }
   // 2-minute and 48-minute controls change virtual speed, not palette phase.
   for(double duration=2;duration<=48;duration+=23){
     double canonical=HPJourneyCycleSeconds(6);
