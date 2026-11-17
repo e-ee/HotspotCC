@@ -1,12 +1,14 @@
 name: Blue Sky Aurora quick prototype
 on:
   push:
-    branches: [blue-sky-aurora-v406, astro-l6-ribbon-v421, astro-ceiling-wallpair-tv-bias-v422, astro-expressive-journeys-v430, astro-emerald-aurora-v431]
+    branches: [blue-sky-aurora-v406, astro-l6-ribbon-v421, astro-ceiling-wallpair-tv-bias-v422, astro-expressive-journeys-v430, astro-emerald-aurora-v431, blu-scene-conductor-v440]
     paths:
       - '.github/workflows/sky-aurora-quick.yml'
       - 'smarthome-plus/LightStudio.inc'
       - 'smarthome-plus/EffectPatterns.h'
       - 'smarthome-plus/SkyAurora.h'
+      - 'smarthome-plus/BluConductor.h'
+      - 'smarthome-plus/test_blu_conductor.c'
       - 'smarthome-plus/test_sky_aurora.c'
       - 'smarthome-plus/ChoreographyEngine.inc'
       - 'smarthome-plus/StudioPresets.m'
@@ -26,6 +28,8 @@ jobs:
           mkdir -p build
           clang -std=c11 -Wall -Wextra -Werror smarthome-plus/test_sky_aurora.c -lm -o build/test-sky
           ./build/test-sky
+          clang -std=c11 -Wall -Wextra -Werror smarthome-plus/test_blu_conductor.c -lm -o build/test-blu
+          ./build/test-blu
           clang -fobjc-arc -fblocks smarthome-plus/StudioPresets.m smarthome-plus/test_studio_presets.m -framework Foundation -o build/test-presets
           ./build/test-presets
       - name: Compile and sign iOS 14+ lighting extension
